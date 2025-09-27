@@ -48,7 +48,7 @@ import java.util.List;
 
 import com.oracle.graal.python.PythonLanguage;
 import com.oracle.graal.python.annotations.ArgumentClinic;
-import com.oracle.graal.python.builtins.Builtin;
+import com.oracle.graal.python.annotations.Builtin;
 import com.oracle.graal.python.builtins.CoreFunctions;
 import com.oracle.graal.python.builtins.PythonBuiltins;
 import com.oracle.graal.python.builtins.objects.iterator.PSequenceIterator;
@@ -85,7 +85,7 @@ public final class StringModuleBuiltins extends PythonBuiltins {
 
         @Specialization
         PSequenceIterator formatterParser(VirtualFrame frame, TruffleString self,
-                        @Cached("createFor(this)") IndirectCallData indirectCallData) {
+                        @Cached("createFor($node)") IndirectCallData indirectCallData) {
             TemplateFormatter formatter = new TemplateFormatter(self);
             List<Object[]> parserList;
             PythonContext context = PythonContext.get(this);
@@ -119,7 +119,7 @@ public final class StringModuleBuiltins extends PythonBuiltins {
 
         @Specialization
         Object formatterParser(VirtualFrame frame, TruffleString self,
-                        @Cached("createFor(this)") IndirectCallData indirectCallData) {
+                        @Cached("createFor($node)") IndirectCallData indirectCallData) {
             TemplateFormatter formatter = new TemplateFormatter(self);
             TemplateFormatter.FieldNameSplitResult result;
             PythonContext context = PythonContext.get(this);

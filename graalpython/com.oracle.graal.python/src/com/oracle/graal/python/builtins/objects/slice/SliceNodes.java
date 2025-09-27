@@ -183,7 +183,7 @@ public abstract class SliceNodes {
      * Coerce indices computation to lossy integer values
      */
     @GenerateUncached
-    @SuppressWarnings("truffle-inlining")       // footprint reduction 36 -> 18
+    @GenerateInline(false)       // footprint reduction 36 -> 18
     public abstract static class ComputeIndices extends PNodeWithContext {
 
         public abstract PSlice.SliceInfo execute(Frame frame, PSlice slice, int i);
@@ -194,8 +194,8 @@ public abstract class SliceNodes {
         }
 
         @Specialization(guards = "length >= 0")
-        PSlice.SliceInfo doSliceObject(VirtualFrame frame, PObjectSlice slice, int length,
-                        @Bind("this") Node inliningTarget,
+        static PSlice.SliceInfo doSliceObject(VirtualFrame frame, PObjectSlice slice, int length,
+                        @Bind Node inliningTarget,
                         @Cached SliceExactCastToInt castStartNode,
                         @Cached SliceExactCastToInt castStopNode,
                         @Cached SliceExactCastToInt castStepNode) {
@@ -207,7 +207,7 @@ public abstract class SliceNodes {
 
         @Specialization(guards = "length < 0")
         PSlice.SliceInfo doSliceInt(@SuppressWarnings("unused") PSlice slice, @SuppressWarnings("unused") int length,
-                        @Bind("this") Node inliningTarget) {
+                        @Bind Node inliningTarget) {
             throw PRaiseNode.raiseStatic(inliningTarget, ValueError, ErrorMessages.LENGTH_SHOULD_NOT_BE_NEG);
         }
     }
@@ -216,14 +216,14 @@ public abstract class SliceNodes {
      * This is only applicable to slow path <i><b>internal</b></i> computations.
      */
     @GenerateUncached
-    @SuppressWarnings("truffle-inlining")       // footprint reduction 48 -> 30
+    @GenerateInline(false)       // footprint reduction 48 -> 30
     public abstract static class CoerceToObjectSlice extends PNodeWithContext {
 
         public abstract PObjectSlice execute(PSlice slice);
 
         @Specialization
         PObjectSlice doSliceInt(PIntSlice slice,
-                        @Bind("this") Node inliningTarget,
+                        @Bind Node inliningTarget,
                         @Shared @Cached SliceCastToToBigInt start,
                         @Shared @Cached SliceCastToToBigInt stop,
                         @Shared @Cached SliceCastToToBigInt step,
@@ -242,7 +242,7 @@ public abstract class SliceNodes {
 
         @Specialization
         PObjectSlice doSliceObject(PObjectSlice slice,
-                        @Bind("this") Node inliningTarget,
+                        @Bind Node inliningTarget,
                         @Shared @Cached SliceCastToToBigInt start,
                         @Shared @Cached SliceCastToToBigInt stop,
                         @Shared @Cached SliceCastToToBigInt step,

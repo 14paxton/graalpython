@@ -67,6 +67,7 @@ import static com.oracle.graal.python.nodes.ErrorMessages.NOT_READABLE;
 import static com.oracle.graal.python.nodes.ErrorMessages.S_SHOULD_HAVE_RETURNED_A_BYTES_LIKE_OBJECT_NOT_P;
 import static com.oracle.graal.python.nodes.PGuards.isPNone;
 import static com.oracle.graal.python.nodes.SpecialMethodNames.T_DECODE;
+import static com.oracle.graal.python.nodes.StringLiterals.T_CRLF;
 import static com.oracle.graal.python.nodes.StringLiterals.T_EMPTY_STRING;
 import static com.oracle.graal.python.nodes.StringLiterals.T_NEWLINE;
 import static com.oracle.graal.python.nodes.StringLiterals.T_STRICT;
@@ -77,6 +78,7 @@ import static com.oracle.graal.python.util.PythonUtils.TS_ENCODING;
 import static com.oracle.graal.python.util.PythonUtils.tsLiteral;
 
 import com.oracle.graal.python.PythonLanguage;
+import com.oracle.graal.python.annotations.PythonOS;
 import com.oracle.graal.python.builtins.modules.CodecsTruffleModuleBuiltins;
 import com.oracle.graal.python.builtins.modules.CodecsTruffleModuleBuiltins.MakeIncrementalcodecNode;
 import com.oracle.graal.python.builtins.modules.WarningsModuleBuiltins;
@@ -85,7 +87,7 @@ import com.oracle.graal.python.builtins.objects.buffer.PythonBufferAccessLibrary
 import com.oracle.graal.python.builtins.objects.buffer.PythonBufferAcquireLibrary;
 import com.oracle.graal.python.builtins.objects.bytes.PBytes;
 import com.oracle.graal.python.builtins.objects.common.SequenceNodes;
-import com.oracle.graal.python.builtins.objects.str.StringNodes.CastToTruffleStringCheckedNode;
+import com.oracle.graal.python.builtins.objects.str.StringNodes.CastToTruffleStringChecked1Node;
 import com.oracle.graal.python.builtins.objects.tuple.PTuple;
 import com.oracle.graal.python.lib.PyNumberAsSizeNode;
 import com.oracle.graal.python.lib.PyObjectCallMethodObjArgs;
@@ -153,11 +155,15 @@ public abstract class TextIOWrapperNodes {
                 self.setWriteNewline(self.getReadNewline());
             }
         } else {
-            self.setWriteNewline(null);
+            if (PythonLanguage.getPythonOS() == PythonOS.PLATFORM_WIN32) {
+                self.setWriteNewline(T_CRLF);
+            } else {
+                self.setWriteNewline(null);
+            }
         }
     }
 
-    @SuppressWarnings("truffle-inlining")       // footprint reduction 28 -> 9
+    @GenerateInline(false)       // footprint reduction 28 -> 9
     abstract static class CheckClosedNode extends Node {
 
         public abstract void execute(VirtualFrame frame, PTextIO self);
@@ -169,13 +175,13 @@ public abstract class TextIOWrapperNodes {
 
         @Specialization(guards = {"self.isFileIO()", "self.getFileIO().isClosed()"})
         static void error(@SuppressWarnings("unused") PTextIO self,
-                        @Bind("this") Node inliningTarget) {
+                        @Bind Node inliningTarget) {
             throw PRaiseNode.raiseStatic(inliningTarget, ValueError, ErrorMessages.IO_CLOSED);
         }
 
         @Specialization(guards = "!self.isFileIO()")
         static void checkGeneric(VirtualFrame frame, PTextIO self,
-                        @Bind("this") Node inliningTarget,
+                        @Bind Node inliningTarget,
                         @Cached PyObjectGetAttr getAttr,
                         @Cached PyObjectIsTrueNode isTrueNode,
                         @Cached PRaiseNode raiseNode) {
@@ -277,8 +283,8 @@ public abstract class TextIOWrapperNodes {
 
         @Specialization(guards = "self.isReadTranslate()")
         static int doTranslated(@SuppressWarnings("unused") PTextIOBase self, TruffleString line, int start, int[] consumed,
-                        @Shared @Cached(inline = false) TruffleString.CodePointLengthNode codePointLengthNode,
-                        @Shared @Cached(inline = false) TruffleString.IndexOfCodePointNode indexOfCodePointNode) {
+                        @Shared @Cached TruffleString.CodePointLengthNode codePointLengthNode,
+                        @Shared @Cached TruffleString.IndexOfCodePointNode indexOfCodePointNode) {
             /* Newlines are already translated, only search for \n */
             int len = codePointLengthNode.execute(line, TS_ENCODING);
             int pos = indexOfCodePointNode.execute(line, '\n', start, len, TS_ENCODING);
@@ -291,8 +297,8 @@ public abstract class TextIOWrapperNodes {
 
         @Specialization(guards = {"!self.isReadTranslate()", "self.isReadUniversal()"})
         static int doUniversal(@SuppressWarnings("unused") PTextIOBase self, TruffleString line, int start, int[] consumed,
-                        @Shared @Cached(inline = false) TruffleString.CodePointLengthNode codePointLengthNode,
-                        @Shared @Cached(inline = false) TruffleString.IndexOfCodePointNode indexOfCodePointNode) {
+                        @Shared @Cached TruffleString.CodePointLengthNode codePointLengthNode,
+                        @Shared @Cached TruffleString.IndexOfCodePointNode indexOfCodePointNode) {
             /*
              * Universal newline search. Find any of \r, \r\n, \n The decoder ensures that \r\n are
              * not split in two pieces
@@ -321,10 +327,10 @@ public abstract class TextIOWrapperNodes {
 
         @Specialization(guards = {"!self.isReadTranslate()", "!self.isReadUniversal()"})
         static int doNonUniversal(@SuppressWarnings("unused") PTextIOBase self, TruffleString line, int start, int[] consumed,
-                        @Shared @Cached(inline = false) TruffleString.CodePointLengthNode codePointLengthNode,
-                        @Cached(inline = false) TruffleString.IndexOfStringNode indexOfStringNode,
-                        @Shared @Cached(inline = false) TruffleString.IndexOfCodePointNode indexOfCodePointNode,
-                        @Cached(inline = false) TruffleString.CodePointAtIndexNode codePointAtIndexNode) {
+                        @Shared @Cached TruffleString.CodePointLengthNode codePointLengthNode,
+                        @Cached TruffleString.IndexOfStringNode indexOfStringNode,
+                        @Shared @Cached TruffleString.IndexOfCodePointNode indexOfCodePointNode,
+                        @Cached TruffleString.CodePointAtIndexNode codePointAtIndexNode) {
             int len = codePointLengthNode.execute(line, TS_ENCODING);
             TruffleString readNl = self.getReadNewline();
             int nlLen = codePointLengthNode.execute(readNl, TS_ENCODING);
@@ -356,14 +362,14 @@ public abstract class TextIOWrapperNodes {
         }
     }
 
-    @SuppressWarnings("truffle-inlining")       // footprint reduction 64 -> 45
+    @GenerateInline(false)       // footprint reduction 64 -> 45
     protected abstract static class ReadlineNode extends Node {
 
         public abstract TruffleString execute(VirtualFrame frame, PTextIO self, int limit);
 
         @Specialization
         static TruffleString readline(VirtualFrame frame, PTextIO self, int limit,
-                        @Bind("this") Node inliningTarget,
+                        @Bind Node inliningTarget,
                         @Cached ReadChunkNode readChunkNode,
                         @Cached WriteFlushNode writeFlushNode,
                         @Cached FindLineEndingNode findLineEndingNode,
@@ -495,13 +501,13 @@ public abstract class TextIOWrapperNodes {
 
         @Specialization(guards = "self.hasDecoder()")
         static boolean readChunk(VirtualFrame frame, Node inliningTarget, PTextIO self, int hint,
-                        @Cached("createFor(this)") IndirectCallData indirectCallData,
+                        @Cached("createFor($node)") IndirectCallData indirectCallData,
                         @Cached SequenceNodes.GetObjectArrayNode getArray,
                         @Cached(inline = false) DecodeNode decodeNode,
                         @Cached PyObjectCallMethodObjArgs callMethodGetState,
                         @Cached PyObjectCallMethodObjArgs callMethodRead,
                         @Cached PyNumberAsSizeNode asSizeNode,
-                        @Cached(inline = false) TruffleString.CodePointLengthNode codePointLengthNode,
+                        @Cached TruffleString.CodePointLengthNode codePointLengthNode,
                         @CachedLibrary(limit = "3") PythonBufferAcquireLibrary bufferAcquireLib,
                         @CachedLibrary(limit = "3") PythonBufferAccessLibrary bufferLib,
                         @Cached PRaiseNode raiseNode) {
@@ -598,7 +604,7 @@ public abstract class TextIOWrapperNodes {
 
         @Specialization(guards = "!self.hasDecoder()")
         static boolean error(@SuppressWarnings("unused") PTextIO self, @SuppressWarnings("unused") int size_hint,
-                        @Bind("this") Node inliningTarget) {
+                        @Bind Node inliningTarget) {
             throw PRaiseNode.raiseStatic(inliningTarget, IOUnsupportedOperation, NOT_READABLE);
         }
     }
@@ -606,7 +612,7 @@ public abstract class TextIOWrapperNodes {
     /*
      * cpython/Modules/_io/textio.c:_textiowrapper_decode
      */
-    @SuppressWarnings("truffle-inlining")       // footprint reduction 80 -> 62
+    @GenerateInline(false)       // footprint reduction 80 -> 62
     protected abstract static class DecodeNode extends Node {
         public abstract TruffleString execute(VirtualFrame frame, Object decoder, Object bytes, boolean eof);
 
@@ -619,8 +625,8 @@ public abstract class TextIOWrapperNodes {
 
         @Specialization
         static TruffleString decodeGeneric(VirtualFrame frame, Object decoder, Object o, boolean eof,
-                        @Bind("this") Node inliningTarget,
-                        @Cached CastToTruffleStringCheckedNode castNode,
+                        @Bind Node inliningTarget,
+                        @Cached CastToTruffleStringChecked1Node castNode,
                         @Cached PyObjectCallMethodObjArgs callMethodDecode) {
             Object decoded = callMethodDecode.execute(frame, inliningTarget, decoder, T_DECODE, o, eof);
             return castNode.cast(inliningTarget, decoded, DECODER_SHOULD_RETURN_A_STRING_RESULT_NOT_P, decoded);
@@ -811,10 +817,10 @@ public abstract class TextIOWrapperNodes {
                         @Cached PyObjectCallMethodObjArgs callMethodSeekable,
                         @Cached PyObjectLookupAttr lookup,
                         @Cached PyObjectIsTrueNode isTrueNode,
-                        @Cached(inline = false) TruffleString.CodePointLengthNode codePointLengthNode,
-                        @Cached(inline = false) TruffleString.CodePointAtIndexNode codePointAtIndexNode,
-                        @Cached(inline = false) TruffleString.IndexOfCodePointNode indexOfCodePointNode,
-                        @Cached(inline = false) TruffleString.EqualNode equalNode,
+                        @Cached TruffleString.CodePointLengthNode codePointLengthNode,
+                        @Cached TruffleString.CodePointAtIndexNode codePointAtIndexNode,
+                        @Cached TruffleString.IndexOfCodePointNode indexOfCodePointNode,
+                        @Cached TruffleString.EqualNode equalNode,
                         @Cached(inline = false) WarningsModuleBuiltins.WarnNode warnNode,
                         @Cached PRaiseNode raiseNode) {
             self.setOK(false);

@@ -25,8 +25,7 @@
  */
 package com.oracle.graal.python;
 
-import static com.oracle.graal.python.builtins.PythonOS.PLATFORM_WIN32;
-import static com.oracle.graal.python.builtins.PythonOS.getPythonOS;
+import static com.oracle.graal.python.annotations.PythonOS.PLATFORM_WIN32;
 import static com.oracle.graal.python.nodes.BuiltinNames.T__SIGNAL;
 import static com.oracle.graal.python.nodes.StringLiterals.J_PY_EXTENSION;
 import static com.oracle.graal.python.nodes.StringLiterals.T_PY_EXTENSION;
@@ -52,10 +51,13 @@ import java.util.concurrent.Semaphore;
 import java.util.logging.Level;
 
 import org.graalvm.home.Version;
+import org.graalvm.nativeimage.ImageInfo;
 import org.graalvm.options.OptionDescriptors;
 import org.graalvm.options.OptionKey;
 import org.graalvm.options.OptionValues;
+import org.graalvm.polyglot.SandboxPolicy;
 
+import com.oracle.graal.python.annotations.PythonOS;
 import com.oracle.graal.python.builtins.Python3Core;
 import com.oracle.graal.python.builtins.PythonBuiltinClassType;
 import com.oracle.graal.python.builtins.modules.MarshalModuleBuiltins;
@@ -81,7 +83,6 @@ import com.oracle.graal.python.compiler.Compiler;
 import com.oracle.graal.python.compiler.ParserCallbacksImpl;
 import com.oracle.graal.python.compiler.bytecode_dsl.BytecodeDSLCompiler;
 import com.oracle.graal.python.compiler.bytecode_dsl.BytecodeDSLCompiler.BytecodeDSLCompilerResult;
-import com.oracle.graal.python.nodes.HiddenAttr;
 import com.oracle.graal.python.nodes.bytecode.PBytecodeRootNode;
 import com.oracle.graal.python.nodes.bytecode_dsl.BytecodeDSLCodeUnit;
 import com.oracle.graal.python.nodes.call.CallDispatchers;
@@ -108,6 +109,7 @@ import com.oracle.graal.python.runtime.PythonOptions;
 import com.oracle.graal.python.runtime.exception.PException;
 import com.oracle.graal.python.runtime.object.PFactory;
 import com.oracle.graal.python.util.Function;
+import com.oracle.graal.python.util.LazySource;
 import com.oracle.graal.python.util.PythonUtils;
 import com.oracle.graal.python.util.Supplier;
 import com.oracle.truffle.api.Assumption;
@@ -125,6 +127,7 @@ import com.oracle.truffle.api.TruffleLogger;
 import com.oracle.truffle.api.debug.DebuggerTags;
 import com.oracle.truffle.api.dsl.Bind;
 import com.oracle.truffle.api.dsl.Idempotent;
+import com.oracle.truffle.api.exception.AbstractTruffleException;
 import com.oracle.truffle.api.frame.VirtualFrame;
 import com.oracle.truffle.api.instrumentation.AllocationReporter;
 import com.oracle.truffle.api.instrumentation.ProvidedTags;
@@ -147,6 +150,7 @@ import com.oracle.truffle.api.strings.TruffleString;
 
 @TruffleLanguage.Registration(id = PythonLanguage.ID, //
                 name = PythonLanguage.NAME, //
+                sandbox = SandboxPolicy.UNTRUSTED, //
                 implementationName = PythonLanguage.IMPLEMENTATION_NAME, //
                 version = PythonLanguage.VERSION, //
                 characterMimeTypes = {PythonLanguage.MIME_TYPE,
@@ -405,6 +409,7 @@ public final class PythonLanguage extends TruffleLanguage<PythonContext> {
      */
     private final ConcurrentHashMap<Object, Source> sourceCache = new ConcurrentHashMap<>();
 
+    @Idempotent
     public static PythonLanguage get(Node node) {
         return REFERENCE.get(node);
     }
@@ -458,7 +463,6 @@ public final class PythonLanguage extends TruffleLanguage<PythonContext> {
     @Override
     protected PythonContext createContext(Env env) {
         final PythonContext context = new PythonContext(this, env);
-        context.initializeHomeAndPrefixPaths(env, getLanguageHome());
 
         Object[] engineOptionsUnroll = this.engineOptionsStorage;
         if (engineOptionsUnroll == null) {
@@ -472,13 +476,6 @@ public final class PythonLanguage extends TruffleLanguage<PythonContext> {
             this.engineOptions = PythonOptions.createEngineOptions(env);
         } else {
             assert areOptionsCompatible(options, PythonOptions.createEngineOptions(env)) : "invalid engine options";
-        }
-
-        if (allocationReporter == null) {
-            allocationReporter = env.lookup(AllocationReporter.class);
-        } else {
-            // GR-61960
-            // assert allocationReporter == env.lookup(AllocationReporter.class);
         }
 
         return context;
@@ -507,8 +504,22 @@ public final class PythonLanguage extends TruffleLanguage<PythonContext> {
     @Override
     protected void initializeContext(PythonContext context) {
         if (!isLanguageInitialized) {
+            if (allocationReporter == null) {
+                allocationReporter = context.getEnv().lookup(AllocationReporter.class);
+            } else {
+                // GR-61960
+                // assert allocationReporter == env.lookup(AllocationReporter.class);
+            }
             initializeLanguage();
         }
+        if (PythonOS.isUnsupported() && context.getEnv().isNativeAccessAllowed()) {
+            LOGGER.log(Level.WARNING, "Loading native libraries into GraalPy on unsupported platforms. " +
+                            "You can ensure that native access is disallowed for this context and configure GraalPy to use Java backends where possible. " +
+                            "Refer to https://www.graalvm.org/python/docs/ for more information on native and Java module backends. " +
+                            "This is not fatal, because other languages may allow native libraries to run on this platform in the same context, " +
+                            "but attempting to load a native library on GraalPy will fail.");
+        }
+        context.initializeHomeAndPrefixPaths(context.getEnv(), getLanguageHome());
         context.initialize();
     }
 
@@ -559,43 +570,7 @@ public final class PythonLanguage extends TruffleLanguage<PythonContext> {
         if (MIME_TYPE_BYTECODE.equals(source.getMimeType())) {
             byte[] bytes = source.getBytes().toByteArray();
             CodeUnit code = MarshalModuleBuiltins.deserializeCodeUnit(null, context, bytes);
-            boolean internal = shouldMarkSourceInternal(context);
-            // The original file path should be passed as the name
-            String name = source.getName();
-            if (name != null && !name.isEmpty()) {
-                Source textSource = tryLoadSource(context, code, internal, name);
-                if (textSource == null) {
-                    if (name.startsWith(FROZEN_FILENAME_PREFIX) && name.endsWith(FROZEN_FILENAME_SUFFIX)) {
-                        String id = name.substring(FROZEN_FILENAME_PREFIX.length(), name.length() - FROZEN_FILENAME_SUFFIX.length());
-                        String fs = context.getEnv().getFileNameSeparator();
-                        String path = context.getStdlibHome() + fs + id.replace(".", fs) + J_PY_EXTENSION;
-                        textSource = tryLoadSource(context, code, internal, path);
-                        if (textSource == null) {
-                            path = context.getStdlibHome() + fs + id.replace(".", fs) + fs + "__init__.py";
-                            textSource = tryLoadSource(context, code, internal, path);
-                        }
-                    }
-                }
-                if (textSource != null) {
-                    source = textSource;
-                }
-            }
-            if (internal && !source.isInternal()) {
-                source = Source.newBuilder(source).internal(true).build();
-            }
-            RootNode rootNode = null;
-
-            if (PythonOptions.ENABLE_BYTECODE_DSL_INTERPRETER) {
-                if (source.hasBytes()) {
-                    // Force a character-based source so that source sections work as expected.
-                    source = Source.newBuilder(source).content(Source.CONTENT_NONE).build();
-                }
-                rootNode = ((BytecodeDSLCodeUnit) code).createRootNode(context, source);
-            } else {
-                rootNode = PBytecodeRootNode.create(this, (BytecodeCodeUnit) code, source);
-            }
-
-            return PythonUtils.getOrCreateCallTarget(rootNode);
+            return callTargetFromBytecode(context, source, code);
         }
 
         String mime = source.getMimeType();
@@ -621,10 +596,50 @@ public final class PythonLanguage extends TruffleLanguage<PythonContext> {
         return parse(context, source, type, false, optimize, false, null, FutureFeature.fromFlags(flags));
     }
 
-    private static Source tryLoadSource(PythonContext context, CodeUnit code, boolean internal, String path) {
+    public RootCallTarget callTargetFromBytecode(PythonContext context, Source source, CodeUnit code) {
+        boolean internal = shouldMarkSourceInternal(context);
+        SourceBuilder builder = null;
+        // The original file path should be passed as the name
+        String name = source.getName();
+        if (name != null && !name.isEmpty()) {
+            builder = sourceForOriginalFile(context, code, internal, name);
+            if (builder == null) {
+                if (name.startsWith(FROZEN_FILENAME_PREFIX) && name.endsWith(FROZEN_FILENAME_SUFFIX)) {
+                    String id = name.substring(FROZEN_FILENAME_PREFIX.length(), name.length() - FROZEN_FILENAME_SUFFIX.length());
+                    String fs = context.getEnv().getFileNameSeparator();
+                    String path = context.getStdlibHome() + fs + id.replace(".", fs) + J_PY_EXTENSION;
+                    builder = sourceForOriginalFile(context, code, internal, path);
+                    if (builder == null) {
+                        path = context.getStdlibHome() + fs + id.replace(".", fs) + fs + "__init__.py";
+                        builder = sourceForOriginalFile(context, code, internal, path);
+                    }
+                }
+            }
+        }
+        if (builder == null) {
+            builder = Source.newBuilder(source).internal(internal).content(Source.CONTENT_NONE);
+        }
+        RootNode rootNode;
+        LazySource lazySource = new LazySource(builder);
+
+        if (PythonOptions.ENABLE_BYTECODE_DSL_INTERPRETER) {
+            // TODO lazily load source in bytecode DSL interpreter too
+            rootNode = ((BytecodeDSLCodeUnit) code).createRootNode(context, lazySource.getSource());
+        } else {
+            rootNode = PBytecodeRootNode.create(this, (BytecodeCodeUnit) code, lazySource, internal);
+        }
+
+        return PythonUtils.getOrCreateCallTarget(rootNode);
+    }
+
+    private static SourceBuilder sourceForOriginalFile(PythonContext context, CodeUnit code, boolean internal, String path) {
         try {
-            return Source.newBuilder(PythonLanguage.ID, context.getEnv().getPublicTruffleFile(path)).name(code.name.toJavaStringUncached()).internal(internal).build();
-        } catch (IOException | SecurityException | UnsupportedOperationException | InvalidPathException e) {
+            TruffleFile file = context.getEnv().getPublicTruffleFile(path);
+            if (!file.isReadable()) {
+                return null;
+            }
+            return Source.newBuilder(PythonLanguage.ID, file).name(code.name.toJavaStringUncached()).internal(internal);
+        } catch (SecurityException | UnsupportedOperationException | InvalidPathException e) {
             return null;
         }
     }
@@ -710,7 +725,7 @@ public final class PythonLanguage extends TruffleLanguage<PythonContext> {
         Compiler compiler = new Compiler(parserCallbacks);
         CompilationUnit cu = compiler.compile(mod, EnumSet.noneOf(Compiler.Flags.class), optimize, futureFeatures);
         BytecodeCodeUnit co = cu.assemble();
-        return PBytecodeRootNode.create(this, co, source, parserCallbacks);
+        return PBytecodeRootNode.create(this, co, new LazySource(source), source.isInternal(), parserCallbacks);
     }
 
     private RootNode compileForBytecodeDSLInterpreter(PythonContext context, ModTy mod, Source source, int optimize,
@@ -1008,6 +1023,22 @@ public final class PythonLanguage extends TruffleLanguage<PythonContext> {
         }
     }
 
+    private static final Source LINEBREAK_REGEX_SOURCE = Source.newBuilder("regex", "/\r\n|[\n\u000B\u000C\r\u0085\u2028\u2029]/", "re_linebreak") //
+                    .option("regex.Flavor", "Python") //
+                    .option("regex.Encoding", "UTF-32") //
+                    .mimeType("application/tregex") //
+                    .internal(true) //
+                    .build();
+    @CompilationFinal private Object cachedTRegexLineBreakRegex;
+
+    public Object getCachedTRegexLineBreakRegex(PythonContext context) {
+        if (cachedTRegexLineBreakRegex == null) {
+            CompilerDirectives.transferToInterpreterAndInvalidate();
+            cachedTRegexLineBreakRegex = context.getEnv().parseInternal(LINEBREAK_REGEX_SOURCE).call();
+        }
+        return cachedTRegexLineBreakRegex;
+    }
+
     @Override
     protected boolean isThreadAccessAllowed(Thread thread, boolean singleThreaded) {
         if (singleThreaded) {
@@ -1040,7 +1071,7 @@ public final class PythonLanguage extends TruffleLanguage<PythonContext> {
 
     public Shape getShapeForClass(PythonAbstractClass klass) {
         if (isSingleContext()) {
-            return Shape.newBuilder(getEmptyShape()).addConstantProperty(HiddenAttr.getClassHiddenKey(), klass, 0).build();
+            return Shape.newBuilder(getEmptyShape()).dynamicType(klass).build();
         } else {
             return getEmptyShape();
         }
@@ -1062,7 +1093,7 @@ public final class PythonLanguage extends TruffleLanguage<PythonContext> {
 
     private Shape createBuiltinShape(PythonBuiltinClassType type, int ordinal) {
         Shape shape;
-        Shape.DerivedBuilder shapeBuilder = Shape.newBuilder(getEmptyShape()).addConstantProperty(HiddenAttr.getClassHiddenKey(), type, 0);
+        Shape.DerivedBuilder shapeBuilder = Shape.newBuilder(getEmptyShape()).dynamicType(type);
         if (!type.isBuiltinWithDict()) {
             shapeBuilder.shapeFlags(PythonObject.HAS_SLOTS_BUT_NO_DICT_FLAG);
         }
@@ -1209,11 +1240,58 @@ public final class PythonLanguage extends TruffleLanguage<PythonContext> {
 
     public static IndirectCallData createIndirectCallData(Node node) {
         CompilerAsserts.neverPartOfCompilation();
-        return get(node).indirectCallDataMap.computeIfAbsent(node, n -> new IndirectCallData(node));
+        return get(node).indirectCallDataMap.computeIfAbsent(node, n -> new IndirectCallData());
     }
 
     public Source getOrCreateSource(Function<Object, Source> rootNodeFunction, Object key) {
         CompilerAsserts.neverPartOfCompilation();
         return sourceCache.computeIfAbsent(key, rootNodeFunction);
+    }
+
+    public static PythonOS getPythonOS() {
+        if (PythonOS.internalCurrent == PythonOS.PLATFORM_ANY) {
+            if (ImageInfo.inImageBuildtimeCode()) {
+                throw new RuntimeException("Native images with GraalPy are only supported on " + PythonOS.SUPPORTED_PLATFORMS + ".");
+            }
+            String emulated = get(null).getEngineOption(PythonOptions.UnsupportedPlatformEmulates);
+            if (!emulated.isEmpty()) {
+                switch (emulated) {
+                    case "linux":
+                        return PythonOS.PLATFORM_LINUX;
+                    case "macos":
+                        return PythonOS.PLATFORM_DARWIN;
+                    case "windows":
+                        return PLATFORM_WIN32;
+                    default:
+                        throw new UnsupportedPlatform("UnsupportedPlatformEmulates must be exactly one of \"linux\", \"macos\", or \"windows\"");
+                }
+            } else {
+                throw new UnsupportedPlatform("This platform is not currently supported. " +
+                                "Currently supported platforms are " + PythonOS.SUPPORTED_PLATFORMS + ". " +
+                                "If you are running on one of these platforms and are receiving this error, that indicates a bug in this build of GraalPy. " +
+                                "If you are running on a different platform and accept that any functionality that interacts with the system may be " +
+                                "incorrect and Python native extensions will not work, you can specify the system property \"UnsupportedPlatformEmulates\" " +
+                                "with a value of either \"linux\", \"macos\", or \"windows\" to continue further and have GraalPy behave as if it were running on " +
+                                "the OS specified. Loading native libraries will not work and must be disabled using the context options. " +
+                                "See https://www.graalvm.org/python/docs/ for details on GraalPy modules with both native and Java backends, " +
+                                "and https://www.graalvm.org/truffle/javadoc/org/graalvm/polyglot/Context.Builder.html to learn about disallowing native access.");
+            }
+        }
+        return PythonOS.internalCurrent;
+    }
+
+    public static void throwIfUnsupported(String msg) {
+        if (PythonOS.isUnsupported()) {
+            throw new UnsupportedPlatform(msg +
+                            "\nThis point was reached as earlier platform checks were overridden using the system property UnsupportedPlatformEmulates");
+        }
+    }
+
+    public static final class UnsupportedPlatform extends AbstractTruffleException {
+        public UnsupportedPlatform(String msg) {
+            super(msg);
+        }
+
+        private static final long serialVersionUID = 1L;
     }
 }

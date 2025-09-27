@@ -58,6 +58,7 @@ ITER_6 = ['-i', '6']
 ITER_5 = ['-i', '5']
 WARMUP_2 = ['-w', '2']
 
+# For benchmarking with Truffle compilation
 MICRO_BENCHMARKS = {
     'arith-binop': ITER_10 + ['5'],
     'arith-modulo-sized': ITER_10 + ['500'],
@@ -119,6 +120,7 @@ MICRO_BENCHMARKS = {
     'virtualize-in-try-catch-oom': ITER_10,
 }
 
+# For benchmarking the interpreter with --engine.Compilation=false
 MICRO_BENCHMARKS_SMALL = {
     'arith-modulo-sized': ITER_6 + WARMUP_2 + ['1'],
     'if-generic': ITER_10 + WARMUP_2 + ['500000'],
@@ -168,6 +170,18 @@ MICRO_BENCHMARKS_SMALL = {
     'with-exception': ITER_6 + WARMUP_2 + ['5_000_000'],
     'tuple-indexing-from-constructor': ITER_6 + WARMUP_2 + ['250_000'],
     'tuple-indexing-from-literal': ITER_6 + WARMUP_2 + ['400_000'],
+    'c-member-access': ITER_5 + ['30'],
+    'c-list-iterating-obj': ITER_5 + ['500000'],
+    'c-magic-bool': ITER_5 + ['1000000'],
+    'c-magic-iter': ITER_5 + ['500000'],
+    'c-arith-binop': ITER_5 + ['3'],
+    'c-arith-binop2': ITER_5 + ['5'],
+    'c-call-classmethod': ITER_5 + ['200000'],
+    'c-issubtype-polymorphic-forced-to-native': ITER_5 + ['100000'],
+    'c-issubtype-polymorphic': ITER_5 + ['100000'],
+    'c-issubtype-monorphic': ITER_5 + ['200000'],
+    'c-call-method': ITER_5 + ['50000'],
+    'c-call-method-int-float': ITER_5 + ['500000'],
 }
 
 def _pickling_benchmarks(module='pickle'):
@@ -196,6 +210,7 @@ MICRO_NATIVE_BENCHMARKS = {
     'c-issubtype-polymorphic': ITER_5 + ['50000000'],
     'c-issubtype-monorphic': ITER_5 + ['50000000'],
     'c-call-method': ITER_5 + ['5000000'],
+    'c-call-method-int-float': ITER_5 + ['5000000'],
     'c-instantiate-large': ITER_5 + ['1000'],
 }
 
@@ -338,5 +353,6 @@ HEAP_BENCHMARKS = {
         "post-startup": [],
         "import-a-lot": [],
         "allocate-objects": [],
-    }]
+    }],
+    "micro-small-heap": [PATH_MICRO, MICRO_BENCHMARKS_SMALL],
 }

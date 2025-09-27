@@ -59,7 +59,7 @@ import static com.oracle.truffle.api.strings.TruffleString.Encoding.US_ASCII;
 
 import com.oracle.graal.python.PythonLanguage;
 import com.oracle.graal.python.builtins.PythonBuiltinClassType;
-import com.oracle.graal.python.builtins.PythonOS;
+import com.oracle.graal.python.annotations.PythonOS;
 import com.oracle.graal.python.builtins.modules.ctypes.FFIType.FFI_TYPES;
 import com.oracle.graal.python.builtins.modules.ctypes.memory.Pointer;
 import com.oracle.graal.python.builtins.modules.ctypes.memory.PointerNodes;
@@ -85,12 +85,11 @@ import com.oracle.truffle.api.dsl.GenerateInline;
 import com.oracle.truffle.api.dsl.GenerateUncached;
 import com.oracle.truffle.api.dsl.Specialization;
 import com.oracle.truffle.api.nodes.Node;
-import com.oracle.truffle.api.strings.InternalByteArray;
 import com.oracle.truffle.api.strings.TruffleString;
 
 public class CtypesNodes {
 
-    public static final int WCHAR_T_SIZE = PythonOS.getPythonOS() == PythonOS.PLATFORM_WIN32 ? 2 : 4;
+    public static final int WCHAR_T_SIZE = PythonLanguage.getPythonOS() == PythonOS.PLATFORM_WIN32 ? 2 : 4;
     public static final TruffleString.Encoding WCHAR_T_ENCODING = WCHAR_T_SIZE == 2 ? TruffleString.Encoding.UTF_16 : TruffleString.Encoding.UTF_32;
 
     @GenerateInline
@@ -402,9 +401,9 @@ public class CtypesNodes {
                         @Cached GetClassNode getClassNode,
                         @Cached PyObjectTypeCheck typeCheck,
                         @Cached StgDictBuiltins.PyTypeStgDictNode stgDictNode,
-                        @Cached(inline = false) TruffleString.SwitchEncodingNode switchEncodingNode,
-                        @Cached(inline = false) TruffleString.GetInternalByteArrayNode getInternalByteArrayNode,
+                        @Cached TruffleString.SwitchEncodingNode switchEncodingNode,
                         @Cached(inline = false) CStructAccess.AllocateNode allocateNode,
+                        @Cached(inline = false) CStructAccess.WriteTruffleStringNode writeTruffleStringNode,
                         @Cached(inline = false) CStructAccess.WriteByteNode writeByteNode,
                         @Cached(inline = false) CStructAccess.WritePointerNode writePointerNode,
                         @Cached(inline = false) CStructAccess.WriteObjectNewRefNode writeObjectNewRefNode,
@@ -427,9 +426,9 @@ public class CtypesNodes {
 
             Object formatPtr;
             if (dict.format != null) {
-                InternalByteArray formatArray = getInternalByteArrayNode.execute(switchEncodingNode.execute(dict.format, US_ASCII), US_ASCII);
-                formatPtr = allocateNode.alloc(formatArray.getLength() + 1);
-                writeByteNode.writeByteArray(formatPtr, formatArray.getArray(), formatArray.getLength(), formatArray.getOffset(), 0);
+                TruffleString formatStr = switchEncodingNode.execute(dict.format, US_ASCII);
+                formatPtr = allocateNode.alloc(formatStr.byteLength(US_ASCII) + 1);
+                writeTruffleStringNode.write(formatPtr, formatStr, US_ASCII);
             } else {
                 formatPtr = allocateNode.alloc(2);
                 writeByteNode.write(formatPtr, (byte) 'B');

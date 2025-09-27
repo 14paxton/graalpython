@@ -37,7 +37,7 @@ import java.util.List;
 import com.oracle.graal.python.PythonLanguage;
 import com.oracle.graal.python.annotations.Slot;
 import com.oracle.graal.python.annotations.Slot.SlotKind;
-import com.oracle.graal.python.builtins.Builtin;
+import com.oracle.graal.python.annotations.Builtin;
 import com.oracle.graal.python.builtins.CoreFunctions;
 import com.oracle.graal.python.builtins.PythonBuiltinClassType;
 import com.oracle.graal.python.builtins.PythonBuiltins;
@@ -139,7 +139,7 @@ public final class ForeignObjectBuiltins extends PythonBuiltins {
     abstract static class GetAttributeNode extends GetAttrBuiltinNode {
         @Specialization
         static Object doIt(VirtualFrame frame, Object self, Object name,
-                        @Bind("this") Node inliningTarget,
+                        @Bind Node inliningTarget,
                         @Cached ObjectBuiltins.GetAttributeNode objectGetattrNode,
                         @Cached IsBuiltinObjectProfile isAttrError,
                         @Cached ForeignGetattrNode foreignGetattrNode) {
@@ -213,7 +213,7 @@ public final class ForeignObjectBuiltins extends PythonBuiltins {
     abstract static class SetattrNode extends SetAttrBuiltinNode {
         @Specialization(guards = "!isNoValue(value)")
         static void doSet(Object object, Object key, Object value,
-                        @Bind("this") Node inliningTarget,
+                        @Bind Node inliningTarget,
                         @Shared @CachedLibrary(limit = "3") InteropLibrary lib,
                         @Shared @Cached CastToJavaStringNode castToString,
                         @Shared @Cached GilNode gil,
@@ -255,7 +255,7 @@ public final class ForeignObjectBuiltins extends PythonBuiltins {
 
         @Specialization(guards = "isNoValue(value)")
         static void doDelete(Object object, Object key, @SuppressWarnings("unused") PNone value,
-                        @Bind("this") Node inliningTarget,
+                        @Bind Node inliningTarget,
                         @Shared @CachedLibrary(limit = "3") InteropLibrary lib,
                         @Shared @Cached CastToJavaStringNode castToString,
                         @Shared @Cached GilNode gil,
@@ -278,7 +278,7 @@ public final class ForeignObjectBuiltins extends PythonBuiltins {
     abstract static class DirNode extends PythonUnaryBuiltinNode {
         @Specialization
         protected Object doIt(VirtualFrame frame, Object object,
-                        @Bind("this") Node inliningTarget,
+                        @Bind Node inliningTarget,
                         @CachedLibrary(limit = "3") InteropLibrary lib,
                         @CachedLibrary(limit = "3") InteropLibrary arrayInterop,
                         @CachedLibrary(limit = "3") InteropLibrary stringInterop,
@@ -288,9 +288,9 @@ public final class ForeignObjectBuiltins extends PythonBuiltins {
                         @Cached GetClassNode getClassNode,
                         @Cached TypeBuiltins.DirNode typeDirNode,
                         @Cached SetNodes.AddNode addNode,
-                        @Cached(inline = false) ListBuiltins.ListSortNode sortNode,
+                        @Cached ListBuiltins.ListSortNode sortNode,
                         @Cached SetNodes.ConstructSetNode constructSetNode,
-                        @Cached(inline = false) ListNodes.ConstructListNode constructListNode) {
+                        @Cached ListNodes.ConstructListNode constructListNode) {
             // Inspired by ObjectBuiltins.DirNode
             var pythonClass = getClassNode.execute(inliningTarget, object);
             PSet attributes = constructSetNode.execute(frame, typeDirNode.execute(frame, pythonClass));
@@ -334,7 +334,7 @@ public final class ForeignObjectBuiltins extends PythonBuiltins {
 
         @Specialization
         Object str(VirtualFrame frame, Object object,
-                        @Bind("this") Node inliningTarget,
+                        @Bind Node inliningTarget,
                         @Cached GetObjectSlotsNode getSlots,
                         @Cached PyObjectReprAsObjectNode reprNode,
                         @CachedLibrary(limit = "3") InteropLibrary lib,

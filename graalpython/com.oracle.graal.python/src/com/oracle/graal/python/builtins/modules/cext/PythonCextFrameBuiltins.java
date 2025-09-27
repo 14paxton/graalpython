@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2023, 2024, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2023, 2025, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * The Universal Permissive License (UPL), Version 1.0
@@ -47,9 +47,11 @@ import static com.oracle.graal.python.builtins.objects.cext.capi.transitions.Arg
 import static com.oracle.graal.python.builtins.objects.cext.capi.transitions.ArgDescriptor.PyFrameObjectTransfer;
 import static com.oracle.graal.python.builtins.objects.cext.capi.transitions.ArgDescriptor.PyObjectTransfer;
 
+import com.oracle.graal.python.builtins.modules.cext.PythonCextBuiltins.CApiBinaryBuiltinNode;
 import com.oracle.graal.python.builtins.modules.cext.PythonCextBuiltins.CApiBuiltin;
 import com.oracle.graal.python.builtins.modules.cext.PythonCextBuiltins.CApiUnaryBuiltinNode;
 import com.oracle.graal.python.builtins.objects.PNone;
+import com.oracle.graal.python.builtins.objects.cext.capi.transitions.ArgDescriptor;
 import com.oracle.graal.python.builtins.objects.frame.FrameBuiltins;
 import com.oracle.graal.python.builtins.objects.frame.PFrame;
 import com.oracle.graal.python.nodes.frame.GetFrameLocalsNode;
@@ -89,7 +91,7 @@ public final class PythonCextFrameBuiltins {
     abstract static class PyFrame_GetLocals extends CApiUnaryBuiltinNode {
         @Specialization
         static Object get(PFrame frame,
-                        @Bind("this") Node inliningTarget,
+                        @Bind Node inliningTarget,
                         @Cached GetFrameLocalsNode getFrameLocalsNode) {
             return getFrameLocalsNode.execute(inliningTarget, frame);
         }
@@ -123,6 +125,15 @@ public final class PythonCextFrameBuiltins {
         static Object get(PFrame frame,
                         @Cached FrameBuiltins.GetBuiltinsNode getBuiltinsNode) {
             return getBuiltinsNode.execute(null, frame);
+        }
+    }
+
+    @CApiBuiltin(ret = ArgDescriptor.Void, args = {PyFrameObject, Int}, call = Direct)
+    abstract static class GraalPyFrame_SetLineNumber extends CApiBinaryBuiltinNode {
+        @Specialization
+        static Object set(PFrame frame, int value) {
+            frame.setLine(value);
+            return PNone.NONE;
         }
     }
 }

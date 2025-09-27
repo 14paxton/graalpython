@@ -54,6 +54,7 @@ import com.oracle.graal.python.builtins.objects.type.slots.TpSlotLen.CallSlotLen
 import com.oracle.graal.python.nodes.PNodeWithContext;
 import com.oracle.truffle.api.HostCompilerDirectives.InliningCutoff;
 import com.oracle.truffle.api.bytecode.OperationProxy;
+import com.oracle.truffle.api.bytecode.StoreBytecodeIndex;
 import com.oracle.truffle.api.dsl.Bind;
 import com.oracle.truffle.api.dsl.Cached;
 import com.oracle.truffle.api.dsl.Cached.Exclusive;
@@ -77,7 +78,7 @@ import com.oracle.truffle.api.strings.TruffleString;
 @GenerateUncached
 @GenerateInline(false)
 @GenerateCached
-@OperationProxy.Proxyable
+@OperationProxy.Proxyable(storeBytecodeIndex = false)
 public abstract class PyObjectIsTrueNode extends PNodeWithContext {
     public abstract boolean execute(Frame frame, Object object);
 
@@ -147,8 +148,9 @@ public abstract class PyObjectIsTrueNode extends PNodeWithContext {
     @Specialization(guards = {"!isBoolean(object)", "!isPNone(object)", "!isInt(object)", "!isLong(object)", "!isDouble(object)", "!isTruffleString(object)"}, //
                     replaces = {"doList", "doTuple", "doDict", "doSet"})
     @InliningCutoff
+    @StoreBytecodeIndex
     public static boolean doOthers(VirtualFrame frame, Object object,
-                    @Cached(inline = false) PyObjectIsTrueNodeGeneric internalNode) {
+                    @Cached PyObjectIsTrueNodeGeneric internalNode) {
         // Cached PyObjectItTrue nodes used in PBytecodeRootNode are significant contributors to
         // footprint, so we use indirection to save all the fields for the nodes used in the generic
         // variant + this is one polymorphic dispatch to the execute method. Inside the cached
@@ -166,7 +168,7 @@ public abstract class PyObjectIsTrueNode extends PNodeWithContext {
 
         @Specialization
         static boolean doIt(VirtualFrame frame, Object object,
-                        @Bind("this") Node inliningTarget,
+                        @Bind Node inliningTarget,
                         @Cached GetObjectSlotsNode getTpSlotsNode,
                         @Cached CallSlotNbBoolNode callBoolNode,
                         @Cached InlinedBranchProfile lenLookupBranch,

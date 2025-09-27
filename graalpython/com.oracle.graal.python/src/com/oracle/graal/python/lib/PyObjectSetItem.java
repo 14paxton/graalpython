@@ -89,7 +89,7 @@ public abstract class PyObjectSetItem extends Node {
 
     public abstract void execute(Frame frame, Node inliningTarget, Object container, Object index, Object item);
 
-    @Specialization(guards = "isBuiltinList(object)")
+    @Specialization(guards = "isBuiltinList(object)", excludeForUncached = true)
     static void doList(VirtualFrame frame, PList object, Object key, Object value,
                     @Cached(inline = false) ListBuiltins.SetSubscriptNode setItemNode) {
         setItemNode.executeVoid(frame, object, key, value);
@@ -134,7 +134,7 @@ public abstract class PyObjectSetItem extends Node {
         @Fallback
         @InliningCutoff
         static void error(Object object, @SuppressWarnings("unused") TpSlots slots, @SuppressWarnings("unused") Object key, @SuppressWarnings("unused") Object value,
-                        @Bind("this") Node inliningTarget) {
+                        @Bind Node inliningTarget) {
             throw PRaiseNode.raiseStatic(inliningTarget, TypeError, ErrorMessages.OBJ_DOES_NOT_SUPPORT_ITEM_ASSIGMENT, object);
         }
     }

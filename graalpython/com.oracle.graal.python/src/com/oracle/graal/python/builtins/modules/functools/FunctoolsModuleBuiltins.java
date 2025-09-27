@@ -50,7 +50,7 @@ import static com.oracle.truffle.api.nodes.LoopNode.reportLoopCount;
 import java.util.List;
 
 import com.oracle.graal.python.PythonLanguage;
-import com.oracle.graal.python.builtins.Builtin;
+import com.oracle.graal.python.annotations.Builtin;
 import com.oracle.graal.python.builtins.CoreFunctions;
 import com.oracle.graal.python.builtins.Python3Core;
 import com.oracle.graal.python.builtins.PythonBuiltinClassType;
@@ -118,7 +118,7 @@ public final class FunctoolsModuleBuiltins extends PythonBuiltins {
     public abstract static class ReduceNode extends PythonTernaryBuiltinNode {
         @Specialization
         Object doReduce(VirtualFrame frame, Object function, Object sequence, Object initialIn,
-                        @Bind("this") Node inliningTarget,
+                        @Bind Node inliningTarget,
                         @Cached PyObjectGetIter getIter,
                         @Cached PyIterNextNode nextNode,
                         @Cached CallNode callNode,

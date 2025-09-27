@@ -68,7 +68,7 @@ import com.oracle.graal.python.annotations.ArgumentClinic;
 import com.oracle.graal.python.annotations.Slot;
 import com.oracle.graal.python.annotations.Slot.SlotKind;
 import com.oracle.graal.python.annotations.Slot.SlotSignature;
-import com.oracle.graal.python.builtins.Builtin;
+import com.oracle.graal.python.annotations.Builtin;
 import com.oracle.graal.python.builtins.CoreFunctions;
 import com.oracle.graal.python.builtins.PythonBuiltins;
 import com.oracle.graal.python.builtins.modules.CodecsModuleBuiltins;
@@ -98,6 +98,7 @@ import com.oracle.truffle.api.dsl.Bind;
 import com.oracle.truffle.api.dsl.Cached;
 import com.oracle.truffle.api.dsl.Cached.Exclusive;
 import com.oracle.truffle.api.dsl.Cached.Shared;
+import com.oracle.truffle.api.dsl.GenerateInline;
 import com.oracle.truffle.api.dsl.GenerateNodeFactory;
 import com.oracle.truffle.api.dsl.ImportStatic;
 import com.oracle.truffle.api.dsl.NodeFactory;
@@ -125,7 +126,7 @@ public final class MultibyteIncrementalEncoderBuiltins extends PythonBuiltins {
 
         @Specialization
         static Object mbstreamreaderNew(VirtualFrame frame, Object type, Object err,
-                        @Bind("this") Node inliningTarget,
+                        @Bind Node inliningTarget,
                         @Cached CastToTruffleStringNode castToStringNode,
                         @Cached PyObjectGetAttr getAttr,
                         @Cached TruffleString.EqualNode isEqual,
@@ -165,7 +166,7 @@ public final class MultibyteIncrementalEncoderBuiltins extends PythonBuiltins {
     }
 
     @ImportStatic(PGuards.class)
-    @SuppressWarnings("truffle-inlining")       // footprint reduction 44 -> 25
+    @GenerateInline(false)       // footprint reduction 44 -> 25
     protected abstract static class EncodeStatefulNode extends Node {
 
         abstract Object execute(VirtualFrame frame, MultibyteStatefulEncoderContext ctx, Object unistr, int end);
@@ -173,7 +174,7 @@ public final class MultibyteIncrementalEncoderBuiltins extends PythonBuiltins {
         // encoder_encode_stateful
         @Specialization
         static Object ts(VirtualFrame frame, MultibyteStatefulEncoderContext ctx, TruffleString ucvt, int end,
-                        @Bind("this") Node inliningTarget,
+                        @Bind Node inliningTarget,
                         @Exclusive @Cached MultibyteCodecUtil.EncodeNode encodeNode,
                         @Shared @Cached TruffleString.ConcatNode concatNode,
                         @Shared @Cached TruffleString.CodePointLengthNode codePointLengthNode,
@@ -214,7 +215,7 @@ public final class MultibyteIncrementalEncoderBuiltins extends PythonBuiltins {
 
         @Specialization(guards = "!isTruffleString(unistr)")
         static Object notTS(VirtualFrame frame, MultibyteStatefulEncoderContext ctx, Object unistr, int end,
-                        @Bind("this") Node inliningTarget,
+                        @Bind Node inliningTarget,
                         @Cached PyObjectStrAsObjectNode strNode,
                         @Cached PyUnicodeCheckNode unicodeCheckNode,
                         @Cached CastToTruffleStringNode toTruffleStringNode,
@@ -261,7 +262,7 @@ public final class MultibyteIncrementalEncoderBuiltins extends PythonBuiltins {
         // _multibytecodec_MultibyteIncrementalEncoder_getstate_impl
         @Specialization
         static Object getstate(MultibyteIncrementalEncoderObject self,
-                        @Bind("this") Node inliningTarget,
+                        @Bind Node inliningTarget,
                         @Cached HiddenAttr.WriteNode writeHiddenAttrNode,
                         @Cached CodecsModuleBuiltins.CodecsEncodeToJavaBytesNode asUTF8AndSize,
                         @Cached IntNodes.PyLongFromByteArray fromByteArray,
@@ -304,7 +305,7 @@ public final class MultibyteIncrementalEncoderBuiltins extends PythonBuiltins {
         @Specialization
         // _multibytecodec_MultibyteIncrementalEncoder_setstate_impl
         static Object setstate(MultibyteIncrementalEncoderObject self, PInt statelong,
-                        @Bind("this") Node inliningTarget,
+                        @Bind Node inliningTarget,
                         @Cached HiddenAttr.ReadNode readHiddenAttrNode,
                         @Cached IntNodes.PyLongAsByteArray asByteArray,
                         @Cached PRaiseNode raiseNode) {

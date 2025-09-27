@@ -50,7 +50,7 @@ import com.oracle.graal.python.PythonLanguage;
 import com.oracle.graal.python.annotations.Slot;
 import com.oracle.graal.python.annotations.Slot.SlotKind;
 import com.oracle.graal.python.annotations.Slot.SlotSignature;
-import com.oracle.graal.python.builtins.Builtin;
+import com.oracle.graal.python.annotations.Builtin;
 import com.oracle.graal.python.builtins.CoreFunctions;
 import com.oracle.graal.python.builtins.PythonBuiltinClassType;
 import com.oracle.graal.python.builtins.PythonBuiltins;
@@ -58,14 +58,15 @@ import com.oracle.graal.python.builtins.objects.function.PKeyword;
 import com.oracle.graal.python.builtins.objects.tuple.PTuple;
 import com.oracle.graal.python.builtins.objects.type.TpSlots;
 import com.oracle.graal.python.builtins.objects.type.TypeNodes;
+import com.oracle.graal.python.builtins.objects.type.slots.TpSlot;
+import com.oracle.graal.python.builtins.objects.type.slots.TpSlotIterNext;
 import com.oracle.graal.python.builtins.objects.type.slots.TpSlotIterNext.TpIterNextBuiltin;
-import com.oracle.graal.python.lib.PyIterNextNode;
 import com.oracle.graal.python.lib.PyObjectGetIter;
 import com.oracle.graal.python.nodes.ErrorMessages;
 import com.oracle.graal.python.nodes.PRaiseNode;
 import com.oracle.graal.python.nodes.call.CallNode;
 import com.oracle.graal.python.nodes.function.PythonBuiltinBaseNode;
-import com.oracle.graal.python.nodes.function.PythonBuiltinNode;
+import com.oracle.graal.python.nodes.function.builtins.PythonBinaryBuiltinNode;
 import com.oracle.graal.python.nodes.function.builtins.PythonUnaryBuiltinNode;
 import com.oracle.graal.python.nodes.function.builtins.PythonVarargsBuiltinNode;
 import com.oracle.graal.python.runtime.object.PFactory;
@@ -92,10 +93,10 @@ public final class MapBuiltins extends PythonBuiltins {
     @Slot(value = SlotKind.tp_new, isComplex = true)
     @SlotSignature(name = J_MAP, minNumOfPositionalArgs = 1, takesVarArgs = true, takesVarKeywordArgs = true)
     @GenerateNodeFactory
-    public abstract static class MapNode extends PythonVarargsBuiltinNode {
+    abstract static class MapNode extends PythonVarargsBuiltinNode {
         @Specialization
         static PMap doit(VirtualFrame frame, Object cls, Object[] args, PKeyword[] keywords,
-                        @Bind("this") Node inliningTarget,
+                        @Bind Node inliningTarget,
                         @Cached(inline = false /* uncommon path */) TypeNodes.HasObjectInitNode hasObjectInitNode,
                         @Cached InlinedLoopConditionProfile loopProfile,
                         @Cached PyObjectGetIter getIter,
@@ -122,25 +123,33 @@ public final class MapBuiltins extends PythonBuiltins {
 
     @Slot(value = SlotKind.tp_iternext, isComplex = true)
     @GenerateNodeFactory
-    public abstract static class NextNode extends TpIterNextBuiltin {
+    abstract static class NextNode extends TpIterNextBuiltin {
         @Specialization(guards = "self.getIterators().length == 1")
-        Object doOne(VirtualFrame frame, PMap self,
+        static Object doOne(VirtualFrame frame, PMap self,
                         @Bind Node inliningTarget,
-                        @Shared @Cached CallNode callNode,
-                        @Shared @Cached PyIterNextNode nextNode) {
-            Object item = nextNode.execute(frame, inliningTarget, self.getIterators()[0]);
+                        @Shared @Cached TpSlots.GetObjectSlotsNode getSlots,
+                        @Shared @Cached TpSlotIterNext.CallSlotTpIterNextNode callTpIternext,
+                        @Shared @Cached CallNode callNode) {
+            Object iterator = self.getIterators()[0];
+            TpSlot iternext = getSlots.execute(inliningTarget, iterator).tp_iternext();
+            Object item = callTpIternext.execute(frame, inliningTarget, iternext, iterator);
             return callNode.execute(frame, self.getFunction(), item);
         }
 
         @Specialization(replaces = "doOne")
-        Object doNext(VirtualFrame frame, PMap self,
+        static Object doNext(VirtualFrame frame, PMap self,
                         @Bind Node inliningTarget,
+                        @Shared @Cached TpSlots.GetObjectSlotsNode getSlots,
+                        @Shared @Cached TpSlotIterNext.CallSlotTpIterNextNode callTpIternext,
                         @Shared @Cached CallNode callNode,
-                        @Shared @Cached PyIterNextNode nextNode) {
+                        @Cached InlinedLoopConditionProfile loopProfile) {
             Object[] iterators = self.getIterators();
             Object[] arguments = new Object[iterators.length];
-            for (int i = 0; i < iterators.length; i++) {
-                arguments[i] = nextNode.execute(frame, inliningTarget, iterators[i]);
+            loopProfile.profileCounted(inliningTarget, iterators.length);
+            for (int i = 0; loopProfile.inject(inliningTarget, i < iterators.length); i++) {
+                Object iterator = iterators[i];
+                TpSlot iternext = getSlots.execute(inliningTarget, iterator).tp_iternext();
+                arguments[i] = callTpIternext.execute(frame, inliningTarget, iternext, iterator);
             }
             return callNode.execute(frame, self.getFunction(), arguments);
         }
@@ -148,7 +157,7 @@ public final class MapBuiltins extends PythonBuiltins {
 
     @Slot(value = SlotKind.tp_iter, isComplex = true)
     @GenerateNodeFactory
-    public abstract static class IterNode extends PythonUnaryBuiltinNode {
+    abstract static class IterNode extends PythonUnaryBuiltinNode {
 
         @Specialization
         static PMap iter(PMap self) {
@@ -158,7 +167,7 @@ public final class MapBuiltins extends PythonBuiltins {
 
     @Builtin(name = J___REDUCE__, minNumOfPositionalArgs = 1, maxNumOfPositionalArgs = 2)
     @GenerateNodeFactory
-    public abstract static class ReduceNode extends PythonBuiltinNode {
+    abstract static class ReduceNode extends PythonBinaryBuiltinNode {
         @Specialization
         static PTuple doit(PMap self, @SuppressWarnings("unused") Object ignored,
                         @Bind PythonLanguage language) {

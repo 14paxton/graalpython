@@ -90,7 +90,7 @@ import java.util.logging.Level;
 
 import com.oracle.graal.python.PythonLanguage;
 import com.oracle.graal.python.builtins.PythonBuiltinClassType;
-import com.oracle.graal.python.builtins.PythonOS;
+import com.oracle.graal.python.annotations.PythonOS;
 import com.oracle.graal.python.builtins.objects.PNone;
 import com.oracle.graal.python.builtins.objects.exception.OSErrorEnum;
 import com.oracle.graal.python.nodes.ErrorMessages;
@@ -229,7 +229,6 @@ public final class NFIPosixSupport extends PosixSupport {
         get_terminal_size("(sint32, [sint32]):sint32"),
         call_kill("(sint64, sint32):sint32"),
         call_killpg("(sint64, sint32):sint32"),
-        call_abort("():void"),
         call_waitpid("(sint64, [sint32], sint32):sint64"),
         call_wcoredump("(sint32):sint32"),
         call_wifcontinued("(sint32):sint32"),
@@ -1200,11 +1199,6 @@ public final class NFIPosixSupport extends PosixSupport {
     }
 
     @ExportMessage
-    public void abort(@Shared("invoke") @Cached InvokeNativeFunction invokeNode) {
-        invokeNode.call(this, PosixNativeFunction.call_abort);
-    }
-
-    @ExportMessage
     public boolean wifcontinued(int status,
                     @Shared("invoke") @Cached InvokeNativeFunction invokeNode) {
         return invokeNode.callInt(this, PosixNativeFunction.call_wifcontinued, status) != 0;
@@ -1933,7 +1927,7 @@ public final class NFIPosixSupport extends PosixSupport {
          */
         if (injectBranchProbability(SLOWPATH_PROBABILITY, cryptLibrary == null)) {
             try {
-                cryptLibrary = InvokeNativeFunction.loadLibrary(this, PythonOS.getPythonOS() != PythonOS.PLATFORM_DARWIN ? "libcrypt.so" : null);
+                cryptLibrary = InvokeNativeFunction.loadLibrary(this, PythonLanguage.getPythonOS() != PythonOS.PLATFORM_DARWIN ? "libcrypt.so" : null);
             } catch (Throwable e) {
                 CompilerDirectives.transferToInterpreterAndInvalidate();
                 throw PRaiseNode.raiseStatic(invokeNode, PythonBuiltinClassType.SystemError, ErrorMessages.UNABLE_TO_LOAD_LIBCRYPT);
@@ -2349,7 +2343,7 @@ public final class NFIPosixSupport extends PosixSupport {
          * msimacek: It works on Linux, and it doesn't work on Darwin. It might work on some other
          * Unix-likes, but it's hard to check, so let's assume it only works on Linux for now
          */
-        if (PythonOS.getPythonOS() != PythonOS.PLATFORM_LINUX) {
+        if (PythonLanguage.getPythonOS() != PythonOS.PLATFORM_LINUX) {
             throw NO_SEM_GETVALUE_EXCEPTION;
         }
         int[] value = new int[1];
@@ -2394,10 +2388,10 @@ public final class NFIPosixSupport extends PosixSupport {
 
     @ExportMessage
     boolean semTimedWait(long handle, long deadlineNs,
-                    @Bind("$node") Node node,
+                    @Bind Node node,
                     @CachedLibrary("this") PosixSupportLibrary thisLib,
                     @Shared("invoke") @Cached InvokeNativeFunction invokeNode) throws PosixException {
-        if (PythonOS.getPythonOS() == PythonOS.PLATFORM_LINUX) {
+        if (PythonLanguage.getPythonOS() == PythonOS.PLATFORM_LINUX) {
             int res = invokeNode.callInt(this, PosixNativeFunction.call_sem_timedwait, handle, deadlineNs);
             if (res < 0) {
                 int errno = getErrno(invokeNode);

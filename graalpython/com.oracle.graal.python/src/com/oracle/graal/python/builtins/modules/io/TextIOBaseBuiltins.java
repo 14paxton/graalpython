@@ -55,7 +55,7 @@ import static com.oracle.graal.python.builtins.modules.io.IONodes.T_WRITE;
 
 import java.util.List;
 
-import com.oracle.graal.python.builtins.Builtin;
+import com.oracle.graal.python.annotations.Builtin;
 import com.oracle.graal.python.builtins.CoreFunctions;
 import com.oracle.graal.python.builtins.PythonBuiltinClassType;
 import com.oracle.graal.python.builtins.PythonBuiltins;
@@ -83,7 +83,7 @@ public final class TextIOBaseBuiltins extends PythonBuiltins {
     abstract static class DetachNode extends PythonBuiltinNode {
         @Specialization
         static Object detach(@SuppressWarnings("unused") Object self,
-                        @Bind("this") Node inliningTarget) {
+                        @Bind Node inliningTarget) {
             throw PRaiseNode.raiseStatic(inliningTarget, IOUnsupportedOperation, T_DETACH);
         }
     }
@@ -93,7 +93,7 @@ public final class TextIOBaseBuiltins extends PythonBuiltins {
     abstract static class ReadNode extends PythonBuiltinNode {
         @Specialization
         static Object read(@SuppressWarnings("unused") Object self, @SuppressWarnings("unused") Object args,
-                        @Bind("this") Node inliningTarget) {
+                        @Bind Node inliningTarget) {
             throw PRaiseNode.raiseStatic(inliningTarget, IOUnsupportedOperation, T_READ);
         }
     }
@@ -103,7 +103,7 @@ public final class TextIOBaseBuiltins extends PythonBuiltins {
     abstract static class ReadlineNode extends PythonBuiltinNode {
         @Specialization
         static Object read(@SuppressWarnings("unused") Object self, @SuppressWarnings("unused") Object args,
-                        @Bind("this") Node inliningTarget) {
+                        @Bind Node inliningTarget) {
             throw PRaiseNode.raiseStatic(inliningTarget, IOUnsupportedOperation, T_READLINE);
         }
     }
@@ -113,7 +113,7 @@ public final class TextIOBaseBuiltins extends PythonBuiltins {
     abstract static class WriteNode extends PythonBuiltinNode {
         @Specialization
         static Object write(@SuppressWarnings("unused") Object self, @SuppressWarnings("unused") Object args,
-                        @Bind("this") Node inliningTarget) {
+                        @Bind Node inliningTarget) {
             throw PRaiseNode.raiseStatic(inliningTarget, IOUnsupportedOperation, T_WRITE);
         }
     }

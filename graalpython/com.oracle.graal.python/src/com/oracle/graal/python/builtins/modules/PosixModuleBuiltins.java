@@ -55,21 +55,20 @@ import com.oracle.graal.python.PythonLanguage;
 import com.oracle.graal.python.annotations.ArgumentClinic;
 import com.oracle.graal.python.annotations.ArgumentClinic.ClinicConversion;
 import com.oracle.graal.python.annotations.ArgumentClinic.PrimitiveType;
+import com.oracle.graal.python.annotations.Builtin;
 import com.oracle.graal.python.annotations.ClinicConverterFactory;
 import com.oracle.graal.python.annotations.ClinicConverterFactory.ArgumentName;
 import com.oracle.graal.python.annotations.ClinicConverterFactory.BuiltinName;
-import com.oracle.graal.python.builtins.Builtin;
+import com.oracle.graal.python.annotations.PythonOS;
 import com.oracle.graal.python.builtins.CoreFunctions;
 import com.oracle.graal.python.builtins.Python3Core;
 import com.oracle.graal.python.builtins.PythonBuiltinClassType;
 import com.oracle.graal.python.builtins.PythonBuiltins;
-import com.oracle.graal.python.builtins.PythonOS;
 import com.oracle.graal.python.builtins.modules.SysModuleBuiltins.AuditNode;
 import com.oracle.graal.python.builtins.objects.PNone;
 import com.oracle.graal.python.builtins.objects.buffer.PythonBufferAccessLibrary;
 import com.oracle.graal.python.builtins.objects.bytes.BytesNodes;
 import com.oracle.graal.python.builtins.objects.bytes.PBytes;
-import com.oracle.graal.python.builtins.objects.common.SequenceNodes.LenNode;
 import com.oracle.graal.python.builtins.objects.common.SequenceStorageNodes;
 import com.oracle.graal.python.builtins.objects.common.SequenceStorageNodes.GetItemNode;
 import com.oracle.graal.python.builtins.objects.common.SequenceStorageNodes.ToArrayNode;
@@ -128,7 +127,6 @@ import com.oracle.graal.python.runtime.PythonOptions;
 import com.oracle.graal.python.runtime.exception.PException;
 import com.oracle.graal.python.runtime.exception.PythonExitException;
 import com.oracle.graal.python.runtime.object.PFactory;
-import com.oracle.graal.python.runtime.sequence.PSequence;
 import com.oracle.graal.python.runtime.sequence.storage.LongSequenceStorage;
 import com.oracle.graal.python.runtime.sequence.storage.SequenceStorage;
 import com.oracle.graal.python.util.OverflowException;
@@ -212,6 +210,11 @@ public final class PosixModuleBuiltins extends PythonBuiltins {
         addConstants(PosixConstants.accessMode);
         addConstants(PosixConstants.exitStatus);
         addConstants(PosixConstants.rtld);
+        for (IntConstant c : PosixConstants.winapiLoadLibraryFlags) {
+            if (c.defined) {
+                addBuiltinConstant('_' + c.name, c.getValueIfDefined());
+            }
+        }
 
         addConstant(PosixConstants.SEEK_DATA);
         addConstant(PosixConstants.SEEK_HOLE);
@@ -233,7 +236,7 @@ public final class PosixModuleBuiltins extends PythonBuiltins {
     public void initialize(Python3Core core) {
         super.initialize(core);
         ArrayList<TruffleString> haveFunctions = new ArrayList<>();
-        if (PythonOS.getPythonOS() != PythonOS.PLATFORM_WIN32) {
+        if (PythonLanguage.getPythonOS() != PythonOS.PLATFORM_WIN32) {
             Collections.addAll(haveFunctions, tsLiteral("HAVE_FACCESSAT"), tsLiteral("HAVE_FCHDIR"), tsLiteral("HAVE_FCHMOD"), tsLiteral("HAVE_FCHMODAT"), tsLiteral("HAVE_FDOPENDIR"),
                             tsLiteral("HAVE_FSTATAT"), tsLiteral("HAVE_FTRUNCATE"), tsLiteral("HAVE_FUTIMES"), tsLiteral("HAVE_LUTIMES"),
                             tsLiteral("HAVE_MKDIRAT"), tsLiteral("HAVE_OPENAT"), tsLiteral("HAVE_READLINKAT"), tsLiteral("HAVE_RENAMEAT"), tsLiteral("HAVE_SYMLINKAT"), tsLiteral("HAVE_UNLINKAT"));
@@ -283,7 +286,7 @@ public final class PosixModuleBuiltins extends PythonBuiltins {
         // them directly in the 'os' module, and expose them in the `posix` module as well.
         // Note that the classes are still re-imported by os.py.
         PythonModule posix;
-        if (PythonOS.getPythonOS() == PythonOS.PLATFORM_WIN32) {
+        if (PythonLanguage.getPythonOS() == PythonOS.PLATFORM_WIN32) {
             posix = core.lookupBuiltinModule(T_NT);
         } else {
             posix = core.lookupBuiltinModule(T_POSIX);
@@ -314,7 +317,7 @@ public final class PosixModuleBuiltins extends PythonBuiltins {
                 // we don't want subprocesses to pick it up
                 continue;
             }
-            if (PythonOS.getPythonOS() == PythonOS.PLATFORM_WIN32 && entry.getKey().startsWith("=")) {
+            if (PythonLanguage.getPythonOS() == PythonOS.PLATFORM_WIN32 && entry.getKey().startsWith("=")) {
                 // Hidden variable, shouldn't be visible to python
                 continue;
             }
@@ -335,7 +338,7 @@ public final class PosixModuleBuiltins extends PythonBuiltins {
             }
             environ.setItem(key, val);
         }
-        if (PythonOS.getPythonOS() == PythonOS.PLATFORM_WIN32) {
+        if (PythonLanguage.getPythonOS() == PythonOS.PLATFORM_WIN32) {
             // XXX: Until we fix pip
             environ.setItem(toEnv(language, "PIP_NO_CACHE_DIR"), toEnv(language, "0"));
         }
@@ -343,7 +346,7 @@ public final class PosixModuleBuiltins extends PythonBuiltins {
         // CPython gets widespread
         environ.setItem(toEnv(language, "UNSAFE_PYO3_SKIP_VERSION_CHECK"), toEnv(language, "1"));
         PythonModule posix;
-        if (PythonOS.getPythonOS() == PythonOS.PLATFORM_WIN32) {
+        if (PythonLanguage.getPythonOS() == PythonOS.PLATFORM_WIN32) {
             posix = core.lookupBuiltinModule(T_NT);
             posix.setAttribute(toTruffleStringUncached("chown"), PNone.NO_VALUE);
             posix.setAttribute(toTruffleStringUncached("fchown"), PNone.NO_VALUE);
@@ -355,7 +358,6 @@ public final class PosixModuleBuiltins extends PythonBuiltins {
         ((PDict) environAttr).setDictStorage(environ.getDictStorage());
 
         if (posixLib.getBackend(posixSupport).toJavaStringUncached().equals("java")) {
-            posix.setAttribute(toTruffleStringUncached("statvfs"), PNone.NO_VALUE);
             posix.setAttribute(toTruffleStringUncached("geteuid"), PNone.NO_VALUE);
             posix.setAttribute(toTruffleStringUncached("getegid"), PNone.NO_VALUE);
 
@@ -364,7 +366,7 @@ public final class PosixModuleBuiltins extends PythonBuiltins {
     }
 
     private static Object toEnv(PythonLanguage language, String value) {
-        if (PythonOS.getPythonOS() == PythonOS.PLATFORM_WIN32) {
+        if (PythonLanguage.getPythonOS() == PythonOS.PLATFORM_WIN32) {
             return toTruffleStringUncached(value);
         } else {
             return PFactory.createBytes(language, value.getBytes());
@@ -372,7 +374,7 @@ public final class PosixModuleBuiltins extends PythonBuiltins {
     }
 
     private static Object toEnv(PythonLanguage language, TruffleString value) {
-        if (PythonOS.getPythonOS() == PythonOS.PLATFORM_WIN32) {
+        if (PythonLanguage.getPythonOS() == PythonOS.PLATFORM_WIN32) {
             return value;
         } else {
             return PFactory.createBytes(language, value.toJavaStringUncached().getBytes());
@@ -392,7 +394,7 @@ public final class PosixModuleBuiltins extends PythonBuiltins {
 
         @Specialization
         static PNone putenv(VirtualFrame frame, PBytes nameBytes, PBytes valueBytes,
-                        @Bind("this") Node inliningTarget,
+                        @Bind Node inliningTarget,
                         @Cached BytesNodes.ToBytesNode toBytesNode,
                         @Cached SysModuleBuiltins.AuditNode auditNode,
                         @Bind PythonContext context,
@@ -445,7 +447,7 @@ public final class PosixModuleBuiltins extends PythonBuiltins {
 
         @Specialization
         static PNone putenv(VirtualFrame frame, PBytes nameBytes,
-                        @Bind("this") Node inliningTarget,
+                        @Bind Node inliningTarget,
                         @Bind PythonContext context,
                         @Cached BytesNodes.ToBytesNode toBytesNode,
                         @Cached SysModuleBuiltins.AuditNode auditNode,
@@ -483,7 +485,7 @@ public final class PosixModuleBuiltins extends PythonBuiltins {
 
         @Specialization
         static Object execvArgsList(VirtualFrame frame, PosixPath path, PList argv,
-                        @Bind("this") Node inliningTarget,
+                        @Bind Node inliningTarget,
                         @Bind PythonContext context,
                         @CachedLibrary("context.getPosixSupport()") PosixSupportLibrary posixLib,
                         @Shared @Cached ToArrayNode toArrayNode,
@@ -498,7 +500,7 @@ public final class PosixModuleBuiltins extends PythonBuiltins {
 
         @Specialization
         static Object execvArgsTuple(VirtualFrame frame, PosixPath path, PTuple argv,
-                        @Bind("this") Node inliningTarget,
+                        @Bind Node inliningTarget,
                         @Bind PythonContext context,
                         @CachedLibrary("context.getPosixSupport()") PosixSupportLibrary posixLib,
                         @Shared @Cached ToArrayNode toArrayNode,
@@ -514,7 +516,7 @@ public final class PosixModuleBuiltins extends PythonBuiltins {
         @Specialization(guards = {"!isList(argv)", "!isPTuple(argv)"})
         @SuppressWarnings("unused")
         static Object execvInvalidArgs(VirtualFrame frame, PosixPath path, Object argv,
-                        @Bind("this") Node inliningTarget) {
+                        @Bind Node inliningTarget) {
             throw PRaiseNode.raiseStatic(inliningTarget, TypeError, ErrorMessages.ARG_D_MUST_BE_S, "execv()", 2, "tuple or list");
         }
 
@@ -626,7 +628,7 @@ public final class PosixModuleBuiltins extends PythonBuiltins {
          */
         @TruffleBoundary
         @Specialization
-        static PTuple getloadavg(@Bind("this") Node inliningTarget,
+        static PTuple getloadavg(@Bind Node inliningTarget,
                         @Bind PythonLanguage language) {
             double load = -1.0;
             // (mq) without native call we can only obtain system load average for the last minute.
@@ -651,7 +653,7 @@ public final class PosixModuleBuiltins extends PythonBuiltins {
 
         @Specialization
         static long getPgid(VirtualFrame frame, long pid,
-                        @Bind("this") Node inliningTarget,
+                        @Bind Node inliningTarget,
                         @Bind PythonContext context,
                         @CachedLibrary("context.getPosixSupport()") PosixSupportLibrary posixLib,
                         @Cached PConstructAndRaiseNode.Lazy constructAndRaiseNode) {
@@ -675,7 +677,7 @@ public final class PosixModuleBuiltins extends PythonBuiltins {
 
         @Specialization
         static Object setPgid(VirtualFrame frame, long pid, long pgid,
-                        @Bind("this") Node inliningTarget,
+                        @Bind Node inliningTarget,
                         @Bind PythonContext context,
                         @CachedLibrary("context.getPosixSupport()") PosixSupportLibrary posixLib,
                         @Cached PConstructAndRaiseNode.Lazy constructAndRaiseNode) {
@@ -693,7 +695,7 @@ public final class PosixModuleBuiltins extends PythonBuiltins {
     public abstract static class SetPgrpdNode extends PythonBuiltinNode {
         @Specialization
         static Object getPpid(VirtualFrame frame,
-                        @Bind("this") Node inliningTarget,
+                        @Bind Node inliningTarget,
                         @Bind PythonContext context,
                         @CachedLibrary("context.getPosixSupport()") PosixSupportLibrary posixLib,
                         @Cached PConstructAndRaiseNode.Lazy constructAndRaiseNode) {
@@ -727,7 +729,7 @@ public final class PosixModuleBuiltins extends PythonBuiltins {
 
         @Specialization
         static long getSid(VirtualFrame frame, long pid,
-                        @Bind("this") Node inliningTarget,
+                        @Bind Node inliningTarget,
                         @Bind PythonContext context,
                         @CachedLibrary("context.getPosixSupport()") PosixSupportLibrary posixLib,
                         @Cached PConstructAndRaiseNode.Lazy constructAndRaiseNode) {
@@ -745,7 +747,7 @@ public final class PosixModuleBuiltins extends PythonBuiltins {
 
         @Specialization
         static Object setsid(VirtualFrame frame,
-                        @Bind("this") Node inliningTarget,
+                        @Bind Node inliningTarget,
                         @Bind PythonContext context,
                         @CachedLibrary("context.getPosixSupport()") PosixSupportLibrary posixLib,
                         @Cached PConstructAndRaiseNode.Lazy constructAndRaiseNode) {
@@ -763,7 +765,7 @@ public final class PosixModuleBuiltins extends PythonBuiltins {
     abstract static class GetGroupsNode extends PythonBuiltinNode {
         @Specialization
         static Object getgroups(VirtualFrame frame,
-                        @Bind("this") Node inliningTarget,
+                        @Bind Node inliningTarget,
                         @Bind PythonContext context,
                         @CachedLibrary("context.getPosixSupport()") PosixSupportLibrary posixLib,
                         @Cached PConstructAndRaiseNode.Lazy constructAndRaiseNode) {
@@ -782,7 +784,7 @@ public final class PosixModuleBuiltins extends PythonBuiltins {
 
         @Specialization
         static Object openpty(VirtualFrame frame,
-                        @Bind("this") Node inliningTarget,
+                        @Bind Node inliningTarget,
                         @Bind PythonContext context,
                         @CachedLibrary("context.getPosixSupport()") PosixSupportLibrary posixLib,
                         @Cached PConstructAndRaiseNode.Lazy constructAndRaiseNode) {
@@ -812,7 +814,7 @@ public final class PosixModuleBuiltins extends PythonBuiltins {
 
         @Specialization
         static int open(VirtualFrame frame, PosixPath path, int flags, int mode, int dirFd,
-                        @Bind("this") Node inliningTarget,
+                        @Bind Node inliningTarget,
                         @Bind PythonContext context,
                         @CachedLibrary("context.getPosixSupport()") PosixSupportLibrary posixLib,
                         @Cached SysModuleBuiltins.AuditNode auditNode,
@@ -857,7 +859,7 @@ public final class PosixModuleBuiltins extends PythonBuiltins {
 
         @Specialization
         static PNone close(VirtualFrame frame, int fd,
-                        @Bind("this") Node inliningTarget,
+                        @Bind Node inliningTarget,
                         @Bind PythonContext context,
                         @CachedLibrary("context.getPosixSupport()") PosixSupportLibrary posixLib,
                         @Cached GilNode gil,
@@ -892,7 +894,7 @@ public final class PosixModuleBuiltins extends PythonBuiltins {
 
         @Specialization
         static PBytes doRead(VirtualFrame frame, int fd, int length,
-                        @Bind("this") Node inliningTarget,
+                        @Bind Node inliningTarget,
                         @Bind PythonContext context,
                         @CachedLibrary("context.getPosixSupport()") PosixSupportLibrary posixLib,
                         @Cached InlinedBranchProfile errorProfile1,
@@ -955,8 +957,8 @@ public final class PosixModuleBuiltins extends PythonBuiltins {
 
         @Specialization(limit = "3")
         static long doWrite(VirtualFrame frame, int fd, Object dataBuffer,
-                        @Bind("this") Node inliningTarget,
-                        @Cached("createFor(this)") IndirectCallData indirectCallData,
+                        @Bind Node inliningTarget,
+                        @Cached("createFor($node)") IndirectCallData indirectCallData,
                         @CachedLibrary("dataBuffer") PythonBufferAccessLibrary bufferLib,
                         @Bind PythonContext context,
                         @CachedLibrary("context.getPosixSupport()") PosixSupportLibrary posixLib,
@@ -1007,7 +1009,7 @@ public final class PosixModuleBuiltins extends PythonBuiltins {
 
         @Specialization
         static int dup(VirtualFrame frame, int fd,
-                        @Bind("this") Node inliningTarget,
+                        @Bind Node inliningTarget,
                         @Bind PythonContext context,
                         @CachedLibrary("context.getPosixSupport()") PosixSupportLibrary posixLib,
                         @Cached PConstructAndRaiseNode.Lazy constructAndRaiseNode) {
@@ -1033,7 +1035,7 @@ public final class PosixModuleBuiltins extends PythonBuiltins {
 
         @Specialization
         static int dup2(VirtualFrame frame, int fd, int fd2, boolean inheritable,
-                        @Bind("this") Node inliningTarget,
+                        @Bind Node inliningTarget,
                         @Bind PythonContext context,
                         @CachedLibrary("context.getPosixSupport()") PosixSupportLibrary posixLib,
                         @Cached PConstructAndRaiseNode.Lazy constructAndRaiseNode) {
@@ -1064,7 +1066,7 @@ public final class PosixModuleBuiltins extends PythonBuiltins {
 
         @Specialization
         static boolean getInheritable(VirtualFrame frame, int fd,
-                        @Bind("this") Node inliningTarget,
+                        @Bind Node inliningTarget,
                         @Bind PythonContext context,
                         @CachedLibrary("context.getPosixSupport()") PosixSupportLibrary posixLib,
                         @Cached PConstructAndRaiseNode.Lazy constructAndRaiseNode) {
@@ -1089,7 +1091,7 @@ public final class PosixModuleBuiltins extends PythonBuiltins {
 
         @Specialization
         static PNone setInheritable(VirtualFrame frame, int fd, int inheritable,
-                        @Bind("this") Node inliningTarget,
+                        @Bind Node inliningTarget,
                         @Bind PythonContext context,
                         @CachedLibrary("context.getPosixSupport()") PosixSupportLibrary posixLib,
                         @Cached PConstructAndRaiseNode.Lazy constructAndRaiseNode) {
@@ -1109,7 +1111,7 @@ public final class PosixModuleBuiltins extends PythonBuiltins {
 
         @Specialization
         static PTuple pipe(VirtualFrame frame,
-                        @Bind("this") Node inliningTarget,
+                        @Bind Node inliningTarget,
                         @Cached GilNode gil,
                         @Bind PythonContext context,
                         @CachedLibrary("context.getPosixSupport()") PosixSupportLibrary posixLib,
@@ -1156,7 +1158,7 @@ public final class PosixModuleBuiltins extends PythonBuiltins {
 
         @Specialization
         static long lseek(VirtualFrame frame, int fd, long pos, int how,
-                        @Bind("this") Node inliningTarget,
+                        @Bind Node inliningTarget,
                         @Bind PythonContext context,
                         @CachedLibrary("context.getPosixSupport()") PosixSupportLibrary posixLib,
                         @Cached PConstructAndRaiseNode.Lazy constructAndRaiseNode) {
@@ -1181,7 +1183,7 @@ public final class PosixModuleBuiltins extends PythonBuiltins {
 
         @Specialization
         static PNone ftruncate(VirtualFrame frame, int fd, long length,
-                        @Bind("this") Node inliningTarget,
+                        @Bind Node inliningTarget,
                         @Bind PythonContext context,
                         @CachedLibrary("context.getPosixSupport()") PosixSupportLibrary posixLib,
                         @Cached SysModuleBuiltins.AuditNode auditNode,
@@ -1223,7 +1225,7 @@ public final class PosixModuleBuiltins extends PythonBuiltins {
 
         @Specialization
         static PNone truncate(VirtualFrame frame, PosixPath path, long length,
-                        @Bind("this") Node inliningTarget,
+                        @Bind Node inliningTarget,
                         @Bind PythonContext context,
                         @CachedLibrary("context.getPosixSupport()") PosixSupportLibrary posixLib,
                         @Shared @Cached SysModuleBuiltins.AuditNode auditNode,
@@ -1245,7 +1247,7 @@ public final class PosixModuleBuiltins extends PythonBuiltins {
 
         @Specialization
         static PNone ftruncate(VirtualFrame frame, PosixFd fd, long length,
-                        @Bind("this") Node inliningTarget,
+                        @Bind Node inliningTarget,
                         @Bind PythonContext context,
                         @CachedLibrary("context.getPosixSupport()") PosixSupportLibrary posixLib,
                         @Shared @Cached SysModuleBuiltins.AuditNode auditNode,
@@ -1268,7 +1270,7 @@ public final class PosixModuleBuiltins extends PythonBuiltins {
 
         @Specialization
         static PNone fsync(VirtualFrame frame, int fd,
-                        @Bind("this") Node inliningTarget,
+                        @Bind Node inliningTarget,
                         @Bind PythonContext context,
                         @CachedLibrary("context.getPosixSupport()") PosixSupportLibrary posixLib,
                         @Cached InlinedBranchProfile errorProfile,
@@ -1301,7 +1303,7 @@ public final class PosixModuleBuiltins extends PythonBuiltins {
 
         @Specialization
         static boolean getBlocking(VirtualFrame frame, int fd,
-                        @Bind("this") Node inliningTarget,
+                        @Bind Node inliningTarget,
                         @Bind PythonContext context,
                         @CachedLibrary("context.getPosixSupport()") PosixSupportLibrary posixLib,
                         @Cached PConstructAndRaiseNode.Lazy constructAndRaiseNode) {
@@ -1326,7 +1328,7 @@ public final class PosixModuleBuiltins extends PythonBuiltins {
 
         @Specialization
         static PNone setBlocking(VirtualFrame frame, int fd, boolean blocking,
-                        @Bind("this") Node inliningTarget,
+                        @Bind Node inliningTarget,
                         @Bind PythonContext context,
                         @CachedLibrary("context.getPosixSupport()") PosixSupportLibrary posixLib,
                         @Cached PConstructAndRaiseNode.Lazy constructAndRaiseNode) {
@@ -1351,7 +1353,7 @@ public final class PosixModuleBuiltins extends PythonBuiltins {
 
         @Specialization
         static PTuple getTerminalSize(VirtualFrame frame, int fd,
-                        @Bind("this") Node inliningTarget,
+                        @Bind Node inliningTarget,
                         @Bind PythonContext context,
                         @CachedLibrary("context.getPosixSupport()") PosixSupportLibrary posixLib,
                         @Cached PConstructAndRaiseNode.Lazy constructAndRaiseNode) {
@@ -1379,7 +1381,7 @@ public final class PosixModuleBuiltins extends PythonBuiltins {
 
         @Specialization
         static PTuple doStatPath(VirtualFrame frame, PosixPath path, int dirFd, boolean followSymlinks,
-                        @Bind("this") Node inliningTarget,
+                        @Bind Node inliningTarget,
                         @Bind PythonContext context,
                         @CachedLibrary("context.getPosixSupport()") PosixSupportLibrary posixLib,
                         @Shared("positive") @Cached InlinedConditionProfile positiveLongProfile,
@@ -1395,20 +1397,20 @@ public final class PosixModuleBuiltins extends PythonBuiltins {
         @Specialization(guards = "!isDefault(dirFd)")
         @SuppressWarnings("unused")
         static PTuple doStatFdWithDirFd(PosixFd fd, int dirFd, boolean followSymlinks,
-                        @Bind("this") Node inliningTarget) {
+                        @Bind Node inliningTarget) {
             throw PRaiseNode.raiseStatic(inliningTarget, ValueError, ErrorMessages.CANT_SPECIFY_DIRFD_WITHOUT_PATH, "stat");
         }
 
         @Specialization(guards = {"isDefault(dirFd)", "!followSymlinks"})
         @SuppressWarnings("unused")
         static PTuple doStatFdWithFollowSymlinks(VirtualFrame frame, PosixFd fd, int dirFd, boolean followSymlinks,
-                        @Bind("this") Node inliningTarget) {
+                        @Bind Node inliningTarget) {
             throw PRaiseNode.raiseStatic(inliningTarget, ValueError, ErrorMessages.CANNOT_USE_FD_AND_FOLLOW_SYMLINKS_TOGETHER, "stat");
         }
 
         @Specialization(guards = {"isDefault(dirFd)", "followSymlinks"})
         static PTuple doStatFd(VirtualFrame frame, PosixFd fd, @SuppressWarnings("unused") int dirFd, @SuppressWarnings("unused") boolean followSymlinks,
-                        @Bind("this") Node inliningTarget,
+                        @Bind Node inliningTarget,
                         @Bind PythonContext context,
                         @CachedLibrary("context.getPosixSupport()") PosixSupportLibrary posixLib,
                         @Shared("positive") @Cached InlinedConditionProfile positiveLongProfile,
@@ -1439,7 +1441,7 @@ public final class PosixModuleBuiltins extends PythonBuiltins {
 
         @Specialization
         static PTuple doStatPath(VirtualFrame frame, PosixPath path, int dirFd,
-                        @Bind("this") Node inliningTarget,
+                        @Bind Node inliningTarget,
                         @Bind PythonContext context,
                         @CachedLibrary("context.getPosixSupport()") PosixSupportLibrary posixLib,
                         @Cached InlinedConditionProfile positiveLongProfile,
@@ -1466,7 +1468,7 @@ public final class PosixModuleBuiltins extends PythonBuiltins {
 
         @Specialization
         static PTuple doStatFd(VirtualFrame frame, int fd,
-                        @Bind("this") Node inliningTarget,
+                        @Bind Node inliningTarget,
                         @Bind PythonContext context,
                         @CachedLibrary("context.getPosixSupport()") PosixSupportLibrary posixLib,
                         @Cached InlinedConditionProfile positiveLongProfile,
@@ -1508,7 +1510,7 @@ public final class PosixModuleBuiltins extends PythonBuiltins {
 
         @Specialization
         static PTuple doStatvfs(VirtualFrame frame, PosixFileHandle posixFileHandle,
-                        @Bind("this") Node inliningTarget,
+                        @Bind Node inliningTarget,
                         @Bind PythonContext context,
                         @CachedLibrary("context.getPosixSupport()") PosixSupportLibrary posixLib,
                         @Cached InlinedConditionProfile posixPathProfile,
@@ -1535,7 +1537,7 @@ public final class PosixModuleBuiltins extends PythonBuiltins {
 
         @Specialization
         static PTuple doStatvfs(VirtualFrame frame, int fd,
-                        @Bind("this") Node inliningTarget,
+                        @Bind Node inliningTarget,
                         @Bind PythonContext context,
                         @CachedLibrary("context.getPosixSupport()") PosixSupportLibrary posixLib,
                         @Cached InlinedConditionProfile positiveLongProfile,
@@ -1562,7 +1564,7 @@ public final class PosixModuleBuiltins extends PythonBuiltins {
 
         @Specialization
         static PTuple uname(VirtualFrame frame,
-                        @Bind("this") Node inliningTarget,
+                        @Bind Node inliningTarget,
                         @Bind PythonContext context,
                         @CachedLibrary("context.getPosixSupport()") PosixSupportLibrary posixLib,
                         @Cached PConstructAndRaiseNode.Lazy constructAndRaiseNode) {
@@ -1589,7 +1591,7 @@ public final class PosixModuleBuiltins extends PythonBuiltins {
         static PNone unlink(VirtualFrame frame, PosixPath path, int dirFd,
                         @Bind PythonContext context,
                         @CachedLibrary("context.getPosixSupport()") PosixSupportLibrary posixLib,
-                        @Bind("this") Node inliningTarget,
+                        @Bind Node inliningTarget,
                         @Cached SysModuleBuiltins.AuditNode auditNode,
                         @Cached PConstructAndRaiseNode.Lazy constructAndRaiseNode) {
             auditNode.audit(inliningTarget, "os.remove", path.originalObject, dirFdForAudit(dirFd));
@@ -1633,7 +1635,7 @@ public final class PosixModuleBuiltins extends PythonBuiltins {
 
         @Specialization
         static PNone link(VirtualFrame frame, PosixPath src, PosixPath dst, int srcDirFd, int dstDirFd, boolean followSymlinks,
-                        @Bind("this") Node inliningTarget,
+                        @Bind Node inliningTarget,
                         @Bind PythonContext context,
                         @CachedLibrary("context.getPosixSupport()") PosixSupportLibrary posixLib,
                         @Cached PConstructAndRaiseNode.Lazy constructAndRaiseNode) {
@@ -1661,7 +1663,7 @@ public final class PosixModuleBuiltins extends PythonBuiltins {
 
         @Specialization
         static PNone symlink(VirtualFrame frame, PosixPath src, PosixPath dst, @SuppressWarnings("unused") boolean targetIsDir, int dirFd,
-                        @Bind("this") Node inliningTarget,
+                        @Bind Node inliningTarget,
                         @Bind PythonContext context,
                         @CachedLibrary("context.getPosixSupport()") PosixSupportLibrary posixLib,
                         @Cached PConstructAndRaiseNode.Lazy constructAndRaiseNode) {
@@ -1690,7 +1692,7 @@ public final class PosixModuleBuiltins extends PythonBuiltins {
         static PNone mkdir(VirtualFrame frame, PosixPath path, int mode, int dirFd,
                         @Bind PythonContext context,
                         @CachedLibrary("context.getPosixSupport()") PosixSupportLibrary posixLib,
-                        @Bind("this") Node inliningTarget,
+                        @Bind Node inliningTarget,
                         @Cached SysModuleBuiltins.AuditNode auditNode,
                         @Cached PConstructAndRaiseNode.Lazy constructAndRaiseNode) {
             auditNode.audit(inliningTarget, "os.mkdir", path.originalObject, mode, dirFdForAudit(dirFd));
@@ -1718,7 +1720,7 @@ public final class PosixModuleBuiltins extends PythonBuiltins {
         static PNone rmdir(VirtualFrame frame, PosixPath path, int dirFd,
                         @Bind PythonContext context,
                         @CachedLibrary("context.getPosixSupport()") PosixSupportLibrary posixLib,
-                        @Bind("this") Node inliningTarget,
+                        @Bind Node inliningTarget,
                         @Cached SysModuleBuiltins.AuditNode auditNode,
                         @Cached PConstructAndRaiseNode.Lazy constructAndRaiseNode) {
             auditNode.audit(inliningTarget, "os.rmdir", path.originalObject, dirFdForAudit(dirFd));
@@ -1736,7 +1738,7 @@ public final class PosixModuleBuiltins extends PythonBuiltins {
     abstract static class GetcwdNode extends PythonBuiltinNode {
         @Specialization
         static TruffleString getcwd(VirtualFrame frame,
-                        @Bind("this") Node inliningTarget,
+                        @Bind Node inliningTarget,
                         @Bind PythonContext context,
                         @CachedLibrary("context.getPosixSupport()") PosixSupportLibrary posixLib,
                         @Cached PConstructAndRaiseNode.Lazy constructAndRaiseNode) {
@@ -1753,7 +1755,7 @@ public final class PosixModuleBuiltins extends PythonBuiltins {
     abstract static class GetcwdbNode extends PythonBuiltinNode {
         @Specialization
         static PBytes getcwdb(VirtualFrame frame,
-                        @Bind("this") Node inliningTarget,
+                        @Bind Node inliningTarget,
                         @Bind PythonContext context,
                         @CachedLibrary("context.getPosixSupport()") PosixSupportLibrary posixLib,
                         @Cached PConstructAndRaiseNode.Lazy constructAndRaiseNode) {
@@ -1778,7 +1780,7 @@ public final class PosixModuleBuiltins extends PythonBuiltins {
 
         @Specialization
         static PNone chdirPath(VirtualFrame frame, PosixPath path,
-                        @Bind("this") Node inliningTarget,
+                        @Bind Node inliningTarget,
                         @Bind PythonContext context,
                         @CachedLibrary("context.getPosixSupport()") PosixSupportLibrary posixLib,
                         @Shared @Cached PConstructAndRaiseNode.Lazy constructAndRaiseNode) {
@@ -1792,7 +1794,7 @@ public final class PosixModuleBuiltins extends PythonBuiltins {
 
         @Specialization
         static PNone chdirFd(VirtualFrame frame, PosixFd fd,
-                        @Bind("this") Node inliningTarget,
+                        @Bind Node inliningTarget,
                         @Bind PythonContext context,
                         @CachedLibrary("context.getPosixSupport()") PosixSupportLibrary posixLib,
                         @Shared @Cached PConstructAndRaiseNode.Lazy constructAndRaiseNode) {
@@ -1817,7 +1819,7 @@ public final class PosixModuleBuiltins extends PythonBuiltins {
 
         @Specialization
         static PNone fchdir(VirtualFrame frame, int fd,
-                        @Bind("this") Node inliningTarget,
+                        @Bind Node inliningTarget,
                         @Bind PythonContext context,
                         @CachedLibrary("context.getPosixSupport()") PosixSupportLibrary posixLib,
                         @Cached InlinedBranchProfile errorProfile,
@@ -1876,7 +1878,7 @@ public final class PosixModuleBuiltins extends PythonBuiltins {
         static PScandirIterator scandirPath(VirtualFrame frame, PosixPath path,
                         @Bind PythonContext context,
                         @CachedLibrary("context.getPosixSupport()") PosixSupportLibrary posixLib,
-                        @Bind("this") Node inliningTarget,
+                        @Bind Node inliningTarget,
                         @Shared @Cached SysModuleBuiltins.AuditNode auditNode,
                         @Shared @Cached PConstructAndRaiseNode.Lazy constructAndRaiseNode) {
             auditNode.audit(inliningTarget, "os.scandir", path.originalObject == null ? PNone.NONE : path.originalObject);
@@ -1891,7 +1893,7 @@ public final class PosixModuleBuiltins extends PythonBuiltins {
         static PScandirIterator scandirFd(VirtualFrame frame, PosixFd fd,
                         @Bind PythonContext context,
                         @CachedLibrary("context.getPosixSupport()") PosixSupportLibrary posixLib,
-                        @Bind("this") Node inliningTarget,
+                        @Bind Node inliningTarget,
                         @Shared @Cached SysModuleBuiltins.AuditNode auditNode,
                         @Shared @Cached PConstructAndRaiseNode.Lazy constructAndRaiseNode) {
             auditNode.audit(inliningTarget, "os.scandir", fd.originalObject);
@@ -1912,7 +1914,7 @@ public final class PosixModuleBuiltins extends PythonBuiltins {
 
         @Specialization
         static PList listdirPath(VirtualFrame frame, PosixPath path,
-                        @Bind("this") Node inliningTarget,
+                        @Bind Node inliningTarget,
                         @Bind PythonContext context,
                         @CachedLibrary("context.getPosixSupport()") PosixSupportLibrary posixLib,
                         @Shared @Cached SysModuleBuiltins.AuditNode auditNode,
@@ -1928,7 +1930,7 @@ public final class PosixModuleBuiltins extends PythonBuiltins {
 
         @Specialization
         static PList listdirFd(VirtualFrame frame, PosixFd fd,
-                        @Bind("this") Node inliningTarget,
+                        @Bind Node inliningTarget,
                         @Bind PythonContext context,
                         @CachedLibrary("context.getPosixSupport()") PosixSupportLibrary posixLib,
                         @Shared @Cached SysModuleBuiltins.AuditNode auditNode,
@@ -1998,7 +2000,7 @@ public final class PosixModuleBuiltins extends PythonBuiltins {
     }
 
     @ImportStatic(PGuards.class)
-    @SuppressWarnings("truffle-inlining")       // footprint reduction 36 -> 17
+    @GenerateInline(false)       // footprint reduction 36 -> 17
     abstract static class UtimeArgsToTimespecNode extends Node {
         abstract long[] execute(VirtualFrame frame, Object times, Object ns);
 
@@ -2015,43 +2017,41 @@ public final class PosixModuleBuiltins extends PythonBuiltins {
 
         @Specialization(guards = {"isNoValue(ns)"})
         static long[] times(VirtualFrame frame, PTuple times, @SuppressWarnings("unused") PNone ns,
-                        @Bind("this") Node inliningTarget,
-                        @Exclusive @Cached LenNode lenNode,
-                        @Shared @Cached("createNotNormalized()") GetItemNode getItemNode,
+                        @Bind Node inliningTarget,
+                        @Shared @Cached SequenceStorageNodes.GetItemScalarNode getItemNode,
                         @Cached ObjectToTimespecNode objectToTimespecNode,
                         @Exclusive @Cached PRaiseNode raiseNode) {
-            return convertToTimespec(frame, inliningTarget, times, lenNode, getItemNode, objectToTimespecNode, raiseNode);
+            return convertToTimespec(frame, inliningTarget, times, getItemNode, objectToTimespecNode, raiseNode);
         }
 
         @Specialization
         static long[] ns(VirtualFrame frame, @SuppressWarnings("unused") PNone times, PTuple ns,
-                        @Bind("this") Node inliningTarget,
-                        @Exclusive @Cached LenNode lenNode,
-                        @Shared @Cached("createNotNormalized()") GetItemNode getItemNode,
+                        @Bind Node inliningTarget,
+                        @Shared @Cached SequenceStorageNodes.GetItemScalarNode getItemNode,
                         @Cached SplitLongToSAndNsNode splitLongToSAndNsNode,
                         @Exclusive @Cached PRaiseNode raiseNode) {
-            return convertToTimespec(frame, inliningTarget, ns, lenNode, getItemNode, splitLongToSAndNsNode, raiseNode);
+            return convertToTimespec(frame, inliningTarget, ns, getItemNode, splitLongToSAndNsNode, raiseNode);
         }
 
         @Specialization(guards = {"!isPNone(times)", "!isNoValue(ns)"})
         @SuppressWarnings("unused")
         static long[] bothSpecified(VirtualFrame frame, Object times, Object ns,
-                        @Bind("this") Node inliningTarget) {
+                        @Bind Node inliningTarget) {
             throw PRaiseNode.raiseStatic(inliningTarget, ValueError, ErrorMessages.YOU_MAY_SPECIFY_EITHER_OR_BUT_NOT_BOTH, "utime", "times", "ns");
         }
 
         @Specialization(guards = {"!isPNone(times)", "!isPTuple(times)", "isNoValue(ns)"})
         @SuppressWarnings("unused")
         static long[] timesNotATuple(VirtualFrame frame, Object times, PNone ns,
-                        @Bind("this") Node inliningTarget,
-                        @Cached PRaiseNode raiseNode) {
+                        @Bind Node inliningTarget,
+                        @Exclusive @Cached PRaiseNode raiseNode) {
             throw timesTupleError(inliningTarget, raiseNode);
         }
 
         @Specialization(guards = {"!isNoValue(ns)", "!isPTuple(ns)"})
         @SuppressWarnings("unused")
         static long[] nsNotATuple(VirtualFrame frame, PNone times, Object ns,
-                        @Bind("this") Node inliningTarget) {
+                        @Bind Node inliningTarget) {
             // ns can actually also contain objects implementing __divmod__, but CPython produces
             // this error message
             throw PRaiseNode.raiseStatic(inliningTarget, TypeError, ErrorMessages.MUST_BE, "utime", "ns", "a tuple of two ints");
@@ -2062,14 +2062,15 @@ public final class PosixModuleBuiltins extends PythonBuiltins {
             throw raiseNode.raise(inliningTarget, TypeError, ErrorMessages.MUST_BE_EITHER_OR, "utime", "times", "a tuple of two ints", "None");
         }
 
-        private static long[] convertToTimespec(VirtualFrame frame, Node inliningTarget, PTuple times, LenNode lenNode, GetItemNode getItemNode, ConvertToTimespecBaseNode convertToTimespecBaseNode,
-                        PRaiseNode raiseNode) {
-            if (lenNode.execute(inliningTarget, times) != 2) {
+        private static long[] convertToTimespec(VirtualFrame frame, Node inliningTarget, PTuple times, SequenceStorageNodes.GetItemScalarNode getItemNode,
+                        ConvertToTimespecBaseNode convertToTimespecBaseNode, PRaiseNode raiseNode) {
+            SequenceStorage storage = times.getSequenceStorage();
+            if (storage.length() != 2) {
                 throw timesTupleError(inliningTarget, raiseNode);
             }
             long[] timespec = new long[4];
-            convertToTimespecBaseNode.execute(frame, inliningTarget, getItemNode.execute(times.getSequenceStorage(), 0), timespec, 0);
-            convertToTimespecBaseNode.execute(frame, inliningTarget, getItemNode.execute(times.getSequenceStorage(), 1), timespec, 2);
+            convertToTimespecBaseNode.execute(frame, inliningTarget, getItemNode.execute(inliningTarget, storage, 0), timespec, 0);
+            convertToTimespecBaseNode.execute(frame, inliningTarget, getItemNode.execute(inliningTarget, storage, 1), timespec, 2);
             return timespec;
         }
     }
@@ -2093,7 +2094,7 @@ public final class PosixModuleBuiltins extends PythonBuiltins {
 
         @Specialization(guards = "HAVE_UTIMENSAT.value")
         static PNone utimensat(VirtualFrame frame, PosixPath path, Object times, Object ns, int dirFd, boolean followSymlinks,
-                        @Bind("this") Node inliningTarget,
+                        @Bind Node inliningTarget,
                         @Shared @Cached UtimeArgsToTimespecNode timespecNode,
                         @Shared @Cached SysModuleBuiltins.AuditNode auditNode,
                         @Bind PythonContext context,
@@ -2112,7 +2113,7 @@ public final class PosixModuleBuiltins extends PythonBuiltins {
 
         @Specialization(guards = {"!HAVE_UTIMENSAT.value", "isDefault(dirFd)", "followSymlinks"})
         static PNone utimes(VirtualFrame frame, PosixPath path, Object times, Object ns, int dirFd, @SuppressWarnings("unused") boolean followSymlinks,
-                        @Bind("this") Node inliningTarget,
+                        @Bind Node inliningTarget,
                         @Shared @Cached UtimeArgsToTimespecNode timespecNode,
                         @Shared @Cached SysModuleBuiltins.AuditNode auditNode,
                         @Bind PythonContext context,
@@ -2131,7 +2132,7 @@ public final class PosixModuleBuiltins extends PythonBuiltins {
 
         @Specialization(guards = {"!HAVE_UTIMENSAT.value", "isDefault(dirFd)", "!followSymlinks"})
         static PNone lutimes(VirtualFrame frame, PosixPath path, Object times, Object ns, int dirFd, @SuppressWarnings("unused") boolean followSymlinks,
-                        @Bind("this") Node inliningTarget,
+                        @Bind Node inliningTarget,
                         @Shared @Cached UtimeArgsToTimespecNode timespecNode,
                         @Shared @Cached SysModuleBuiltins.AuditNode auditNode,
                         @Bind PythonContext context,
@@ -2151,20 +2152,20 @@ public final class PosixModuleBuiltins extends PythonBuiltins {
         @Specialization(guards = {"!HAVE_UTIMENSAT.value", "!isDefault(dirFd)", "followSymlinks"})
         @SuppressWarnings("unused")
         static PNone dirFdNotSupported(VirtualFrame frame, PosixPath path, Object times, Object ns, int dirFd, boolean followSymlinks,
-                        @Bind("this") Node inliningTarget) {
+                        @Bind Node inliningTarget) {
             throw PRaiseNode.raiseStatic(inliningTarget, NotImplementedError, ErrorMessages.UNAVAILABLE_ON_THIS_PLATFORM_NO_FUNC, "dir_fd");
         }
 
         @Specialization(guards = {"!HAVE_UTIMENSAT.value", "!isDefault(dirFd)", "!followSymlinks"})
         @SuppressWarnings("unused")
         static PNone dirFdAndFollowSymlinksNotSupported(VirtualFrame frame, PosixPath path, Object times, Object ns, int dirFd, boolean followSymlinks,
-                        @Bind("this") Node inliningTarget) {
+                        @Bind Node inliningTarget) {
             throw PRaiseNode.raiseStatic(inliningTarget, ValueError, ErrorMessages.UTIME_CANNOT_USE_DIR_FD_AND_FOLLOW_SYMLINKS, "dir_fd");
         }
 
         @Specialization(guards = {"HAVE_FUTIMENS.value", "isDefault(dirFd)", "followSymlinks"})
         static PNone futimens(VirtualFrame frame, PosixFd fd, Object times, Object ns, int dirFd, @SuppressWarnings("unused") boolean followSymlinks,
-                        @Bind("this") Node inliningTarget,
+                        @Bind Node inliningTarget,
                         @Shared @Cached UtimeArgsToTimespecNode timespecNode,
                         @Shared @Cached SysModuleBuiltins.AuditNode auditNode,
                         @Bind PythonContext context,
@@ -2183,7 +2184,7 @@ public final class PosixModuleBuiltins extends PythonBuiltins {
 
         @Specialization(guards = {"!HAVE_FUTIMENS.value", "isDefault(dirFd)", "followSymlinks"})
         static PNone futimes(VirtualFrame frame, PosixFd fd, Object times, Object ns, int dirFd, @SuppressWarnings("unused") boolean followSymlinks,
-                        @Bind("this") Node inliningTarget,
+                        @Bind Node inliningTarget,
                         @Shared @Cached UtimeArgsToTimespecNode timespecNode,
                         @Shared @Cached SysModuleBuiltins.AuditNode auditNode,
                         @Bind PythonContext context,
@@ -2203,14 +2204,14 @@ public final class PosixModuleBuiltins extends PythonBuiltins {
         @Specialization(guards = {"isPNone(times) || isNoValue(ns)", "!isDefault(dirFd)"})
         @SuppressWarnings("unused")
         static PNone fdWithDirFd(VirtualFrame frame, PosixFd fd, Object times, Object ns, int dirFd, boolean followSymlinks,
-                        @Bind("this") Node inliningTarget) {
+                        @Bind Node inliningTarget) {
             throw PRaiseNode.raiseStatic(inliningTarget, ValueError, ErrorMessages.CANT_SPECIFY_DIRFD_WITHOUT_PATH, "utime");
         }
 
         @Specialization(guards = {"isPNone(times) || isNoValue(ns)", "isDefault(dirFd)", "!followSymlinks"})
         @SuppressWarnings("unused")
         static PNone fdWithFollowSymlinks(VirtualFrame frame, PosixFd fd, Object times, Object ns, int dirFd, boolean followSymlinks,
-                        @Bind("this") Node inliningTarget) {
+                        @Bind Node inliningTarget) {
             throw PRaiseNode.raiseStatic(inliningTarget, ValueError, ErrorMessages.CANNOT_USE_FD_AND_FOLLOW_SYMLINKS_TOGETHER, "utime");
         }
 
@@ -2236,7 +2237,7 @@ public final class PosixModuleBuiltins extends PythonBuiltins {
         static PNone rename(VirtualFrame frame, PosixPath src, PosixPath dst, int srcDirFd, int dstDirFd,
                         @Bind PythonContext context,
                         @CachedLibrary("context.getPosixSupport()") PosixSupportLibrary posixLib,
-                        @Bind("this") Node inliningTarget,
+                        @Bind Node inliningTarget,
                         @Cached SysModuleBuiltins.AuditNode auditNode,
                         @Cached PConstructAndRaiseNode.Lazy constructAndRaiseNode) {
             auditNode.audit(inliningTarget, "os.rename", src.originalObject, dst.originalObject, dirFdForAudit(srcDirFd), dirFdForAudit(dstDirFd));
@@ -2300,7 +2301,7 @@ public final class PosixModuleBuiltins extends PythonBuiltins {
 
         @Specialization
         static PNone fchmod(VirtualFrame frame, int fd, int mode,
-                        @Bind("this") Node inliningTarget,
+                        @Bind Node inliningTarget,
                         @Cached SysModuleBuiltins.AuditNode auditNode,
                         @Bind PythonContext context,
                         @CachedLibrary("context.getPosixSupport()") PosixSupportLibrary posixLib,
@@ -2330,7 +2331,7 @@ public final class PosixModuleBuiltins extends PythonBuiltins {
 
         @Specialization
         static PNone chmodFollow(VirtualFrame frame, PosixPath path, int mode, int dirFd, boolean followSymlinks,
-                        @Bind("this") Node inliningTarget,
+                        @Bind Node inliningTarget,
                         @Shared @Cached SysModuleBuiltins.AuditNode auditNode,
                         @Bind PythonContext context,
                         @CachedLibrary("context.getPosixSupport()") PosixSupportLibrary posixLib,
@@ -2355,7 +2356,7 @@ public final class PosixModuleBuiltins extends PythonBuiltins {
 
         @Specialization
         static PNone chmodFollow(VirtualFrame frame, PosixFd fd, int mode, int dirFd, @SuppressWarnings("unused") boolean followSymlinks,
-                        @Bind("this") Node inliningTarget,
+                        @Bind Node inliningTarget,
                         @Shared @Cached SysModuleBuiltins.AuditNode auditNode,
                         @Bind PythonContext context,
                         @CachedLibrary("context.getPosixSupport()") PosixSupportLibrary posixLib,
@@ -2384,7 +2385,7 @@ public final class PosixModuleBuiltins extends PythonBuiltins {
     abstract static class FChownNode extends PythonTernaryClinicBuiltinNode {
         @Specialization
         static Object chown(VirtualFrame frame, int fd, long uid, long gid,
-                        @Bind("this") Node inliningTarget,
+                        @Bind Node inliningTarget,
                         @Cached SysModuleBuiltins.AuditNode auditNode,
                         @Bind PythonContext context,
                         @CachedLibrary("context.getPosixSupport()") PosixSupportLibrary posixLib,
@@ -2418,7 +2419,7 @@ public final class PosixModuleBuiltins extends PythonBuiltins {
     abstract static class LChownNode extends PythonTernaryClinicBuiltinNode {
         @Specialization
         static Object chown(VirtualFrame frame, PosixPath path, long uid, long gid,
-                        @Bind("this") Node inliningTarget,
+                        @Bind Node inliningTarget,
                         @Cached SysModuleBuiltins.AuditNode auditNode,
                         @Bind PythonContext context,
                         @CachedLibrary("context.getPosixSupport()") PosixSupportLibrary posixLib,
@@ -2454,7 +2455,7 @@ public final class PosixModuleBuiltins extends PythonBuiltins {
     abstract static class ChownNode extends PythonClinicBuiltinNode {
         @Specialization
         static Object chown(VirtualFrame frame, PosixPath path, long uid, long gid, int dirFd, boolean followSymlinks,
-                        @Bind("this") Node inliningTarget,
+                        @Bind Node inliningTarget,
                         @Shared @Cached SysModuleBuiltins.AuditNode auditNode,
                         @Bind PythonContext context,
                         @CachedLibrary("context.getPosixSupport()") PosixSupportLibrary posixLib,
@@ -2478,7 +2479,7 @@ public final class PosixModuleBuiltins extends PythonBuiltins {
 
         @Specialization
         static Object chown(VirtualFrame frame, PosixFd fd, long uid, long gid, int dirFd, boolean followSymlinks,
-                        @Bind("this") Node inliningTarget,
+                        @Bind Node inliningTarget,
                         @Shared @Cached SysModuleBuiltins.AuditNode auditNode,
                         @Bind PythonContext context,
                         @CachedLibrary("context.getPosixSupport()") PosixSupportLibrary posixLib,
@@ -2525,7 +2526,7 @@ public final class PosixModuleBuiltins extends PythonBuiltins {
 
         @Specialization
         static Object readlinkAsBytes(VirtualFrame frame, PosixPath path, int dirFd,
-                        @Bind("this") Node inliningTarget,
+                        @Bind Node inliningTarget,
                         @Bind PythonContext context,
                         @CachedLibrary("context.getPosixSupport()") PosixSupportLibrary posixLib,
                         @Cached InlinedConditionProfile wasBufferLikeProfile,
@@ -2613,7 +2614,7 @@ public final class PosixModuleBuiltins extends PythonBuiltins {
 
         @Specialization
         static PTuple waitpid(VirtualFrame frame, long pid, int options,
-                        @Bind("this") Node inliningTarget,
+                        @Bind Node inliningTarget,
                         @Cached GilNode gil,
                         @Bind PythonContext context,
                         @CachedLibrary("context.getPosixSupport()") PosixSupportLibrary posixLib,
@@ -2650,7 +2651,7 @@ public final class PosixModuleBuiltins extends PythonBuiltins {
         static int waitstatusToExitcode(VirtualFrame frame, Object statusObj,
                         @Bind PythonContext context,
                         @CachedLibrary("context.getPosixSupport()") PosixSupportLibrary posixLib,
-                        @Bind("this") Node inliningTarget,
+                        @Bind Node inliningTarget,
                         @Cached PyLongAsIntNode longAsInt,
                         @Cached PRaiseNode raiseNode) {
             int status = longAsInt.execute(frame, inliningTarget, statusObj);
@@ -2824,7 +2825,7 @@ public final class PosixModuleBuiltins extends PythonBuiltins {
 
         @Specialization
         static int system(PBytes command,
-                        @Bind("this") Node inliningTarget,
+                        @Bind Node inliningTarget,
                         @Cached BytesNodes.ToBytesNode toBytesNode,
                         @Cached SysModuleBuiltins.AuditNode auditNode,
                         @Bind PythonContext context,
@@ -2851,7 +2852,7 @@ public final class PosixModuleBuiltins extends PythonBuiltins {
     abstract static class URandomNode extends PythonUnaryClinicBuiltinNode {
         @Specialization(guards = "size >= 0")
         static PBytes urandom(int size,
-                        @Bind("this") Node inliningTarget,
+                        @Bind Node inliningTarget,
                         @Bind PythonContext context) {
             byte[] bytes = new byte[size];
             nextBytes(context.getSecureRandom(), bytes);
@@ -2860,7 +2861,7 @@ public final class PosixModuleBuiltins extends PythonBuiltins {
 
         @Specialization(guards = "size < 0")
         static Object urandomNeg(@SuppressWarnings("unused") int size,
-                        @Bind("this") Node inliningTarget) {
+                        @Bind Node inliningTarget) {
             throw PRaiseNode.raiseStatic(inliningTarget, ValueError, ErrorMessages.NEG_ARG_NOT_ALLOWED);
         }
 
@@ -2893,7 +2894,7 @@ public final class PosixModuleBuiltins extends PythonBuiltins {
 
         @Specialization
         static long sysconf(VirtualFrame frame, PythonModule self, Object arg,
-                        @Bind("this") Node inliningTarget,
+                        @Bind Node inliningTarget,
                         @Cached PyLongCheckNode longCheckNode,
                         @Cached PyLongAsIntNode asIntNode,
                         @Cached PyUnicodeCheckNode unicodeCheckNode,
@@ -2937,7 +2938,7 @@ public final class PosixModuleBuiltins extends PythonBuiltins {
 
         @Specialization
         static int umask(VirtualFrame frame, int mask,
-                        @Bind("this") Node inliningTarget,
+                        @Bind Node inliningTarget,
                         @Bind PythonContext context,
                         @CachedLibrary("context.getPosixSupport()") PosixSupportLibrary posixLib,
                         @Cached PConstructAndRaiseNode.Lazy constructAndRaiseNode) {
@@ -2954,7 +2955,7 @@ public final class PosixModuleBuiltins extends PythonBuiltins {
     abstract static class CtermId extends PythonBuiltinNode {
         @Specialization
         static TruffleString ctermid(VirtualFrame frame,
-                        @Bind("this") Node inliningTarget,
+                        @Bind Node inliningTarget,
                         @Bind PythonContext context,
                         @CachedLibrary("context.getPosixSupport()") PosixSupportLibrary posixLib,
                         @Cached PConstructAndRaiseNode.Lazy constructAndRaiseNode) {
@@ -2978,7 +2979,7 @@ public final class PosixModuleBuiltins extends PythonBuiltins {
 
         @Specialization
         static PNone kill(VirtualFrame frame, long pid, int signal,
-                        @Bind("this") Node inliningTarget,
+                        @Bind Node inliningTarget,
                         @Cached SysModuleBuiltins.AuditNode auditNode,
                         @Bind PythonContext context,
                         @CachedLibrary("context.getPosixSupport()") PosixSupportLibrary posixLib,
@@ -3007,7 +3008,7 @@ public final class PosixModuleBuiltins extends PythonBuiltins {
 
         @Specialization
         static PNone kill(VirtualFrame frame, long pid, int signal,
-                        @Bind("this") Node inliningTarget,
+                        @Bind Node inliningTarget,
                         @Cached SysModuleBuiltins.AuditNode auditNode,
                         @Bind PythonContext context,
                         @CachedLibrary("context.getPosixSupport()") PosixSupportLibrary posixLib,
@@ -3030,7 +3031,7 @@ public final class PosixModuleBuiltins extends PythonBuiltins {
     public abstract static class FspathNode extends PythonUnaryBuiltinNode {
         @Specialization
         static Object doTrivial(VirtualFrame frame, Object value,
-                        @Bind("this") Node inliningTarget,
+                        @Bind Node inliningTarget,
                         @Cached PyOSFSPathNode fsPathNode) {
             return fsPathNode.execute(frame, inliningTarget, value);
         }
@@ -3063,8 +3064,8 @@ public final class PosixModuleBuiltins extends PythonBuiltins {
         static PBytes doString(Node inliningTarget, Object strObj,
                         @Bind PythonLanguage language,
                         @Cached CastToTruffleStringNode castToStringNode,
-                        @Cached(inline = false) TruffleString.SwitchEncodingNode switchEncodingNode,
-                        @Cached(inline = false) TruffleString.CopyToByteArrayNode copyToByteArrayNode) {
+                        @Cached TruffleString.SwitchEncodingNode switchEncodingNode,
+                        @Cached TruffleString.CopyToByteArrayNode copyToByteArrayNode) {
             TruffleString str = castToStringNode.execute(inliningTarget, strObj);
             TruffleString utf8 = switchEncodingNode.execute(str, Encoding.UTF_8);
             byte[] bytes = new byte[utf8.byteLength(Encoding.UTF_8)];
@@ -3241,17 +3242,19 @@ public final class PosixModuleBuiltins extends PythonBuiltins {
         @Specialization(guards = {"!isInteger(value)"})
         static void doGeneric(VirtualFrame frame, Node inliningTarget, Object value, long[] timespec, int offset,
                         @Cached PyNumberDivmodNode divmodNode,
-                        @Cached LenNode lenNode,
                         @Cached(value = "createNotNormalized()", inline = false) GetItemNode getItemNode,
                         @Cached PyLongAsLongNode asLongNode,
                         @Cached PRaiseNode raiseNode) {
             Object divmod = divmodNode.execute(frame, inliningTarget, value, BILLION);
-            if (!PGuards.isPTuple(divmod) || lenNode.execute(inliningTarget, (PSequence) divmod) != 2) {
-                throw raiseNode.raise(inliningTarget, TypeError, ErrorMessages.MUST_RETURN_2TUPLE, value, divmod);
+            if (divmod instanceof PTuple tuple) {
+                SequenceStorage storage = tuple.getSequenceStorage();
+                if (storage.length() == 2) {
+                    timespec[offset] = asLongNode.execute(frame, inliningTarget, getItemNode.execute(storage, 0));
+                    timespec[offset + 1] = asLongNode.execute(frame, inliningTarget, getItemNode.execute(storage, 1));
+                    return;
+                }
             }
-            SequenceStorage storage = ((PTuple) divmod).getSequenceStorage();
-            timespec[offset] = asLongNode.execute(frame, inliningTarget, getItemNode.execute(storage, 0));
-            timespec[offset + 1] = asLongNode.execute(frame, inliningTarget, getItemNode.execute(storage, 1));
+            throw raiseNode.raise(inliningTarget, TypeError, ErrorMessages.MUST_RETURN_2TUPLE, value, divmod);
         }
     }
 
@@ -3299,7 +3302,7 @@ public final class PosixModuleBuiltins extends PythonBuiltins {
     public abstract static class FsConverterNode extends ArgumentCastNode {
         @Specialization
         static PBytes convert(VirtualFrame frame, Object value,
-                        @Bind("this") Node inliningTarget,
+                        @Bind Node inliningTarget,
                         @Cached PyOSFSPathNode fspathNode,
                         @Cached StringOrBytesToBytesNode stringOrBytesToBytesNode) {
             return stringOrBytesToBytesNode.execute(inliningTarget, fspathNode.execute(frame, inliningTarget, value));
@@ -3335,7 +3338,7 @@ public final class PosixModuleBuiltins extends PythonBuiltins {
 
         @Specialization
         static int doFdLong(long value,
-                        @Bind("this") Node inliningTarget,
+                        @Bind Node inliningTarget,
                         @Exclusive @Cached PRaiseNode raiseNode) {
             return longToFd(inliningTarget, value, raiseNode);
         }
@@ -3343,7 +3346,7 @@ public final class PosixModuleBuiltins extends PythonBuiltins {
         @Specialization
         @SuppressWarnings("truffle-static-method")
         static int doFdPInt(PInt value,
-                        @Bind("this") Node inliningTarget,
+                        @Bind Node inliningTarget,
                         @Exclusive @Cached CastToJavaLongLossyNode castToLongNode,
                         @Exclusive @Cached PRaiseNode raiseNode) {
             return doFdLong(castToLongNode.execute(inliningTarget, value), inliningTarget, raiseNode);
@@ -3352,7 +3355,7 @@ public final class PosixModuleBuiltins extends PythonBuiltins {
         @Specialization(guards = {"!isPNone(value)", "!canBeInteger(value)"})
         @SuppressWarnings("truffle-static-method")
         static int doIndex(VirtualFrame frame, Object value,
-                        @Bind("this") Node inliningTarget,
+                        @Bind Node inliningTarget,
                         @Cached PyIndexCheckNode indexCheckNode,
                         @Cached PyNumberIndexNode indexNode,
                         @Exclusive @Cached CastToJavaLongLossyNode castToLongNode,
@@ -3402,7 +3405,7 @@ public final class PosixModuleBuiltins extends PythonBuiltins {
 
         @Specialization(guards = "nullable")
         PosixFileHandle doNone(@SuppressWarnings("unused") PNone value,
-                        @Bind("this") Node inliningTarget,
+                        @Bind Node inliningTarget,
                         @Bind PythonContext context,
                         @CachedLibrary("context.getPosixSupport()") PosixSupportLibrary posixLib,
                         @Exclusive @Cached PRaiseNode raiseNode) {
@@ -3422,14 +3425,14 @@ public final class PosixModuleBuiltins extends PythonBuiltins {
 
         @Specialization(guards = "allowFd")
         static PosixFileHandle doFdLong(long value,
-                        @Bind("this") Node inliningTarget,
+                        @Bind Node inliningTarget,
                         @Exclusive @Cached PRaiseNode raiseNode) {
             return new PosixFd(value, DirFdConversionNode.longToFd(inliningTarget, value, raiseNode));
         }
 
         @Specialization(guards = "allowFd")
         static PosixFileHandle doFdPInt(PInt value,
-                        @Bind("this") Node inliningTarget,
+                        @Bind Node inliningTarget,
                         @Exclusive @Cached CastToJavaLongLossyNode castToLongNode,
                         @Exclusive @Cached PRaiseNode raiseNode) {
             return new PosixFd(value, DirFdConversionNode.longToFd(inliningTarget, castToLongNode.execute(inliningTarget, value), raiseNode));
@@ -3438,7 +3441,7 @@ public final class PosixModuleBuiltins extends PythonBuiltins {
         @Specialization(guards = "isString(value)")
         @SuppressWarnings("truffle-static-method")
         PosixFileHandle doUnicode(Object value,
-                        @Bind("this") Node inliningTarget,
+                        @Bind Node inliningTarget,
                         @Exclusive @Cached CastToTruffleStringNode castToStringNode,
                         @Bind PythonContext context,
                         @CachedLibrary("context.getPosixSupport()") PosixSupportLibrary posixLib,
@@ -3451,7 +3454,7 @@ public final class PosixModuleBuiltins extends PythonBuiltins {
         @Specialization
         @SuppressWarnings("truffle-static-method")
         PosixFileHandle doBytes(PBytes value,
-                        @Bind("this") Node inliningTarget,
+                        @Bind Node inliningTarget,
                         @Exclusive @Cached BytesNodes.ToBytesNode toByteArrayNode,
                         @Bind PythonContext context,
                         @CachedLibrary("context.getPosixSupport()") PosixSupportLibrary posixLib,
@@ -3463,7 +3466,7 @@ public final class PosixModuleBuiltins extends PythonBuiltins {
         @Specialization(guards = {"!isHandled(value)", "allowFd", "indexCheckNode.execute(this, value)"}, limit = "1")
         @SuppressWarnings("truffle-static-method")
         PosixFileHandle doIndex(VirtualFrame frame, Object value,
-                        @Bind("this") Node inliningTarget,
+                        @Bind Node inliningTarget,
                         @SuppressWarnings("unused") @Exclusive @Cached PyIndexCheckNode indexCheckNode,
                         @Cached PyNumberIndexNode indexNode,
                         @Exclusive @Cached CastToJavaLongLossyNode castToLongNode,
@@ -3475,7 +3478,7 @@ public final class PosixModuleBuiltins extends PythonBuiltins {
         @Specialization(guards = {"!isHandled(value)", "!allowFd || !indexCheckNode.execute(this, value)"}, limit = "1")
         @SuppressWarnings("truffle-static-method")
         PosixFileHandle doGeneric(VirtualFrame frame, Object value,
-                        @Bind("this") Node inliningTarget,
+                        @Bind Node inliningTarget,
                         @SuppressWarnings("unused") @Exclusive @Cached PyIndexCheckNode indexCheckNode,
                         @Cached("create(T___FSPATH__)") LookupAndCallUnaryNode callFSPath,
                         @Exclusive @Cached BytesNodes.ToBytesNode toByteArrayNode,
@@ -3539,7 +3542,7 @@ public final class PosixModuleBuiltins extends PythonBuiltins {
 
         @Specialization
         static long doOthers(VirtualFrame frame, Object value,
-                        @Bind("this") Node inliningTarget,
+                        @Bind Node inliningTarget,
                         @Cached PyLongAsLongNode asLongNode) {
             return asLongNode.execute(frame, inliningTarget, value);
         }
@@ -3559,7 +3562,7 @@ public final class PosixModuleBuiltins extends PythonBuiltins {
     public abstract static class FileDescriptorConversionNode extends ArgumentCastNode {
         @Specialization
         static int doIndex(VirtualFrame frame, Object value,
-                        @Bind("this") Node inliningTarget,
+                        @Bind Node inliningTarget,
                         @Cached PyObjectAsFileDescriptor asFileDescriptor) {
             return asFileDescriptor.execute(frame, inliningTarget, value);
         }
@@ -3588,7 +3591,7 @@ public final class PosixModuleBuiltins extends PythonBuiltins {
 
         @Specialization(guards = "!isInteger(value)")
         static long doGeneric(VirtualFrame frame, Object value,
-                        @Bind("this") Node inliningTarget,
+                        @Bind Node inliningTarget,
                         @Cached PyLongAsLongNode asLongNode) {
             return asLongNode.execute(frame, inliningTarget, value);
         }
@@ -3611,14 +3614,14 @@ public final class PosixModuleBuiltins extends PythonBuiltins {
 
         @Specialization
         long doInt(int value,
-                        @Bind("this") Node inliningTarget,
+                        @Bind Node inliningTarget,
                         @Shared @Cached PRaiseNode raiseNode) {
             return checkValue(inliningTarget, value, raiseNode);
         }
 
         @Specialization
         long doLong(long value,
-                        @Bind("this") Node inliningTarget,
+                        @Bind Node inliningTarget,
                         @Shared @Cached PRaiseNode raiseNode) {
             return checkValue(inliningTarget, value, raiseNode);
         }
@@ -3626,7 +3629,7 @@ public final class PosixModuleBuiltins extends PythonBuiltins {
         @Specialization(guards = "!isInteger(value)")
         @SuppressWarnings("truffle-static-method")
         long doGeneric(VirtualFrame frame, Object value,
-                        @Bind("this") Node inliningTarget,
+                        @Bind Node inliningTarget,
                         @Cached PyNumberIndexNode pyNumberIndexNode,
                         @Cached PyLongAsLongNode asLongNode,
                         @Exclusive @Cached PRaiseNode raiseNode) {

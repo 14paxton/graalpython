@@ -1,4 +1,4 @@
-/* Copyright (c) 2024, Oracle and/or its affiliates.
+/* Copyright (c) 2024, 2025, Oracle and/or its affiliates.
  * Copyright (C) 1996-2024 Python Software Foundation
  *
  * Licensed under the PYTHON SOFTWARE FOUNDATION LICENSE VERSION 2
@@ -1147,7 +1147,7 @@ _PyDict_MaybeUntrack(PyObject *op)
         return;
 
     // GraalPy change: do an upcall to consider all dict elements
-    if (!GraalPyTruffleDict_MaybeUntrack(op))
+    if (!GraalPyPrivate_Dict_MaybeUntrack(op))
         return;
 
     mp = (PyDictObject *) op;
@@ -1631,7 +1631,7 @@ _PyDict_NewPresized(Py_ssize_t minused)
 {
     // GraalPy change: different implementation
     // GraalPy: we ignore requests to capacity for now
-    return GraalPyDict_New();
+    return PyDict_New();
 }
 
 #if 0 // GraalPy change
@@ -3871,7 +3871,7 @@ PyTypeObject PyDict_Type = {
     0,                                          /* tp_init */ // GraalPy change: nulled
     0,                                          /* tp_alloc */ // GraalPy change: nulled
     0,                                          /* tp_new */ // GraalPy change: nulled
-    GraalPyObject_GC_Del,                       /* tp_free */ // GraalPy change: different function
+    GraalPyPrivate_Object_GC_Del,              /* tp_free */ // GraalPy change: different function
 #if 0 // GraalPy change
     .tp_vectorcall = dict_vectorcall,
 #endif // GraalPy change
@@ -5555,10 +5555,12 @@ _PyObject_IsInstanceDictEmpty(PyObject *obj)
     }
     return ((PyDictObject *)dict)->ma_used == 0;
 }
+#endif // GraalPy change
 
 void
 _PyObject_FreeInstanceAttributes(PyObject *self)
 {
+#if 0 // GraalPy change
     PyTypeObject *tp = Py_TYPE(self);
     assert(Py_TYPE(self)->tp_flags & Py_TPFLAGS_MANAGED_DICT);
     PyDictOrValues dorv = *_PyObject_DictOrValuesPointer(self);
@@ -5571,11 +5573,13 @@ _PyObject_FreeInstanceAttributes(PyObject *self)
         Py_XDECREF(values->values[i]);
     }
     free_values(values);
+#endif // GraalPy change
 }
 
 int
 _PyObject_VisitManagedDict(PyObject *obj, visitproc visit, void *arg)
 {
+#if 0 // GraalPy change
     PyTypeObject *tp = Py_TYPE(obj);
     if((tp->tp_flags & Py_TPFLAGS_MANAGED_DICT) == 0) {
         return 0;
@@ -5593,12 +5597,14 @@ _PyObject_VisitManagedDict(PyObject *obj, visitproc visit, void *arg)
         PyObject *dict = _PyDictOrValues_GetDict(dorv);
         Py_VISIT(dict);
     }
+#endif // GraalPy change
     return 0;
 }
 
 void
 _PyObject_ClearManagedDict(PyObject *obj)
 {
+#if 0 // GraalPy change
     PyTypeObject *tp = Py_TYPE(obj);
     if((tp->tp_flags & Py_TPFLAGS_MANAGED_DICT) == 0) {
         return;
@@ -5620,15 +5626,15 @@ _PyObject_ClearManagedDict(PyObject *obj)
             Py_DECREF(dict);
         }
     }
-}
 #endif // GraalPy change
+}
 
 PyObject *
 PyObject_GenericGetDict(PyObject *obj, void *context)
 {
     // GraalPy change: upcall for managed
     if (points_to_py_handle_space(obj)) {
-        return GraalPyTruffleObject_GenericGetDict(obj);
+        return GraalPyPrivate_Object_GenericGetDict(obj);
     }
     PyObject *dict;
     // GraalPy change: we don't have inlined values in managed dict

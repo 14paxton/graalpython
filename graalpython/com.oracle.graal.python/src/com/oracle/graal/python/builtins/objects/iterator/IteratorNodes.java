@@ -122,7 +122,7 @@ public abstract class IteratorNodes {
 
         @Specialization
         static int doTruffleString(TruffleString str,
-                        @Cached(inline = false) TruffleString.CodePointLengthNode codePointLengthNode) {
+                        @Cached TruffleString.CodePointLengthNode codePointLengthNode) {
             return codePointLengthNode.execute(str, TS_ENCODING);
         }
 
@@ -300,7 +300,7 @@ public abstract class IteratorNodes {
 
         @Specialization
         static int doString(PStringIterator it,
-                        @Cached(inline = false) TruffleString.CodePointLengthNode codePointLengthNode) {
+                        @Cached TruffleString.CodePointLengthNode codePointLengthNode) {
             return ensurePositive(codePointLengthNode.execute(it.value, TS_ENCODING));
         }
 
@@ -328,13 +328,13 @@ public abstract class IteratorNodes {
     }
 
     @ImportStatic(PGuards.class)
-    @SuppressWarnings("truffle-inlining")       // footprint reduction 36 -> 18
+    @GenerateInline(false)       // footprint reduction 36 -> 18
     public abstract static class ToArrayNode extends Node {
         public abstract Object[] execute(VirtualFrame frame, Object iterable);
 
         @Specialization(guards = "isString(iterableObj)")
         public static Object[] doIt(Object iterableObj,
-                        @Bind("this") Node inliningTarget,
+                        @Bind Node inliningTarget,
                         @Cached CastBuiltinStringToTruffleStringNode castToStringNode,
                         @Cached InlinedLoopConditionProfile loopProfile,
                         @Cached TruffleString.CodePointLengthNode codePointLengthNode,
@@ -348,14 +348,14 @@ public abstract class IteratorNodes {
             int i = 0;
             while (loopProfile.inject(inliningTarget, it.hasNext())) {
                 // TODO: GR-37219: use SubstringNode with lazy=true?
-                result[i++] = fromCodePointNode.execute(nextNode.execute(it), TS_ENCODING, true);
+                result[i++] = fromCodePointNode.execute(nextNode.execute(it, TS_ENCODING), TS_ENCODING, true);
             }
             return result;
         }
 
         @Specialization
         public static Object[] doIt(PSequence iterable,
-                        @Bind("this") Node inliningTarget,
+                        @Bind Node inliningTarget,
                         @Cached GetSequenceStorageNode getStorageNode,
                         @Cached SequenceStorageNodes.ToArrayNode toArrayNode) {
             SequenceStorage storage = getStorageNode.execute(inliningTarget, iterable);
@@ -364,7 +364,7 @@ public abstract class IteratorNodes {
 
         @Fallback
         public static Object[] doIt(VirtualFrame frame, Object iterable,
-                        @Bind("this") Node inliningTarget,
+                        @Bind Node inliningTarget,
                         @Cached PyObjectGetIter getIter,
                         @Cached PyIterNextNode nextNode) {
             Object it = getIter.execute(frame, inliningTarget, iterable);

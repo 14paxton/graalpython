@@ -25,9 +25,10 @@
  */
 package com.oracle.graal.python.runtime;
 
-import static com.oracle.graal.python.builtins.PythonOS.PLATFORM_DARWIN;
-import static com.oracle.graal.python.builtins.PythonOS.PLATFORM_WIN32;
-import static com.oracle.graal.python.builtins.PythonOS.getPythonOS;
+import static com.oracle.graal.python.PythonLanguage.getPythonOS;
+import static com.oracle.graal.python.PythonLanguage.throwIfUnsupported;
+import static com.oracle.graal.python.annotations.PythonOS.PLATFORM_DARWIN;
+import static com.oracle.graal.python.annotations.PythonOS.PLATFORM_WIN32;
 import static com.oracle.graal.python.builtins.modules.SysModuleBuiltins.T_CACHE_TAG;
 import static com.oracle.graal.python.builtins.modules.SysModuleBuiltins.T__MULTIARCH;
 import static com.oracle.graal.python.builtins.modules.io.IONodes.T_CLOSED;
@@ -100,17 +101,17 @@ import java.util.logging.Level;
 import org.graalvm.options.OptionKey;
 
 import com.oracle.graal.python.PythonLanguage;
+import com.oracle.graal.python.annotations.PythonOS;
 import com.oracle.graal.python.builtins.Python3Core;
 import com.oracle.graal.python.builtins.PythonBuiltinClassType;
-import com.oracle.graal.python.builtins.PythonOS;
 import com.oracle.graal.python.builtins.modules.MathGuards;
 import com.oracle.graal.python.builtins.modules.ctypes.CtypesModuleBuiltins.CtypesThreadState;
 import com.oracle.graal.python.builtins.objects.PNone;
 import com.oracle.graal.python.builtins.objects.cext.PythonNativeClass;
 import com.oracle.graal.python.builtins.objects.cext.capi.CApiContext;
 import com.oracle.graal.python.builtins.objects.cext.capi.PThreadState;
-import com.oracle.graal.python.builtins.objects.cext.capi.PyTruffleObjectFree;
 import com.oracle.graal.python.builtins.objects.cext.capi.PythonNativeWrapper.PythonAbstractObjectNativeWrapper;
+import com.oracle.graal.python.builtins.objects.cext.capi.transitions.CApiTransitions;
 import com.oracle.graal.python.builtins.objects.cext.capi.transitions.CApiTransitions.HandleContext;
 import com.oracle.graal.python.builtins.objects.cext.common.NativePointer;
 import com.oracle.graal.python.builtins.objects.cext.structs.CStructAccess;
@@ -128,6 +129,7 @@ import com.oracle.graal.python.builtins.objects.frame.PFrame;
 import com.oracle.graal.python.builtins.objects.frame.PFrame.Reference;
 import com.oracle.graal.python.builtins.objects.function.PFunction;
 import com.oracle.graal.python.builtins.objects.function.PKeyword;
+import com.oracle.graal.python.builtins.objects.generator.PGenerator;
 import com.oracle.graal.python.builtins.objects.list.PList;
 import com.oracle.graal.python.builtins.objects.module.PythonModule;
 import com.oracle.graal.python.builtins.objects.str.PString;
@@ -144,6 +146,7 @@ import com.oracle.graal.python.nodes.PRaiseNode;
 import com.oracle.graal.python.nodes.SpecialAttributeNames;
 import com.oracle.graal.python.nodes.SpecialMethodNames;
 import com.oracle.graal.python.nodes.WriteUnraisableNode;
+import com.oracle.graal.python.nodes.attributes.ReadAttributeFromModuleNode;
 import com.oracle.graal.python.nodes.attributes.ReadAttributeFromObjectNode;
 import com.oracle.graal.python.nodes.bytecode_dsl.PBytecodeDSLRootNode;
 import com.oracle.graal.python.nodes.call.CallNode;
@@ -197,6 +200,7 @@ import com.oracle.truffle.api.interop.ExceptionType;
 import com.oracle.truffle.api.interop.InteropLibrary;
 import com.oracle.truffle.api.interop.UnsupportedMessageException;
 import com.oracle.truffle.api.nodes.Node;
+import com.oracle.truffle.api.nodes.RootNode;
 import com.oracle.truffle.api.source.Source;
 import com.oracle.truffle.api.strings.TruffleString;
 import com.oracle.truffle.api.utilities.CyclicAssumption;
@@ -221,7 +225,7 @@ public final class PythonContext extends Python3Core {
     public static String getSupportLibName(PythonOS os, String libName) {
         // note: this should be aligned with MX's "lib" substitution
         return switch (os) {
-            case PLATFORM_LINUX, PLATFORM_FREEBSD, PLATFORM_SUNOS -> J_LIB_PREFIX + libName + J_EXT_SO;
+            case PLATFORM_LINUX -> J_LIB_PREFIX + libName + J_EXT_SO;
             case PLATFORM_DARWIN -> J_LIB_PREFIX + libName + J_EXT_DYLIB;
             case PLATFORM_WIN32 -> libName + J_EXT_DLL;
             default -> libName;
@@ -230,6 +234,10 @@ public final class PythonContext extends Python3Core {
 
     @TruffleBoundary
     public static String getSupportLibName(String libName) {
+        throwIfUnsupported("Trying to load a native library on an unsupported platform. " +
+                        "This is not possible and will fail. " +
+                        "Ensure that native access is disallowed for this context and configure GraalPy to use Java backends where possible. " +
+                        "Refer to https://www.graalvm.org/python/docs/ for more information on native and Java module backends.");
         return getSupportLibName(getPythonOS(), libName);
     }
 
@@ -460,9 +468,9 @@ public final class PythonContext extends Python3Core {
             this.nativeWrapper = nativeWrapper;
         }
 
-        public PContextVarsContext getContextVarsContext() {
+        public PContextVarsContext getContextVarsContext(Node node) {
             if (contextVarsContext == null) {
-                contextVarsContext = PFactory.createContextVarsContext(PythonLanguage.get(null));
+                contextVarsContext = PFactory.createContextVarsContext(PythonLanguage.get(node));
             }
             return contextVarsContext;
         }
@@ -483,12 +491,12 @@ public final class PythonContext extends Python3Core {
             if (dict != null) {
                 PythonAbstractObjectNativeWrapper dictNativeWrapper = dict.getNativeWrapper();
                 if (dictNativeWrapper != null && dictNativeWrapper.ref == null) {
-                    PyTruffleObjectFree.releaseNativeWrapperUncached(dictNativeWrapper);
+                    CApiTransitions.releaseNativeWrapperUncached(dictNativeWrapper);
                 }
             }
             dict = null;
             if (nativeWrapper != null && nativeWrapper.ref == null) {
-                PyTruffleObjectFree.releaseNativeWrapperUncached(nativeWrapper);
+                CApiTransitions.releaseNativeWrapperUncached(nativeWrapper);
                 nativeWrapper = null;
             }
             /*
@@ -519,11 +527,14 @@ public final class PythonContext extends Python3Core {
 
             // Ensure tracing + profiling are enabled for each method on the stack.
             Truffle.getRuntime().iterateFrames((frameInstance) -> {
-                if (frameInstance.getCallTarget() instanceof RootCallTarget c && c.getRootNode() instanceof PBytecodeDSLRootNode r) {
-                    if (r.needsTraceAndProfileInstrumentation()) {
-                        r.ensureTraceAndProfileEnabled();
+                if (frameInstance.getCallTarget() instanceof RootCallTarget c) {
+                    RootNode root = PGenerator.unwrapContinuationRoot(c.getRootNode());
+                    if (root instanceof PBytecodeDSLRootNode r) {
+                        if (r.needsTraceAndProfileInstrumentation()) {
+                            r.ensureTraceAndProfileEnabled();
+                        }
+                        rootNodes.add(r);
                     }
-                    rootNodes.add(r);
                 }
                 return null;
             });
@@ -624,7 +635,8 @@ public final class PythonContext extends Python3Core {
         public void setNativeThreadLocalVarPointer(Object ptr) {
             // either unset or same
             assert nativeThreadLocalVarPointer == null || nativeThreadLocalVarPointer == ptr ||
-                            InteropLibrary.getUncached().isIdentical(nativeThreadLocalVarPointer, ptr, InteropLibrary.getUncached());
+                            InteropLibrary.getUncached().isIdentical(nativeThreadLocalVarPointer, ptr, InteropLibrary.getUncached()) : //
+                            String.format("ptr = %s; nativeThreadLocalVarPointer = %s", ptr, nativeThreadLocalVarPointer);
             this.nativeThreadLocalVarPointer = ptr;
         }
     }
@@ -762,6 +774,8 @@ public final class PythonContext extends Python3Core {
     private OutputStream out;
     private OutputStream err;
     private InputStream in;
+    private final ReentrantLock cApiInitializationLock = new ReentrantLock(false);
+    private volatile boolean cApiWasInitialized = false;
     @CompilationFinal private CApiContext cApiContext;
     @CompilationFinal private boolean nativeAccessAllowed;
 
@@ -1249,7 +1263,7 @@ public final class PythonContext extends Python3Core {
         this.in = env.in();
         this.out = env.out();
         this.err = env.err();
-        this.nativeAccessAllowed = env.isNativeAccessAllowed();
+        this.nativeAccessAllowed = env.isNativeAccessAllowed() && !PythonOS.isUnsupported();
     }
 
     private static final ContextReference<PythonContext> REFERENCE = ContextReference.create(PythonLanguage.class);
@@ -1439,7 +1453,7 @@ public final class PythonContext extends Python3Core {
         err = env.err();
         posixSupport.setEnv(env);
         optionValues = PythonOptions.createOptionValuesStorage(newEnv);
-        nativeAccessAllowed = newEnv.isNativeAccessAllowed();
+        nativeAccessAllowed = newEnv.isNativeAccessAllowed() && !PythonOS.isUnsupported();
     }
 
     /**
@@ -1501,18 +1515,15 @@ public final class PythonContext extends Python3Core {
         assert !env.isPreInitialization();
         if (secureRandom == null) {
             CompilerDirectives.transferToInterpreterAndInvalidate();
+            /*
+             * Be careful with what we initialize here. Doing stuff likes Security.getAlgorithms may
+             * eagerly initialize bouncycastle and bloat the heap. Run the heap:post-startup
+             * benchmark when making changes.
+             */
             try {
-                secureRandom = SecureRandom.getInstance("NativePRNGNonBlocking");
+                secureRandom = SecureRandom.getInstance("NATIVEPRNGNONBLOCKING");
             } catch (NoSuchAlgorithmException e) {
-                if (getPythonOS() == PLATFORM_WIN32) {
-                    try {
-                        secureRandom = SecureRandom.getInstanceStrong();
-                    } catch (NoSuchAlgorithmException e2) {
-                        throw new RuntimeException("Unable to obtain entropy source for random number generation (NativePRNGNonBlocking)", e2);
-                    }
-                } else {
-                    throw new RuntimeException("Unable to obtain entropy source for random number generation (NativePRNGNonBlocking)", e);
-                }
+                secureRandom = new SecureRandom();
             }
         }
         return secureRandom;
@@ -1842,9 +1853,13 @@ public final class PythonContext extends Python3Core {
                         () -> {
                             try {
                                 TruffleFile internalResource = newEnv.getInternalResource("python-home");
-                                return internalResource == null ? null : internalResource.getAbsoluteFile();
+                                if (internalResource == null) {
+                                    PythonLanguage.getLogger(Python3Core.class).fine("Couldn't load python internal resources");
+                                    return null;
+                                }
+                                return internalResource.getAbsoluteFile();
                             } catch (IOException e) {
-                                // fall through
+                                PythonLanguage.getLogger(Python3Core.class).log(Level.INFO, "Internal resources loading error", e);
                             }
                             return null;
                         }
@@ -2335,6 +2350,15 @@ public final class PythonContext extends Python3Core {
         return getEnv().isHostLookupAllowed() || isNativeAccessAllowed();
     }
 
+    public boolean useNativeCompressionModules() {
+        if (isNativeAccessAllowed()) {
+            TruffleString option = getLanguage().getEngineOption(PythonOptions.CompressionModulesBackend);
+            TruffleString.EqualNode eqNode = TruffleString.EqualNode.getUncached();
+            return !eqNode.execute(T_JAVA, option, TS_ENCODING);
+        }
+        return false;
+    }
+
     /**
      * Trigger any pending asynchronous actions
      */
@@ -2434,14 +2458,10 @@ public final class PythonContext extends Python3Core {
     @TruffleBoundary
     void acquireGil() throws InterruptedException {
         assert !ownsGil() : dumpStackOnAssertionHelper("trying to acquire the GIL more than once");
-        boolean wasInterrupted = Thread.interrupted();
         globalInterpreterLock.lockInterruptibly();
-        if (wasInterrupted) {
-            Thread.currentThread().interrupt();
-        }
     }
 
-    static final String dumpStackOnAssertionHelper(String msg) {
+    static String dumpStackOnAssertionHelper(String msg) {
         Thread.dumpStack();
         return msg;
     }
@@ -2628,11 +2648,29 @@ public final class PythonContext extends Python3Core {
     }
 
     public boolean hasCApiContext() {
+        // This may be called during C API initialization, we have a context so that we can finish
+        // the initialization, but the C API is not fully initialized yet
+        assert (cApiContext != null) || !cApiWasInitialized;
         return cApiContext != null;
     }
 
+    public boolean isCApiInitialized() {
+        assert (cApiContext != null) || !cApiWasInitialized;
+        return cApiWasInitialized;
+    }
+
+    public void setCApiInitialized() {
+        assert cApiContext != null;
+        cApiWasInitialized = true;
+    }
+
     public CApiContext getCApiContext() {
+        assert (cApiContext != null) || !cApiWasInitialized;
         return cApiContext;
+    }
+
+    public ReentrantLock getcApiInitializationLock() {
+        return cApiInitializationLock;
     }
 
     public void setCApiContext(CApiContext capiContext) {
@@ -2689,7 +2727,7 @@ public final class PythonContext extends Python3Core {
     public TruffleString getSoAbi() {
         if (soABI == null) {
             PythonModule sysModule = this.lookupBuiltinModule(T_SYS);
-            Object implementationObj = ReadAttributeFromObjectNode.getUncached().execute(sysModule, T_IMPLEMENTATION);
+            Object implementationObj = ReadAttributeFromModuleNode.getUncached().execute(sysModule, T_IMPLEMENTATION);
             // sys.implementation.cache_tag
             TruffleString cacheTag = (TruffleString) PyObjectGetAttr.executeUncached(implementationObj, T_CACHE_TAG);
             // sys.implementation._multiarch
@@ -2719,9 +2757,12 @@ public final class PythonContext extends Python3Core {
         return null;
     }
 
-    private int dlopenFlags = PosixConstants.RTLD_NOW.value;
+    private Integer dlopenFlags = null;
 
     public int getDlopenFlags() {
+        if (dlopenFlags == null) {
+            dlopenFlags = PosixConstants.RTLD_NOW.value;
+        }
         return dlopenFlags;
     }
 

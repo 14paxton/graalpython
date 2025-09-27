@@ -252,7 +252,7 @@ public class IONodes {
             int flags = 0;
             TruffleStringIterator it = createCodePointIteratorNode.execute(mode, TS_ENCODING);
             while (it.hasNext()) {
-                int c = nextNode.execute(it);
+                int c = nextNode.execute(it, TS_ENCODING);
                 int current;
                 switch (c) {
                     case 'x':
@@ -368,7 +368,7 @@ public class IONodes {
         @Fallback
         @SuppressWarnings("truffle-static-method")
         IOMode generic(VirtualFrame frame, Object modeObj,
-                        @Bind("this") Node inliningTarget,
+                        @Bind Node inliningTarget,
                         @Cached CastToTruffleStringNode toString,
                         @Cached TruffleString.CreateCodePointIteratorNode createCodePointIteratorNode,
                         @Cached TruffleStringIterator.NextNode nextNode,
@@ -426,7 +426,7 @@ public class IONodes {
 
         @Specialization(guards = "!isInteger(nameobj)")
         static Object generic(VirtualFrame frame, Object nameobj,
-                        @Bind("this") Node inliningTarget,
+                        @Bind Node inliningTarget,
                         @Cached BytesNodes.DecodeUTF8FSPathNode fspath,
                         @Cached PyIndexCheckNode indexCheckNode,
                         @Cached PyNumberAsSizeNode asSizeNode,
@@ -444,13 +444,13 @@ public class IONodes {
 
         @Specialization(guards = "fd < 0")
         static int err(int fd,
-                        @Bind("this") Node inliningTarget) {
+                        @Bind Node inliningTarget) {
             throw PRaiseNode.raiseStatic(inliningTarget, ValueError, OPENER_RETURNED_D, fd);
         }
 
         @Specialization(guards = "fd < 0")
         static int err(long fd,
-                        @Bind("this") Node inliningTarget) {
+                        @Bind Node inliningTarget) {
             throw PRaiseNode.raiseStatic(inliningTarget, ValueError, OPENER_RETURNED_D, fd);
         }
 

@@ -3,6 +3,9 @@
 This changelog summarizes major changes between GraalVM versions of the Python
 language runtime. The main focus is on user-observable behavior of the engine.
 
+## Version 25.0.1
+* Allow users to keep going on unsupported JDK/OS/ARCH combinations at their own risk by opting out of early failure using `-Dtruffle.UseFallbackRuntime=true`, `-Dpolyglot.engine.userResourceCache=/set/to/a/writeable/dir`, `-Dpolyglot.engine.allowUnsupportedPlatform=true`, and `-Dpolyglot.python.UnsupportedPlatformEmulates=[linux|macos|windows]` and `-Dorg.graalvm.python.resources.exclude=native.files`.
+
 ## Version 25.0.0
 * `sys.implementation.version` now returns the GraalPy version instead of the Python version it implements. Also available as `sys.graalpy_version_info` for better discoverability by people already familiar with PyPy and its `sys.pypy_version_info`.
 * `GRAALPY_VERSION_NUM` C macro now inlcudes the release level and serial number at the end to conform to the `hexversion` format. This shouldn't break any existing comparisons.
@@ -17,7 +20,7 @@ language runtime. The main focus is on user-observable behavior of the engine.
 * Enable FTS3, FTS4, FTS5, RTREE, and math function features in the bundled sqlite3 library.
 * Add support patches for Torch 2.7.0, PyGObject 3.52.3, xmlschema 4.0.0, lxml < 5.4.0, SciPy 1.15, jq 1.8.0, NumPy < 2.3, ormsgpack < 1.9.1, pandas 2.2.3, PyArrow 19.0, PyMuPDF 1.25.4.
 * The GraalPy Native standalone on Linux now uses the G1 garbage collector which is much faster.
-* Speedup native extensions by using the Panama NFI backend for faster native calls, available on GraalVM 25, JDK 25 and in the GraalPy JVM standalone.
+* The full-featured Python REPL is now available on GraalPy standalone builds for Windows.
 
 ## Version 24.2.0
 * Updated developer metadata of Maven artifacts.
@@ -50,7 +53,7 @@ language runtime. The main focus is on user-observable behavior of the engine.
 * Update to Python 3.11.7.
 * We now provide intrinsified `_pickle` module also in the community version.
 * `polyglot.eval` now raises more meaningful exceptions. Unavailable languages raise `ValueError`. Exceptions from the polyglot language are raised directly as interop objects (typed as `polyglot.ForeignException`). The shortcut for executing python files without specifying language has been removed, use regular `eval` for executing Python code.
-* In Jython emulation mode we now magically fall back to calling Java getters or setters when using Python attribute access for non-visible properties. This can help migrating away from Jython if you relied on this behavior. 
+* In Jython emulation mode we now magically fall back to calling Java getters or setters when using Python attribute access for non-visible properties. This can help migrating away from Jython if you relied on this behavior.
 * The option `python.EmulateJython` to enable Jython emulation is now marked as stable, and can thus be relied upon in production.
 * Fixed parsing of pyvenv.cfg according to PEP 405, which is required to use [uv](https://github.com/astral-sh/uv?tab=readme-ov-file#uv) generated venvs with GraalPy.
 * Use https://www.graalvm.org/python/wheels/ as the default value for the `--extra-index-url` pip option. This will make it easy for users to install GraalPy binary wheels in the future.
@@ -198,7 +201,7 @@ language runtime. The main focus is on user-observable behavior of the engine.
 * Escaping Unicode characters using the character names in strings like
   "\N{GREEK CAPITAL LETTER DELTA}".
 * When a `*.py` file is imported, `*.pyc` file is created. It contains binary data to speed up parsing.
-* Adding option `PyCachePrefix`, which is equivalent to PYTHONPYCACHEPREFIX environment variable, which is also accepted now. 
+* Adding option `PyCachePrefix`, which is equivalent to PYTHONPYCACHEPREFIX environment variable, which is also accepted now.
 * Adding optin `DontWriteBytecodeFlag`. Equivalent to the Python -B flag. Don't write bytecode files.
 * Command option -B works
 * Implement better reference counting for native extensions to fix memory leaks

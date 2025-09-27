@@ -59,8 +59,6 @@ import static com.oracle.graal.python.util.PythonUtils.tsbCapacity;
 
 import java.util.List;
 import java.util.Locale;
-import java.util.regex.Matcher;
-import java.util.regex.Pattern;
 
 import org.graalvm.shadowed.com.ibm.icu.lang.UCharacter;
 import org.graalvm.shadowed.com.ibm.icu.lang.UProperty;
@@ -69,10 +67,10 @@ import org.graalvm.shadowed.com.ibm.icu.text.CaseMap;
 import com.oracle.graal.python.PythonLanguage;
 import com.oracle.graal.python.annotations.ArgumentClinic;
 import com.oracle.graal.python.annotations.ArgumentClinic.ClinicConversion;
+import com.oracle.graal.python.annotations.Builtin;
 import com.oracle.graal.python.annotations.Slot;
 import com.oracle.graal.python.annotations.Slot.SlotKind;
 import com.oracle.graal.python.annotations.Slot.SlotSignature;
-import com.oracle.graal.python.builtins.Builtin;
 import com.oracle.graal.python.builtins.CoreFunctions;
 import com.oracle.graal.python.builtins.PythonBuiltinClassType;
 import com.oracle.graal.python.builtins.PythonBuiltins;
@@ -110,14 +108,17 @@ import com.oracle.graal.python.builtins.objects.slice.SliceNodes.ComputeIndices;
 import com.oracle.graal.python.builtins.objects.str.StringBuiltinsClinicProviders.FormatNodeClinicProviderGen;
 import com.oracle.graal.python.builtins.objects.str.StringBuiltinsClinicProviders.SplitNodeClinicProviderGen;
 import com.oracle.graal.python.builtins.objects.str.StringNodes.CastToJavaStringCheckedNode;
-import com.oracle.graal.python.builtins.objects.str.StringNodes.CastToTruffleStringCheckedNode;
+import com.oracle.graal.python.builtins.objects.str.StringNodes.CastToTruffleStringChecked0Node;
+import com.oracle.graal.python.builtins.objects.str.StringNodes.CastToTruffleStringChecked1Node;
+import com.oracle.graal.python.builtins.objects.str.StringNodes.CastToTruffleStringChecked2Node;
+import com.oracle.graal.python.builtins.objects.str.StringNodes.CastToTruffleStringChecked3Node;
+import com.oracle.graal.python.builtins.objects.str.StringNodes.CastToTruffleStringChecked4Node;
 import com.oracle.graal.python.builtins.objects.str.StringNodes.JoinInternalNode;
 import com.oracle.graal.python.builtins.objects.str.StringNodes.SpliceNode;
 import com.oracle.graal.python.builtins.objects.str.StringNodes.StringLenNode;
 import com.oracle.graal.python.builtins.objects.str.StringNodes.StringReplaceNode;
 import com.oracle.graal.python.builtins.objects.str.StringUtils.StripKind;
 import com.oracle.graal.python.builtins.objects.tuple.PTuple;
-import com.oracle.graal.python.builtins.objects.tuple.TupleBuiltins;
 import com.oracle.graal.python.builtins.objects.type.TpSlots;
 import com.oracle.graal.python.builtins.objects.type.TypeNodes;
 import com.oracle.graal.python.builtins.objects.type.slots.TpSlotBinaryFunc.MpSubscriptBuiltinNode;
@@ -175,6 +176,7 @@ import com.oracle.truffle.api.dsl.Cached;
 import com.oracle.truffle.api.dsl.Cached.Exclusive;
 import com.oracle.truffle.api.dsl.Cached.Shared;
 import com.oracle.truffle.api.dsl.Fallback;
+import com.oracle.truffle.api.dsl.GenerateCached;
 import com.oracle.truffle.api.dsl.GenerateInline;
 import com.oracle.truffle.api.dsl.GenerateNodeFactory;
 import com.oracle.truffle.api.dsl.GenerateUncached;
@@ -182,12 +184,16 @@ import com.oracle.truffle.api.dsl.ImportStatic;
 import com.oracle.truffle.api.dsl.NeverDefault;
 import com.oracle.truffle.api.dsl.Specialization;
 import com.oracle.truffle.api.frame.VirtualFrame;
+import com.oracle.truffle.api.interop.ArityException;
+import com.oracle.truffle.api.interop.InteropLibrary;
+import com.oracle.truffle.api.interop.UnknownIdentifierException;
+import com.oracle.truffle.api.interop.UnsupportedMessageException;
+import com.oracle.truffle.api.interop.UnsupportedTypeException;
 import com.oracle.truffle.api.library.CachedLibrary;
 import com.oracle.truffle.api.nodes.Node;
 import com.oracle.truffle.api.profiles.InlinedBranchProfile;
 import com.oracle.truffle.api.profiles.InlinedConditionProfile;
 import com.oracle.truffle.api.profiles.InlinedLoopConditionProfile;
-import com.oracle.truffle.api.strings.InternalByteArray;
 import com.oracle.truffle.api.strings.TruffleString;
 import com.oracle.truffle.api.strings.TruffleString.CodePointLengthNode;
 import com.oracle.truffle.api.strings.TruffleString.CodeRange;
@@ -231,7 +237,7 @@ public final class StringBuiltins extends PythonBuiltins {
         @Specialization(guards = {"!needsNativeAllocationNode.execute(inliningTarget, cls)", "isNoValue(arg)"}, limit = "1")
         @SuppressWarnings("unused")
         static Object strNoArgs(Object cls, PNone arg, Object encoding, Object errors,
-                        @Bind("this") Node inliningTarget,
+                        @Bind Node inliningTarget,
                         @SuppressWarnings("unused") @Exclusive @Cached TypeNodes.NeedsNativeAllocationNode needsNativeAllocationNode,
                         @Exclusive @Cached IsBuiltinClassExactProfile isPrimitiveProfile,
                         @Shared @Cached TypeNodes.GetInstanceShape getInstanceShape) {
@@ -240,7 +246,7 @@ public final class StringBuiltins extends PythonBuiltins {
 
         @Specialization(guards = {"!needsNativeAllocationNode.execute(inliningTarget, cls)", "!isNoValue(obj)", "isNoValue(encoding)", "isNoValue(errors)"}, limit = "1")
         static Object strOneArg(VirtualFrame frame, Object cls, Object obj, @SuppressWarnings("unused") PNone encoding, @SuppressWarnings("unused") PNone errors,
-                        @Bind("this") Node inliningTarget,
+                        @Bind Node inliningTarget,
                         @SuppressWarnings("unused") @Exclusive @Cached TypeNodes.NeedsNativeAllocationNode needsNativeAllocationNode,
                         @Exclusive @Cached IsBuiltinClassExactProfile isPrimitiveProfile,
                         @Exclusive @Cached InlinedConditionProfile isStringProfile,
@@ -271,8 +277,8 @@ public final class StringBuiltins extends PythonBuiltins {
 
         @Specialization(guards = {"!needsNativeAllocationNode.execute(inliningTarget, cls)", "!isNoValue(encoding) || !isNoValue(errors)"}, limit = "3")
         static Object doBuffer(VirtualFrame frame, Object cls, Object obj, Object encoding, Object errors,
-                        @Bind("this") Node inliningTarget,
-                        @Exclusive @Cached("createFor(this)") IndirectCallData indirectCallData,
+                        @Bind Node inliningTarget,
+                        @Exclusive @Cached("createFor($node)") IndirectCallData indirectCallData,
                         @SuppressWarnings("unused") @Exclusive @Cached TypeNodes.NeedsNativeAllocationNode needsNativeAllocationNode,
                         @Exclusive @Cached IsBuiltinClassExactProfile isPrimitiveProfile,
                         @Exclusive @Cached InlinedConditionProfile isStringProfile,
@@ -314,7 +320,7 @@ public final class StringBuiltins extends PythonBuiltins {
         @Specialization(guards = {"needsNativeAllocationNode.execute(inliningTarget, cls)", "isSubtypeOfString(isSubtype, cls)", //
                         "isNoValue(encoding)", "isNoValue(errors)"}, limit = "1")
         static Object doNativeSubclass(VirtualFrame frame, Object cls, Object obj, @SuppressWarnings("unused") Object encoding, @SuppressWarnings("unused") Object errors,
-                        @SuppressWarnings("unused") @Bind("this") Node inliningTarget,
+                        @SuppressWarnings("unused") @Bind Node inliningTarget,
                         @SuppressWarnings("unused") @Exclusive @Cached TypeNodes.NeedsNativeAllocationNode needsNativeAllocationNode,
                         @Shared @Cached @SuppressWarnings("unused") IsSubtypeNode isSubtype,
                         @Exclusive @Cached PyObjectStrAsObjectNode strNode,
@@ -329,8 +335,8 @@ public final class StringBuiltins extends PythonBuiltins {
         @Specialization(guards = {"needsNativeAllocationNode.execute(inliningTarget, cls)", "isSubtypeOfString(isSubtype, cls)", //
                         "!isNoValue(encoding) || !isNoValue(errors)"}, limit = "1")
         static Object doNativeSubclassEncodeErr(VirtualFrame frame, Object cls, Object obj, @SuppressWarnings("unused") Object encoding, @SuppressWarnings("unused") Object errors,
-                        @SuppressWarnings("unused") @Bind("this") Node inliningTarget,
-                        @Exclusive @Cached("createFor(this)") IndirectCallData indirectCallData,
+                        @SuppressWarnings("unused") @Bind Node inliningTarget,
+                        @Exclusive @Cached("createFor($node)") IndirectCallData indirectCallData,
                         @SuppressWarnings("unused") @Exclusive @Cached TypeNodes.NeedsNativeAllocationNode needsNativeAllocationNode,
                         @Shared @Cached @SuppressWarnings("unused") IsSubtypeNode isSubtype,
                         @Exclusive @Cached IsBuiltinClassExactProfile isPrimitiveProfile,
@@ -393,8 +399,8 @@ public final class StringBuiltins extends PythonBuiltins {
 
         @Specialization(guards = "!isTruffleString(self)")
         static TruffleString doGeneric(Object self,
-                        @Bind("this") Node inliningTarget,
-                        @Cached CastToTruffleStringCheckedNode castToTruffleStringNode) {
+                        @Bind Node inliningTarget,
+                        @Cached CastToTruffleStringChecked2Node castToTruffleStringNode) {
             return castToTruffleStringNode.cast(inliningTarget, self, ErrorMessages.REQUIRES_STR_OBJECT_BUT_RECEIVED_P, T___STR__, self);
         }
     }
@@ -410,7 +416,7 @@ public final class StringBuiltins extends PythonBuiltins {
 
         @Specialization(guards = "!formatString.isEmpty()")
         static TruffleString format(Object self, TruffleString formatString,
-                        @Bind("this") Node inliningTarget,
+                        @Bind Node inliningTarget,
                         @Cached CastToJavaStringCheckedNode castToJavaStringNode,
                         @Cached PRaiseNode raiseNode) {
             // We cannot cast self via argument clinic, because we need to keep it as-is for the
@@ -454,8 +460,8 @@ public final class StringBuiltins extends PythonBuiltins {
 
         @Specialization
         static TruffleString format(VirtualFrame frame, Object self, Object[] args, PKeyword[] kwargs,
-                        @Bind("this") Node inliningTarget,
-                        @Cached("createFor(this)") IndirectCallData indirectCallData,
+                        @Bind Node inliningTarget,
+                        @Cached("createFor($node)") IndirectCallData indirectCallData,
                         @Cached BuiltinFunctions.FormatNode format,
                         @Cached CastToTruffleStringNode castToStringNode,
                         @Cached PRaiseNode raiseNode) {
@@ -489,7 +495,7 @@ public final class StringBuiltins extends PythonBuiltins {
 
         @Specialization
         TruffleString format(VirtualFrame frame, TruffleString self, Object mapping,
-                        @Cached("createFor(this)") IndirectCallData indirectCallData,
+                        @Cached("createFor($node)") IndirectCallData indirectCallData,
                         @Cached BuiltinFunctions.FormatNode format) {
 
             TemplateFormatter template = new TemplateFormatter(self);
@@ -510,8 +516,8 @@ public final class StringBuiltins extends PythonBuiltins {
     abstract static class ReprNode extends PythonUnaryBuiltinNode {
         @Specialization
         static TruffleString doGeneric(Object self,
-                        @Bind("this") Node inliningTarget,
-                        @Cached CastToTruffleStringCheckedNode castToStringNode,
+                        @Bind Node inliningTarget,
+                        @Cached CastToTruffleStringChecked2Node castToStringNode,
                         @Cached StringNodes.StringReprNode reprNode) {
             return reprNode.execute(castToStringNode.cast(inliningTarget, self, ErrorMessages.REQUIRES_STR_OBJECT_BUT_RECEIVED_P, T___REPR__, self));
         }
@@ -522,9 +528,9 @@ public final class StringBuiltins extends PythonBuiltins {
     public abstract static class GetNewargsNode extends PythonUnaryBuiltinNode {
         @Specialization
         PTuple doGeneric(Object self,
-                        @Bind("this") Node inliningTarget,
+                        @Bind Node inliningTarget,
                         @Bind PythonLanguage language,
-                        @Cached CastToTruffleStringCheckedNode cast) {
+                        @Cached CastToTruffleStringChecked2Node cast) {
             TruffleString selfStr = cast.cast(inliningTarget, self, ErrorMessages.REQUIRES_STR_OBJECT_BUT_RECEIVED_P, T___GETNEWARGS__, self);
             // CPython requires the resulting string not to be the same object as the original for
             // some reason
@@ -541,7 +547,7 @@ public final class StringBuiltins extends PythonBuiltins {
 
         @Specialization
         Object doGeneric(Object self, Object other, RichCmpOp op,
-                        @Bind("$node") Node inliningTarget,
+                        @Bind Node inliningTarget,
                         @Cached CastToTruffleStringNode castSelfNode,
                         @Cached CastToTruffleStringNode castOtherNode,
                         @Cached InlinedBranchProfile noStringBranch) {
@@ -578,8 +584,8 @@ public final class StringBuiltins extends PythonBuiltins {
 
         @Specialization
         static boolean doit(Object self, Object other,
-                        @Bind("this") Node inliningTarget,
-                        @Cached CastToTruffleStringCheckedNode castStr,
+                        @Bind Node inliningTarget,
+                        @Cached CastToTruffleStringChecked1Node castStr,
                         @Cached TruffleString.CodePointLengthNode codePointLengthNode,
                         @Cached TruffleString.IndexOfStringNode indexOfStringNode) {
             TruffleString selfStr = castStr.cast(inliningTarget, self, ErrorMessages.REQUIRES_STRING_AS_LEFT_OPERAND, other);
@@ -599,7 +605,7 @@ public final class StringBuiltins extends PythonBuiltins {
 
         @Fallback
         static TruffleString doSS(Object self, Object other,
-                        @Bind("this") Node inliningTarget,
+                        @Bind Node inliningTarget,
                         @Cached CastToTruffleStringNode castToStringLeftNode,
                         @Cached CastToTruffleStringNode castToStringRightNode,
                         @Shared @Cached TruffleString.ConcatNode concatNode,
@@ -645,9 +651,9 @@ public final class StringBuiltins extends PythonBuiltins {
 
         @Specialization(guards = "!isPTuple(subStrObj)")
         static boolean doString(Object selfObj, Object subStrObj, int start, int end, Op op,
-                        @Bind("this") Node inliningTarget,
-                        @Exclusive @Cached CastToTruffleStringCheckedNode castSelfNode,
-                        @Exclusive @Cached CastToTruffleStringCheckedNode castPrefixNode,
+                        @Bind Node inliningTarget,
+                        @Exclusive @Cached CastToTruffleStringChecked2Node castSelfNode,
+                        @Exclusive @Cached CastToTruffleStringChecked3Node castPrefixNode,
                         @Shared @Cached TruffleString.CodePointLengthNode codePointLengthNode,
                         @Shared @Cached TruffleString.RegionEqualNode regionEqualNode) {
             TruffleString self = castSelfNode.cast(inliningTarget, selfObj, ErrorMessages.REQUIRES_STR_OBJECT_BUT_RECEIVED_P, op.methodName(), selfObj);
@@ -659,10 +665,10 @@ public final class StringBuiltins extends PythonBuiltins {
 
         @Specialization
         static boolean doTuple(Object selfObj, PTuple subStrs, int start, int end, Op op,
-                        @Bind("this") Node inliningTarget,
+                        @Bind Node inliningTarget,
                         @Cached GetObjectArrayNode getObjectArrayNode,
-                        @Exclusive @Cached CastToTruffleStringCheckedNode castSelfNode,
-                        @Exclusive @Cached CastToTruffleStringCheckedNode castPrefixNode,
+                        @Exclusive @Cached CastToTruffleStringChecked2Node castSelfNode,
+                        @Exclusive @Cached CastToTruffleStringChecked2Node castPrefixNode,
                         @Shared @Cached TruffleString.CodePointLengthNode codePointLengthNode,
                         @Shared @Cached TruffleString.RegionEqualNode regionEqualNode) {
             TruffleString self = castSelfNode.cast(inliningTarget, selfObj, ErrorMessages.REQUIRES_STR_OBJECT_BUT_RECEIVED_P, op.methodName(), selfObj);
@@ -755,12 +761,13 @@ public final class StringBuiltins extends PythonBuiltins {
 
         @Specialization
         static int rfind(Object self, Object sub, int start, int end,
-                        @Bind("this") Node inliningTarget,
-                        @Cached CastToTruffleStringCheckedNode castNode,
+                        @Bind Node inliningTarget,
+                        @Cached CastToTruffleStringChecked1Node cast1Node,
+                        @Cached CastToTruffleStringChecked2Node cast2Node,
                         @Shared("cpLen") @Cached TruffleString.CodePointLengthNode codePointLengthNode,
                         @Shared("lastIndexOf") @Cached TruffleString.LastIndexOfStringNode lastIndexOfStringNode) {
-            TruffleString selfStr = castNode.cast(inliningTarget, self, ErrorMessages.REQUIRES_STR_OBJECT_BUT_RECEIVED_P, "rfind", self);
-            TruffleString subStr = castNode.cast(inliningTarget, sub, ErrorMessages.MUST_BE_STR_NOT_P, sub);
+            TruffleString selfStr = cast2Node.cast(inliningTarget, self, ErrorMessages.REQUIRES_STR_OBJECT_BUT_RECEIVED_P, "rfind", self);
+            TruffleString subStr = cast1Node.cast(inliningTarget, sub, ErrorMessages.MUST_BE_STR_NOT_P, sub);
             return rfind(selfStr, subStr, start, end, codePointLengthNode, lastIndexOfStringNode);
         }
     }
@@ -787,12 +794,13 @@ public final class StringBuiltins extends PythonBuiltins {
 
         @Specialization
         static int find(Object self, Object sub, int start, int end,
-                        @Bind("this") Node inliningTarget,
-                        @Cached CastToTruffleStringCheckedNode castNode,
+                        @Bind Node inliningTarget,
+                        @Cached CastToTruffleStringChecked1Node cast1Node,
+                        @Cached CastToTruffleStringChecked2Node cast2Node,
                         @Shared("cpLen") @Cached TruffleString.CodePointLengthNode codePointLengthNode,
                         @Shared("indexOf") @Cached TruffleString.IndexOfStringNode indexOfStringNode) {
-            TruffleString selfStr = castNode.cast(inliningTarget, self, ErrorMessages.REQUIRES_STR_OBJECT_BUT_RECEIVED_P, "find", self);
-            TruffleString subStr = castNode.cast(inliningTarget, sub, ErrorMessages.MUST_BE_STR_NOT_P, sub);
+            TruffleString selfStr = cast2Node.cast(inliningTarget, self, ErrorMessages.REQUIRES_STR_OBJECT_BUT_RECEIVED_P, "find", self);
+            TruffleString subStr = cast1Node.cast(inliningTarget, sub, ErrorMessages.MUST_BE_STR_NOT_P, sub);
             return find(selfStr, subStr, start, end, codePointLengthNode, indexOfStringNode);
         }
     }
@@ -845,12 +853,13 @@ public final class StringBuiltins extends PythonBuiltins {
 
         @Specialization
         static int count(Object self, Object sub, int start, int end,
-                        @Bind("this") Node inliningTarget,
-                        @Cached CastToTruffleStringCheckedNode castNode,
+                        @Bind Node inliningTarget,
+                        @Cached CastToTruffleStringChecked1Node cast1Node,
+                        @Cached CastToTruffleStringChecked2Node cast2Node,
                         @Shared("cpLen") @Cached TruffleString.CodePointLengthNode codePointLengthNode,
                         @Shared("indexOf") @Cached TruffleString.IndexOfStringNode indexOfStringNode) {
-            TruffleString selfStr = castNode.cast(inliningTarget, self, ErrorMessages.REQUIRES_STR_OBJECT_BUT_RECEIVED_P, "count", self);
-            TruffleString subStr = castNode.cast(inliningTarget, sub, ErrorMessages.MUST_BE_STR_NOT_P, sub);
+            TruffleString selfStr = cast2Node.cast(inliningTarget, self, ErrorMessages.REQUIRES_STR_OBJECT_BUT_RECEIVED_P, "count", self);
+            TruffleString subStr = cast1Node.cast(inliningTarget, sub, ErrorMessages.MUST_BE_STR_NOT_P, sub);
             return count(selfStr, subStr, start, end, codePointLengthNode, indexOfStringNode);
         }
     }
@@ -862,8 +871,8 @@ public final class StringBuiltins extends PythonBuiltins {
 
         @Specialization
         static TruffleString join(VirtualFrame frame, Object self, Object iterable,
-                        @Bind("this") Node inliningTarget,
-                        @Cached CastToTruffleStringCheckedNode castToStringNode,
+                        @Bind Node inliningTarget,
+                        @Cached CastToTruffleStringChecked2Node castToStringNode,
                         @Cached JoinInternalNode join) {
             return join.execute(frame, castToStringNode.cast(inliningTarget, self, ErrorMessages.REQUIRES_STR_OBJECT_BUT_RECEIVED_P, "join", self), iterable);
         }
@@ -874,15 +883,17 @@ public final class StringBuiltins extends PythonBuiltins {
     @GenerateNodeFactory
     public abstract static class LowerNode extends PythonUnaryBuiltinNode {
 
+        private static final TruffleString.CodePointSet ASCII_UPPER = TruffleString.CodePointSet.fromRanges(new int[]{'A', 'Z'}, Encoding.US_ASCII);
+
         @Specialization(guards = "isAscii(self, getCodeRangeNode)")
         static TruffleString lowerAscii(TruffleString self,
                         @Shared("getCodeRange") @Cached @SuppressWarnings("unused") TruffleString.GetCodeRangeNode getCodeRangeNode,
                         @Cached TruffleString.SwitchEncodingNode switchEncodingNode,
-                        @Cached TruffleString.GetInternalByteArrayNode getInternalByteArrayNode,
+                        @Cached TruffleString.ByteIndexOfCodePointSetNode indexOfCodePointSetNode,
                         @Cached TruffleString.CopyToByteArrayNode copyToByteArrayNode,
                         @Cached TruffleString.FromByteArrayNode fromByteArrayNode) {
             TruffleString ascii = switchEncodingNode.execute(self, Encoding.US_ASCII);
-            int i = findFirstUpperCase(ascii, getInternalByteArrayNode);
+            int i = indexOfCodePointSetNode.execute(ascii, 0, ascii.byteLength(Encoding.US_ASCII), ASCII_UPPER);
             if (i < 0) {
                 return self;
             }
@@ -906,23 +917,12 @@ public final class StringBuiltins extends PythonBuiltins {
 
         @Specialization
         static Object doGeneric(VirtualFrame frame, Object self,
-                        @Bind("this") Node inliningTarget,
-                        @Cached CastToTruffleStringCheckedNode castToStringNode,
+                        @Bind Node inliningTarget,
+                        @Cached CastToTruffleStringChecked2Node castToStringNode,
                         @Cached LowerNode lowerNode) {
             return lowerNode.execute(frame, castToStringNode.cast(inliningTarget, self, ErrorMessages.REQUIRES_STR_OBJECT_BUT_RECEIVED_P, "lower", self));
         }
 
-        private static int findFirstUpperCase(TruffleString s, TruffleString.GetInternalByteArrayNode getInternalByteArrayNode) {
-            InternalByteArray iba = getInternalByteArrayNode.execute(s, Encoding.US_ASCII);
-            byte[] bytes = iba.getArray();
-            int end = iba.getEnd();
-            for (int i = iba.getOffset(); i < end; ++i) {
-                if (bytes[i] >= 'A' && bytes[i] <= 'Z') {
-                    return i;
-                }
-            }
-            return -1;
-        }
     }
 
     // str.upper()
@@ -930,15 +930,17 @@ public final class StringBuiltins extends PythonBuiltins {
     @GenerateNodeFactory
     public abstract static class UpperNode extends PythonUnaryBuiltinNode {
 
+        private static final TruffleString.CodePointSet ASCII_LOWER = TruffleString.CodePointSet.fromRanges(new int[]{'a', 'z'}, Encoding.US_ASCII);
+
         @Specialization(guards = "isAscii(self, getCodeRangeNode)")
         static TruffleString upperAscii(TruffleString self,
                         @Shared("getCodeRange") @Cached @SuppressWarnings("unused") TruffleString.GetCodeRangeNode getCodeRangeNode,
                         @Cached TruffleString.SwitchEncodingNode switchEncodingNode,
-                        @Cached TruffleString.GetInternalByteArrayNode getInternalByteArrayNode,
+                        @Cached TruffleString.ByteIndexOfCodePointSetNode indexOfCodePointSetNode,
                         @Cached TruffleString.CopyToByteArrayNode copyToByteArrayNode,
                         @Cached TruffleString.FromByteArrayNode fromByteArrayNode) {
             TruffleString ascii = switchEncodingNode.execute(self, Encoding.US_ASCII);
-            int i = findFirstLowerCase(ascii, getInternalByteArrayNode);
+            int i = indexOfCodePointSetNode.execute(ascii, 0, ascii.byteLength(Encoding.US_ASCII), ASCII_LOWER);
             if (i < 0) {
                 return self;
             }
@@ -962,23 +964,12 @@ public final class StringBuiltins extends PythonBuiltins {
 
         @Specialization
         static Object doGeneric(VirtualFrame frame, Object self,
-                        @Bind("this") Node inliningTarget,
-                        @Cached CastToTruffleStringCheckedNode castToStringNode,
+                        @Bind Node inliningTarget,
+                        @Cached CastToTruffleStringChecked2Node castToStringNode,
                         @Cached UpperNode upperNode) {
             return upperNode.execute(frame, castToStringNode.cast(inliningTarget, self, ErrorMessages.REQUIRES_STR_OBJECT_BUT_RECEIVED_P, "upper", self));
         }
 
-        private static int findFirstLowerCase(TruffleString s, TruffleString.GetInternalByteArrayNode getInternalByteArrayNode) {
-            InternalByteArray iba = getInternalByteArrayNode.execute(s, Encoding.US_ASCII);
-            byte[] bytes = iba.getArray();
-            int end = iba.getEnd();
-            for (int i = iba.getOffset(); i < end; ++i) {
-                if (bytes[i] >= 'a' && bytes[i] <= 'z') {
-                    return i;
-                }
-            }
-            return -1;
-        }
     }
 
     // str.maketrans()
@@ -989,10 +980,10 @@ public final class StringBuiltins extends PythonBuiltins {
         @Specialization(guards = "!isNoValue(to)")
         @SuppressWarnings("unused")
         static PDict doString(VirtualFrame frame, Object cls, Object from, Object to, Object z,
-                        @Bind("this") Node inliningTarget,
-                        @Exclusive @Cached CastToTruffleStringCheckedNode castFromNode,
-                        @Exclusive @Cached CastToTruffleStringCheckedNode castToNode,
-                        @Exclusive @Cached CastToTruffleStringCheckedNode castZNode,
+                        @Bind Node inliningTarget,
+                        @Exclusive @Cached CastToTruffleStringChecked0Node castFromNode,
+                        @Exclusive @Cached CastToTruffleStringChecked3Node castToNode,
+                        @Exclusive @Cached CastToTruffleStringChecked4Node castZNode,
                         @Shared("cpLen") @Cached TruffleString.CodePointLengthNode codePointLengthNode,
                         @Cached TruffleString.CreateCodePointIteratorNode createCodePointIteratorNode,
                         @Cached TruffleStringIterator.NextNode nextNode,
@@ -1017,15 +1008,15 @@ public final class StringBuiltins extends PythonBuiltins {
             TruffleStringIterator toIt = createCodePointIteratorNode.execute(toStr, TS_ENCODING);
             while (fromIt.hasNext()) {
                 assert toIt.hasNext();
-                int key = nextNode.execute(fromIt);
-                int value = nextNode.execute(toIt);
+                int key = nextNode.execute(fromIt, TS_ENCODING);
+                int value = nextNode.execute(toIt, TS_ENCODING);
                 storage = setHashingStorageItem.execute(frame, inliningTarget, storage, key, value);
             }
             assert !toIt.hasNext();
             if (hasZ) {
                 TruffleStringIterator zIt = createCodePointIteratorNode.execute(zString, TS_ENCODING);
                 while (zIt.hasNext()) {
-                    int key = nextNode.execute(zIt);
+                    int key = nextNode.execute(zIt, TS_ENCODING);
                     storage = setHashingStorageItem.execute(frame, inliningTarget, storage, key, PNone.NONE);
                 }
             }
@@ -1035,8 +1026,8 @@ public final class StringBuiltins extends PythonBuiltins {
         @Specialization(guards = {"isNoValue(to)", "isNoValue(z)"})
         @SuppressWarnings("unused")
         static PDict doDict(VirtualFrame frame, Object cls, PDict from, Object to, Object z,
-                        @Bind("this") Node inliningTarget,
-                        @Exclusive @Cached CastToTruffleStringCheckedNode cast,
+                        @Bind Node inliningTarget,
+                        @Exclusive @Cached CastToTruffleStringChecked0Node cast,
                         @Shared("cpLen") @Cached TruffleString.CodePointLengthNode codePointLengthNode,
                         @Cached TruffleString.CodePointAtIndexNode codePointAtIndexNode,
                         @Exclusive @Cached HashingStorageSetItem setHashingStorageItem,
@@ -1069,7 +1060,7 @@ public final class StringBuiltins extends PythonBuiltins {
         @Specialization(guards = {"!isDict(from)", "isNoValue(to)"})
         @SuppressWarnings("unused")
         static PDict doFail(Object cls, Object from, Object to, Object z,
-                        @Bind("this") Node inliningTarget) {
+                        @Bind Node inliningTarget) {
             throw PRaiseNode.raiseStatic(inliningTarget, TypeError, ErrorMessages.IF_YOU_GIVE_ONLY_ONE_ARG_TO_DICT);
         }
     }
@@ -1090,7 +1081,7 @@ public final class StringBuiltins extends PythonBuiltins {
             TruffleStringIterator it = createCodePointIteratorNode.execute(self, TS_ENCODING);
             TruffleStringBuilder sb = TruffleStringBuilder.create(TS_ENCODING, self.byteLength(TS_ENCODING));
             while (it.hasNext()) {
-                int cp = nextNode.execute(it);
+                int cp = nextNode.execute(it, TS_ENCODING);
                 if (cp >= 0 && cp < tableLen) {
                     cp = codePointAtIndexNode.execute(table, cp, TS_ENCODING);
                 }
@@ -1101,8 +1092,8 @@ public final class StringBuiltins extends PythonBuiltins {
 
         @Specialization
         static TruffleString doGeneric(VirtualFrame frame, Object self, Object table,
-                        @Bind("this") Node inliningTarget,
-                        @Cached CastToTruffleStringCheckedNode castSelfNode,
+                        @Bind Node inliningTarget,
+                        @Cached CastToTruffleStringChecked2Node castSelfNode,
                         @Cached PyObjectGetItem getItemNode,
                         @Cached GetClassNode getClassNode,
                         @Cached IsSubtypeNode isSubtypeNode,
@@ -1115,7 +1106,7 @@ public final class StringBuiltins extends PythonBuiltins {
             TruffleStringBuilder sb = TruffleStringBuilder.create(TS_ENCODING, selfStr.byteLength(TS_ENCODING));
             TruffleStringIterator it = createCodePointIteratorNode.execute(selfStr, TS_ENCODING);
             while (it.hasNext()) {
-                int original = nextNode.execute(it);
+                int original = nextNode.execute(it, TS_ENCODING);
                 Object translated = null;
                 try {
                     translated = getItemNode.execute(frame, inliningTarget, table, original);
@@ -1155,7 +1146,7 @@ public final class StringBuiltins extends PythonBuiltins {
 
         @Specialization
         static TruffleString doGeneric(Object self,
-                        @Bind("this") Node inliningTarget,
+                        @Bind Node inliningTarget,
                         @Cached CastToJavaStringCheckedNode castToJavaStringNode,
                         @Shared("js2ts") @Cached TruffleString.FromJavaStringNode fromJavaStringNode) {
             String s = castToJavaStringNode.cast(inliningTarget, self, ErrorMessages.REQUIRES_STR_OBJECT_BUT_RECEIVED_P, "capitalize", self);
@@ -1186,9 +1177,9 @@ public final class StringBuiltins extends PythonBuiltins {
 
         @Specialization
         static PTuple doGeneric(Object self, Object sep,
-                        @Bind("this") Node inliningTarget,
-                        @Cached CastToTruffleStringCheckedNode castSelfNode,
-                        @Cached CastToTruffleStringCheckedNode castSepNode,
+                        @Bind Node inliningTarget,
+                        @Cached CastToTruffleStringChecked2Node castSelfNode,
+                        @Cached CastToTruffleStringChecked1Node castSepNode,
                         @Cached TruffleString.CodePointLengthNode codePointLengthNode,
                         @Cached TruffleString.IndexOfStringNode indexOfStringNode,
                         @Cached TruffleString.SubstringNode substringNode,
@@ -1222,9 +1213,9 @@ public final class StringBuiltins extends PythonBuiltins {
 
         @Specialization
         static Object doGeneric(Object self, Object sep,
-                        @Bind("this") Node inliningTarget,
-                        @Cached CastToTruffleStringCheckedNode castSelfNode,
-                        @Cached CastToTruffleStringCheckedNode castSepNode,
+                        @Bind Node inliningTarget,
+                        @Cached CastToTruffleStringChecked2Node castSelfNode,
+                        @Cached CastToTruffleStringChecked1Node castSepNode,
                         @Cached TruffleString.CodePointLengthNode codePointLengthNode,
                         @Cached TruffleString.LastIndexOfStringNode lastIndexOfStringNode,
                         @Cached TruffleString.SubstringNode substringNode,
@@ -1276,7 +1267,7 @@ public final class StringBuiltins extends PythonBuiltins {
 
         @Specialization
         static PList doStringSep(TruffleString self, TruffleString sep, int maxsplit,
-                        @Bind("this") Node inliningTarget,
+                        @Bind Node inliningTarget,
                         @Shared("cpLen") @Cached TruffleString.CodePointLengthNode codePointLengthNode,
                         @Cached TruffleString.IndexOfStringNode indexOfStringNode,
                         @Shared("substring") @Cached TruffleString.SubstringNode substringNode,
@@ -1380,7 +1371,7 @@ public final class StringBuiltins extends PythonBuiltins {
 
         @Specialization
         static PList doStringSepMaxsplit(VirtualFrame frame, TruffleString self, TruffleString sep, int maxsplitInput,
-                        @Bind("this") Node inliningTarget,
+                        @Bind Node inliningTarget,
                         @Shared("appendNode") @Cached AppendNode appendNode,
                         @Shared("reverseNode") @Cached ListReverseNode reverseNode,
                         @Shared("cpLen") @Cached CodePointLengthNode codePointLengthNode,
@@ -1417,7 +1408,7 @@ public final class StringBuiltins extends PythonBuiltins {
 
         @Specialization
         static PList doStringMaxsplit(VirtualFrame frame, TruffleString s, @SuppressWarnings("unused") PNone sep, int maxsplit,
-                        @Bind("this") Node inliningTarget,
+                        @Bind Node inliningTarget,
                         @Shared("appendNode") @Cached AppendNode appendNode,
                         @Shared("reverseNode") @Cached ListReverseNode reverseNode,
                         @Shared("cpLen") @Cached TruffleString.CodePointLengthNode codePointLengthNode,
@@ -1470,85 +1461,141 @@ public final class StringBuiltins extends PythonBuiltins {
     @Builtin(name = "splitlines", minNumOfPositionalArgs = 1, parameterNames = {"self", "keepends"})
     @GenerateNodeFactory
     public abstract static class SplitLinesNode extends PythonBinaryBuiltinNode {
-        private static final Pattern LINEBREAK_PATTERN = Pattern.compile("\\R");
 
         @Specialization
         static PList doString(TruffleString self, @SuppressWarnings("unused") PNone keepends,
-                        @Shared("ts2js") @Cached TruffleString.ToJavaStringNode toJavaStringNode,
-                        @Shared("js2ts") @Cached TruffleString.FromJavaStringNode fromJavaStringNode,
-                        @Shared @Cached AppendNode appendNode) {
-            return doStringKeepends(self, false, toJavaStringNode, fromJavaStringNode, appendNode);
+                        @Bind Node inliningTarget,
+                        @Cached @Shared SplitLinesInnerNode innerNode) {
+            return innerNode.execute(inliningTarget, self, false);
         }
 
         @Specialization
         static PList doStringKeepends(TruffleString selfTs, boolean keepends,
-                        @Shared("ts2js") @Cached TruffleString.ToJavaStringNode toJavaStringNode,
-                        @Shared("js2ts") @Cached TruffleString.FromJavaStringNode fromJavaStringNode,
-                        @Shared @Cached AppendNode appendNode) {
-            // TODO GR-37218: use TRegex or codepoint iterator + hand-written state machine
-            PList list = PFactory.createList(PythonLanguage.get(appendNode));
-            int lastEnd = 0;
-            String self = toJavaStringNode.execute(selfTs);
-            Matcher matcher = getMatcher(self);
-            while (matcherFind(matcher)) {
-                int end = matcherEnd(matcher);
-                String line;
-                if (keepends) {
-                    line = substring(self, lastEnd, end);
-                } else {
-                    line = substring(self, lastEnd, matcherStart(matcher));
-                }
-                appendNode.execute(list, fromJavaStringNode.execute(line, TS_ENCODING));
-                lastEnd = end;
-            }
-            String remainder = substring(self, lastEnd);
-            if (!remainder.isEmpty()) {
-                appendNode.execute(list, fromJavaStringNode.execute(remainder, TS_ENCODING));
-            }
-            return list;
-        }
-
-        @TruffleBoundary(allowInlining = true)
-        private static String substring(String str, int start, int end) {
-            return str.substring(start, end);
-        }
-
-        @TruffleBoundary(allowInlining = true)
-        private static String substring(String str, int start) {
-            return str.substring(start);
-        }
-
-        @TruffleBoundary
-        private static int matcherStart(Matcher matcher) {
-            return matcher.start();
-        }
-
-        @TruffleBoundary
-        private static int matcherEnd(Matcher matcher) {
-            return matcher.end();
-        }
-
-        @TruffleBoundary
-        private static boolean matcherFind(Matcher matcher) {
-            return matcher.find();
-        }
-
-        @TruffleBoundary
-        private static Matcher getMatcher(String self) {
-            return LINEBREAK_PATTERN.matcher(self);
+                        @Bind Node inliningTarget,
+                        @Cached @Shared SplitLinesInnerNode innerNode) {
+            return innerNode.execute(inliningTarget, selfTs, keepends);
         }
 
         @Specialization(replaces = {"doString", "doStringKeepends"})
         static PList doGeneric(Object self, Object keepends,
-                        @Bind("this") Node inliningTarget,
-                        @Cached CastToTruffleStringCheckedNode castSelfNode,
+                        @Bind Node inliningTarget,
+                        @Cached CastToTruffleStringChecked2Node castSelfNode,
                         @Cached CastToJavaIntExactNode castToJavaIntNode,
-                        @Shared("ts2js") @Cached TruffleString.ToJavaStringNode toJavaStringNode,
-                        @Shared("js2ts") @Cached TruffleString.FromJavaStringNode fromJavaStringNode,
-                        @Shared @Cached AppendNode appendNode) {
+                        @Cached @Exclusive SplitLinesInnerNode innerNode) {
             TruffleString selfStr = castSelfNode.cast(inliningTarget, self, ErrorMessages.REQUIRES_STR_OBJECT_BUT_RECEIVED_P, "splitlines", self);
             boolean bKeepends = !PGuards.isPNone(keepends) && castToJavaIntNode.execute(inliningTarget, keepends) != 0;
-            return doStringKeepends(selfStr, bKeepends, toJavaStringNode, fromJavaStringNode, appendNode);
+            return innerNode.execute(inliningTarget, selfStr, bKeepends);
+        }
+
+        @GenerateCached(false)
+        @GenerateInline
+        @GenerateUncached
+        public abstract static class InvokeExecMethodNode extends Node {
+            static final String EXEC = "exec";
+
+            public abstract Object execute(Node inliningTarget, Object compiledRegex, TruffleString input, int fromIndex);
+
+            @Specialization(guards = "objs.isMemberInvocable(compiledRegex, EXEC)", limit = "3")
+            static Object exec(Object compiledRegex, TruffleString input, int fromIndex,
+                            @CachedLibrary("compiledRegex") InteropLibrary objs) {
+                try {
+                    return objs.invokeMember(compiledRegex, EXEC, input, fromIndex);
+                } catch (UnsupportedMessageException | UnsupportedTypeException | ArityException | UnknownIdentifierException e) {
+                    throw CompilerDirectives.shouldNotReachHere(e);
+                }
+            }
+        }
+
+        @GenerateCached(false)
+        @GenerateInline
+        @GenerateUncached
+        public abstract static class ReadIsMatchNode extends Node {
+            static final String IS_MATCH = "isMatch";
+
+            public abstract boolean execute(Node inliningTarget, Object regexResult);
+
+            @Specialization(guards = "objs.isMemberReadable(regexResult, IS_MATCH)", limit = "3")
+            static boolean read(Object regexResult, @CachedLibrary("regexResult") InteropLibrary objs) {
+                try {
+                    return (boolean) objs.readMember(regexResult, IS_MATCH);
+                } catch (UnsupportedMessageException | UnknownIdentifierException e) {
+                    throw CompilerDirectives.shouldNotReachHere(e);
+                }
+            }
+        }
+
+        @GenerateCached(false)
+        @GenerateInline
+        @GenerateUncached
+        public abstract static class InvokeGetGroupBoundariesMethodNode extends Node {
+            static final String GET_START = "getStart";
+            static final String GET_END = "getEnd";
+
+            public abstract int execute(Node inliningTarget, Object regexResult, Object method, int groupNumber);
+
+            @Specialization(guards = "objs.isMemberInvocable(regexResult, method)", limit = "3")
+            static int exec(Object regexResult, String method, int groupNumber,
+                            @CachedLibrary("regexResult") InteropLibrary objs) {
+                try {
+                    return (int) objs.invokeMember(regexResult, method, groupNumber);
+                } catch (UnsupportedMessageException | UnsupportedTypeException | ArityException | UnknownIdentifierException e) {
+                    throw CompilerDirectives.shouldNotReachHere(e);
+                }
+            }
+        }
+
+        @GenerateCached(false)
+        @GenerateInline
+        @GenerateUncached
+        abstract static class SplitLinesInnerNode extends Node {
+
+            abstract PList execute(Node inliningTarget, TruffleString selfTs, boolean keepends);
+
+            @Specialization
+            static PList doStringKeepends(Node inliningTarget, TruffleString self, boolean keepends,
+                            @Cached InvokeExecMethodNode invokeExecMethodNode,
+                            @Cached ReadIsMatchNode readIsMatchNode,
+                            @Cached InvokeGetGroupBoundariesMethodNode getStartNode,
+                            @Cached InvokeGetGroupBoundariesMethodNode getEndNode,
+                            @Cached TruffleString.SubstringByteIndexNode substringNode,
+                            @Cached AppendNode appendNode) {
+                Object lineBreakRegex = PythonLanguage.get(inliningTarget).getCachedTRegexLineBreakRegex(PythonContext.get(inliningTarget));
+                CompilerAsserts.partialEvaluationConstant(lineBreakRegex);
+                PList list = PFactory.createList(PythonLanguage.get(inliningTarget));
+                int lastEnd = 0;
+                boolean matchFound;
+                do {
+                    Object regexResult = invokeExecMethodNode.execute(inliningTarget, lineBreakRegex, self, lastEnd);
+                    matchFound = readIsMatchNode.execute(inliningTarget, regexResult);
+                    // TRegex reports UTF-32 matches as int indices
+                    final int substringStartByteIndex = asByteIndex(lastEnd);
+                    final int substringByteLength;
+                    if (matchFound) {
+                        int end = getEndNode.execute(inliningTarget, regexResult, InvokeGetGroupBoundariesMethodNode.GET_END, 0);
+                        if (keepends) {
+                            substringByteLength = asByteIndex(end - lastEnd);
+                        } else {
+                            int start = getStartNode.execute(inliningTarget, regexResult, InvokeGetGroupBoundariesMethodNode.GET_START, 0);
+                            substringByteLength = asByteIndex(start - lastEnd);
+                        }
+                        assert end > lastEnd : String.format("end: %d, lastEnd: %d", end, lastEnd);
+                        lastEnd = end;
+                    } else {
+                        substringByteLength = self.byteLength(TS_ENCODING) - asByteIndex(lastEnd);
+                        if (substringByteLength == 0) {
+                            break;
+                        }
+                    }
+                    TruffleString line = substringNode.execute(self, substringStartByteIndex, substringByteLength, TS_ENCODING, false);
+                    appendNode.execute(list, line);
+                } while (matchFound);
+                return list;
+            }
+
+            private static int asByteIndex(int tregexResultIndex) {
+                assert TS_ENCODING == Encoding.UTF_32 : "byte index must be adapted when changing the language string encoding";
+                return tregexResultIndex << 2;
+            }
         }
     }
 
@@ -1571,13 +1618,14 @@ public final class StringBuiltins extends PythonBuiltins {
 
         @Specialization
         static TruffleString doGeneric(VirtualFrame frame, Object self, Object old, Object with, Object maxCount,
-                        @Bind("this") Node inliningTarget,
-                        @Cached CastToTruffleStringCheckedNode castSelfNode,
+                        @Bind Node inliningTarget,
+                        @Cached CastToTruffleStringChecked2Node cast2Node,
+                        @Cached CastToTruffleStringChecked4Node cast4Node,
                         @Cached PyNumberAsSizeNode asSizeNode,
                         @Shared("replace") @Cached StringReplaceNode replaceNode) {
-            TruffleString selfStr = castSelfNode.cast(inliningTarget, self, ErrorMessages.REQUIRES_STR_OBJECT_BUT_RECEIVED_P, "replace", self);
-            TruffleString oldStr = castSelfNode.cast(inliningTarget, old, ErrorMessages.S_BRACKETS_ARG_S_MUST_BE_S_NOT_P, "replace", "1", "str", old);
-            TruffleString withStr = castSelfNode.cast(inliningTarget, with, ErrorMessages.S_BRACKETS_ARG_S_MUST_BE_S_NOT_P, "replace", "2", "str", with);
+            TruffleString selfStr = cast2Node.cast(inliningTarget, self, ErrorMessages.REQUIRES_STR_OBJECT_BUT_RECEIVED_P, "replace", self);
+            TruffleString oldStr = cast4Node.cast(inliningTarget, old, ErrorMessages.S_BRACKETS_ARG_S_MUST_BE_S_NOT_P, "replace", "1", "str", old);
+            TruffleString withStr = cast4Node.cast(inliningTarget, with, ErrorMessages.S_BRACKETS_ARG_S_MUST_BE_S_NOT_P, "replace", "2", "str", with);
             int iMaxCount;
             if (PGuards.isPNone(maxCount)) {
                 iMaxCount = -1;
@@ -1610,9 +1658,9 @@ public final class StringBuiltins extends PythonBuiltins {
 
         @Specialization(replaces = {"doStringString", "doStringNone"})
         static TruffleString doGeneric(Object self, Object chars,
-                        @Bind("this") Node inliningTarget,
-                        @Cached CastToTruffleStringCheckedNode castSelfNode,
-                        @Cached CastToTruffleStringCheckedNode castCharsNode,
+                        @Bind Node inliningTarget,
+                        @Cached CastToTruffleStringChecked2Node castSelfNode,
+                        @Cached CastToTruffleStringChecked2Node castCharsNode,
                         @Shared("cpLen") @Cached TruffleString.CodePointLengthNode codePointLengthNode,
                         @Shared("cpAtIndex") @Cached TruffleString.CodePointAtIndexNode codePointAtIndexNode,
                         @Shared("indexOf") @Cached TruffleString.IndexOfCodePointNode indexOfCodePointNode,
@@ -1648,9 +1696,9 @@ public final class StringBuiltins extends PythonBuiltins {
 
         @Specialization(replaces = {"doStringString", "doStringNone"})
         static TruffleString doGeneric(Object self, Object chars,
-                        @Bind("this") Node inliningTarget,
-                        @Cached CastToTruffleStringCheckedNode castSelfNode,
-                        @Cached CastToTruffleStringCheckedNode castCharsNode,
+                        @Bind Node inliningTarget,
+                        @Cached CastToTruffleStringChecked2Node castSelfNode,
+                        @Cached CastToTruffleStringChecked2Node castCharsNode,
                         @Shared("cpLen") @Cached TruffleString.CodePointLengthNode codePointLengthNode,
                         @Shared("cpAtIndex") @Cached TruffleString.CodePointAtIndexNode codePointAtIndexNode,
                         @Shared("indexOf") @Cached TruffleString.IndexOfCodePointNode indexOfCodePointNode,
@@ -1686,9 +1734,9 @@ public final class StringBuiltins extends PythonBuiltins {
 
         @Specialization(replaces = {"doStringString", "doStringNone"})
         static TruffleString doGeneric(Object self, Object chars,
-                        @Bind("this") Node inliningTarget,
-                        @Cached CastToTruffleStringCheckedNode castSelfNode,
-                        @Cached CastToTruffleStringCheckedNode castCharsNode,
+                        @Bind Node inliningTarget,
+                        @Cached CastToTruffleStringChecked2Node castSelfNode,
+                        @Cached CastToTruffleStringChecked2Node castCharsNode,
                         @Shared("cpLen") @Cached TruffleString.CodePointLengthNode codePointLengthNode,
                         @Shared("cpAtIndex") @Cached TruffleString.CodePointAtIndexNode codePointAtIndexNode,
                         @Shared("indexOf") @Cached TruffleString.IndexOfCodePointNode indexOfCodePointNode,
@@ -1750,13 +1798,14 @@ public final class StringBuiltins extends PythonBuiltins {
 
         @Specialization
         static int index(Object selfObj, Object subObj, int start, int end,
-                        @Bind("this") Node inliningTarget,
-                        @Cached CastToTruffleStringCheckedNode castNode,
+                        @Bind Node inliningTarget,
+                        @Cached CastToTruffleStringChecked1Node cast1Node,
+                        @Cached CastToTruffleStringChecked2Node cast2Node,
                         @Cached TruffleString.CodePointLengthNode codePointLengthNode,
                         @Cached TruffleString.IndexOfStringNode indexOfStringNode,
                         @Cached PRaiseNode raiseNode) {
-            TruffleString self = castNode.cast(inliningTarget, selfObj, ErrorMessages.REQUIRES_STR_OBJECT_BUT_RECEIVED_P, "index", selfObj);
-            TruffleString sub = castNode.cast(inliningTarget, subObj, ErrorMessages.MUST_BE_STR_NOT_P, subObj);
+            TruffleString self = cast2Node.cast(inliningTarget, selfObj, ErrorMessages.REQUIRES_STR_OBJECT_BUT_RECEIVED_P, "index", selfObj);
+            TruffleString sub = cast1Node.cast(inliningTarget, subObj, ErrorMessages.MUST_BE_STR_NOT_P, subObj);
 
             int idx = indexOf(self, sub, start, end, codePointLengthNode, indexOfStringNode);
             if (idx < 0) {
@@ -1778,13 +1827,14 @@ public final class StringBuiltins extends PythonBuiltins {
 
         @Specialization
         static int rindex(Object selfObj, Object subObj, int start, int end,
-                        @Bind("this") Node inliningTarget,
-                        @Cached CastToTruffleStringCheckedNode castNode,
+                        @Bind Node inliningTarget,
+                        @Cached CastToTruffleStringChecked1Node cast1Node,
+                        @Cached CastToTruffleStringChecked2Node cast2Node,
                         @Cached TruffleString.CodePointLengthNode codePointLengthNode,
                         @Cached TruffleString.LastIndexOfStringNode lastIndexOfStringNode,
                         @Cached PRaiseNode raiseNode) {
-            TruffleString self = castNode.cast(inliningTarget, selfObj, ErrorMessages.REQUIRES_STR_OBJECT_BUT_RECEIVED_P, "rindex", selfObj);
-            TruffleString sub = castNode.cast(inliningTarget, subObj, ErrorMessages.MUST_BE_STR_NOT_P, subObj);
+            TruffleString self = cast2Node.cast(inliningTarget, selfObj, ErrorMessages.REQUIRES_STR_OBJECT_BUT_RECEIVED_P, "rindex", selfObj);
+            TruffleString sub = cast1Node.cast(inliningTarget, subObj, ErrorMessages.MUST_BE_STR_NOT_P, subObj);
             int idx = lastIndexOf(self, sub, start, end, codePointLengthNode, lastIndexOfStringNode);
             if (idx < 0) {
                 throw raiseNode.raise(inliningTarget, ValueError, ErrorMessages.SUBSTRING_NOT_FOUND);
@@ -1814,8 +1864,8 @@ public final class StringBuiltins extends PythonBuiltins {
 
         @Specialization
         static Object doIt(VirtualFrame frame, Object selfObj, TruffleString encoding, TruffleString errors,
-                        @Bind("this") Node inliningTarget,
-                        @Cached CastToTruffleStringCheckedNode castSelfNode,
+                        @Bind Node inliningTarget,
+                        @Cached CastToTruffleStringChecked2Node castSelfNode,
                         @Cached CodecsModuleBuiltins.EncodeNode encodeNode,
                         @Cached SequenceStorageNodes.CopyNode copyNode,
                         @Cached InlinedBranchProfile convertByteArray,
@@ -1850,8 +1900,8 @@ public final class StringBuiltins extends PythonBuiltins {
 
         @Specialization
         static TruffleString doGeneric(Object self, int right,
-                        @Bind("this") Node inliningTarget,
-                        @Cached CastToTruffleStringCheckedNode castSelfNode,
+                        @Bind Node inliningTarget,
+                        @Cached CastToTruffleStringChecked2Node castSelfNode,
                         @Cached InlinedConditionProfile isNegativeProfile,
                         @Shared("repeat") @Cached TruffleString.RepeatNode repeatNode) {
             TruffleString selfStr = castSelfNode.cast(inliningTarget, self, ErrorMessages.REQUIRES_STR_OBJECT_BUT_RECEIVED_P, "index", self);
@@ -1867,18 +1917,17 @@ public final class StringBuiltins extends PythonBuiltins {
     public abstract static class ModNode extends BinaryOpBuiltinNode {
         @Specialization(guards = "check.execute(inliningTarget, self)", limit = "1")
         static Object doGeneric(VirtualFrame frame, Object self, Object right,
-                        @Bind("this") Node inliningTarget,
+                        @Bind Node inliningTarget,
                         @SuppressWarnings("unused") @Cached PyUnicodeCheckNode check,
-                        @Cached("createFor(this)") IndirectCallData indirectCallData,
+                        @Cached("createFor($node)") IndirectCallData indirectCallData,
                         @Cached CastToJavaStringCheckedNode castSelfNode,
-                        @Cached TupleBuiltins.GetItemNode getTupleItemNode,
                         @Cached TruffleString.FromJavaStringNode fromJavaStringNode) {
             String selfStr = castSelfNode.cast(inliningTarget, self, ErrorMessages.REQUIRES_STR_OBJECT_BUT_RECEIVED_P, T___MOD__, self);
             PythonContext context = PythonContext.get(inliningTarget);
             PythonLanguage language = context.getLanguage(inliningTarget);
             Object state = IndirectCallContext.enter(frame, language, context, indirectCallData);
             try {
-                return fromJavaStringNode.execute(new StringFormatProcessor(context, getTupleItemNode, selfStr, inliningTarget).format(assertNoJavaString(right)), TS_ENCODING);
+                return fromJavaStringNode.execute(new StringFormatProcessor(context, selfStr, inliningTarget).format(assertNoJavaString(right)), TS_ENCODING);
             } finally {
                 IndirectCallContext.exit(frame, language, context, state);
             }
@@ -1901,8 +1950,8 @@ public final class StringBuiltins extends PythonBuiltins {
 
         @Specialization(replaces = "doString")
         boolean doGeneric(Object self,
-                        @Bind("this") Node inliningTarget,
-                        @Cached CastToTruffleStringCheckedNode castSelfNode,
+                        @Bind Node inliningTarget,
+                        @Cached CastToTruffleStringChecked2Node castSelfNode,
                         @Shared("getCodeRange") @Cached TruffleString.GetCodeRangeNode getCodeRangeNode) {
             return doString(castSelfNode.cast(inliningTarget, self, ErrorMessages.REQUIRES_STR_OBJECT_BUT_RECEIVED_P, "isascii", self), getCodeRangeNode);
         }
@@ -1911,8 +1960,8 @@ public final class StringBuiltins extends PythonBuiltins {
     abstract static class IsCategoryBaseNode extends PythonUnaryBuiltinNode {
         @Specialization
         boolean doGeneric(Object selfObj,
-                        @Bind("this") Node inliningTarget,
-                        @Cached CastToTruffleStringCheckedNode castSelfNode,
+                        @Bind Node inliningTarget,
+                        @Cached CastToTruffleStringChecked2Node castSelfNode,
                         @Cached InlinedConditionProfile isEmptyProfile,
                         @Cached TruffleString.CreateCodePointIteratorNode createCodePointIteratorNode,
                         @Cached TruffleStringIterator.NextNode nextNode) {
@@ -1922,7 +1971,7 @@ public final class StringBuiltins extends PythonBuiltins {
             }
             TruffleStringIterator it = createCodePointIteratorNode.execute(self, TS_ENCODING);
             while (it.hasNext()) {
-                int codePoint = nextNode.execute(it);
+                int codePoint = nextNode.execute(it, TS_ENCODING);
                 if (!isCategory(codePoint)) {
                     return false;
                 }
@@ -2027,8 +2076,8 @@ public final class StringBuiltins extends PythonBuiltins {
     public abstract static class IsIdentifierNode extends PythonUnaryBuiltinNode {
         @Specialization
         boolean doGeneric(Object selfObj,
-                        @Bind("this") Node inliningTarget,
-                        @Cached CastToTruffleStringCheckedNode castSelfNode,
+                        @Bind Node inliningTarget,
+                        @Cached CastToTruffleStringChecked2Node castSelfNode,
                         @Cached StringUtils.IsIdentifierNode isIdentifierNode) {
             TruffleString self = castSelfNode.cast(inliningTarget, selfObj, ErrorMessages.REQUIRES_STR_OBJECT_BUT_RECEIVED_P, "isidentifier", selfObj);
             return isIdentifierNode.execute(inliningTarget, self);
@@ -2050,15 +2099,15 @@ public final class StringBuiltins extends PythonBuiltins {
 
         @Specialization
         static boolean doIt(Object selfObj,
-                        @Bind("this") Node inliningTarget,
-                        @Cached CastToTruffleStringCheckedNode castSelfNode,
+                        @Bind Node inliningTarget,
+                        @Cached CastToTruffleStringChecked2Node castSelfNode,
                         @Cached TruffleString.CreateCodePointIteratorNode createCodePointIteratorNode,
                         @Cached TruffleStringIterator.NextNode nextNode) {
             TruffleString self = castSelfNode.cast(inliningTarget, selfObj, ErrorMessages.REQUIRES_STR_OBJECT_BUT_RECEIVED_P, "islower", selfObj);
             boolean hasLower = false;
             TruffleStringIterator it = createCodePointIteratorNode.execute(self, TS_ENCODING);
             while (it.hasNext()) {
-                int codePoint = nextNode.execute(it);
+                int codePoint = nextNode.execute(it, TS_ENCODING);
                 if (isUpper(codePoint)) {
                     return false;
                 }
@@ -2115,7 +2164,7 @@ public final class StringBuiltins extends PythonBuiltins {
             boolean previousIsCased = false;
             TruffleStringIterator it = createCodePointIteratorNode.execute(self, TS_ENCODING);
             while (it.hasNext()) {
-                int codePoint = nextNode.execute(it);
+                int codePoint = nextNode.execute(it, TS_ENCODING);
                 if (isUpper(codePoint)) {
                     if (previousIsCased) {
                         return false;
@@ -2147,8 +2196,8 @@ public final class StringBuiltins extends PythonBuiltins {
 
         @Specialization(replaces = "doString")
         static boolean doGeneric(Object self,
-                        @Bind("this") Node inliningTarget,
-                        @Cached CastToTruffleStringCheckedNode castSelfNode,
+                        @Bind Node inliningTarget,
+                        @Cached CastToTruffleStringChecked2Node castSelfNode,
                         @Shared("createCpIterator") @Cached TruffleString.CreateCodePointIteratorNode createCodePointIteratorNode,
                         @Shared("next") @Cached TruffleStringIterator.NextNode nextNode) {
             return doString(castSelfNode.cast(inliningTarget, self, ErrorMessages.REQUIRES_STR_OBJECT_BUT_RECEIVED_P, "istitle", self), createCodePointIteratorNode, nextNode);
@@ -2165,7 +2214,7 @@ public final class StringBuiltins extends PythonBuiltins {
             boolean hasUpper = false;
             TruffleStringIterator it = createCodePointIteratorNode.execute(self, TS_ENCODING);
             while (it.hasNext()) {
-                int codePoint = nextNode.execute(it);
+                int codePoint = nextNode.execute(it, TS_ENCODING);
                 if (isLower(codePoint)) {
                     return false;
                 }
@@ -2188,8 +2237,8 @@ public final class StringBuiltins extends PythonBuiltins {
 
         @Specialization(replaces = "doString")
         static boolean doGeneric(Object self,
-                        @Bind("this") Node inliningTarget,
-                        @Cached CastToTruffleStringCheckedNode castSelfNode,
+                        @Bind Node inliningTarget,
+                        @Cached CastToTruffleStringChecked2Node castSelfNode,
                         @Shared("createCpIterator") @Cached TruffleString.CreateCodePointIteratorNode createCodePointIteratorNode,
                         @Shared("next") @Cached TruffleStringIterator.NextNode nextNode) {
             return doString(castSelfNode.cast(inliningTarget, self, ErrorMessages.REQUIRES_STR_OBJECT_BUT_RECEIVED_P, "isupper", self), createCodePointIteratorNode, nextNode);
@@ -2202,8 +2251,8 @@ public final class StringBuiltins extends PythonBuiltins {
 
         @Specialization
         static TruffleString doGeneric(VirtualFrame frame, Object selfObj, Object widthObj,
-                        @Bind("this") Node inliningTarget,
-                        @Cached CastToTruffleStringCheckedNode castSelfNode,
+                        @Bind Node inliningTarget,
+                        @Cached CastToTruffleStringChecked2Node castSelfNode,
                         @Cached PyNumberAsSizeNode asSizeNode,
                         @Cached TruffleString.CodePointLengthNode codePointLengthNode,
                         @Cached TruffleString.CodePointAtIndexNode codePointAtIndexNode,
@@ -2264,7 +2313,7 @@ public final class StringBuiltins extends PythonBuiltins {
             int start = 0;
             int end = 0;
             while (it.hasNext()) {
-                final int cp = nextNode.execute(it);
+                final int cp = nextNode.execute(it, TS_ENCODING);
                 if (!UCharacter.isLowerCase(cp) && !UCharacter.isUpperCase(cp)) {
                     if (start == end) {
                         appendCodePointNode.execute(sb, cp, 1, true);
@@ -2301,10 +2350,10 @@ public final class StringBuiltins extends PythonBuiltins {
 
         @Specialization
         TruffleString doIt(VirtualFrame frame, Object selfObj, Object width, Object fill,
-                        @Bind("this") Node inliningTarget,
-                        @Cached CastToTruffleStringCheckedNode castSelfNode,
+                        @Bind Node inliningTarget,
+                        @Cached CastToTruffleStringChecked2Node castSelfNode,
                         @Cached PyNumberAsSizeNode asSizeNode,
-                        @Cached CastToTruffleStringCheckedNode castFillNode,
+                        @Cached CastToTruffleStringChecked1Node castFillNode,
                         @Cached TruffleString.CodePointLengthNode codePointLengthNode,
                         @Cached TruffleString.CodePointAtIndexNode codePointAtIndexNode,
                         @Cached TruffleStringBuilder.AppendCodePointNode appendCodePointNode,
@@ -2375,7 +2424,7 @@ public final class StringBuiltins extends PythonBuiltins {
     }
 
     @GenerateUncached
-    @SuppressWarnings("truffle-inlining")       // footprint reduction 52 -> 34
+    @GenerateInline(false)       // footprint reduction 52 -> 34
     public abstract static class StrGetItemNodeWithSlice extends Node {
 
         public abstract TruffleString execute(TruffleString value, SliceInfo info);
@@ -2406,7 +2455,7 @@ public final class StringBuiltins extends PythonBuiltins {
 
         @Specialization(guards = {"step == slice.step", "!isSimpleSlice(slice)", "!isEmptySlice(slice)"}, limit = "1")
         static TruffleString doGenericCachedStep(TruffleString value, SliceInfo slice,
-                        @Bind("this") Node inliningTarget,
+                        @Bind Node inliningTarget,
                         @Cached(value = "slice.step") int step,
                         @Shared("loop") @Cached InlinedLoopConditionProfile loopProfile,
                         @Shared("len") @Cached LenOfRangeNode sliceLen,
@@ -2427,7 +2476,7 @@ public final class StringBuiltins extends PythonBuiltins {
 
         @Specialization(replaces = "doGenericCachedStep", guards = {"!isSimpleSlice(slice)", "!isEmptySlice(slice)"})
         static TruffleString doGeneric(TruffleString value, SliceInfo slice,
-                        @Bind("this") Node inliningTarget,
+                        @Bind Node inliningTarget,
                         @Shared("loop") @Cached InlinedLoopConditionProfile loopProfile,
                         @Shared("len") @Cached LenOfRangeNode sliceLen,
                         @Shared("appendCP") @Cached TruffleStringBuilder.AppendCodePointNode appendCodePointNode,
@@ -2442,8 +2491,8 @@ public final class StringBuiltins extends PythonBuiltins {
     public abstract static class StrSqItemNode extends SqItemBuiltinNode {
         @Specialization
         static Object doIt(VirtualFrame frame, Object self, int index,
-                        @Bind("this") Node inliningTarget,
-                        @Cached CastToTruffleStringCheckedNode castToString,
+                        @Bind Node inliningTarget,
+                        @Cached CastToTruffleStringChecked3Node castToString,
                         @Cached TruffleString.SubstringNode substringNode) {
             TruffleString str = castToString.cast(inliningTarget, self, ErrorMessages.DESCRIPTOR_S_REQUIRES_S_OBJ_RECEIVED_P, T___GETITEM__, "str", self);
             return substringNode.execute(str, index, 1, TS_ENCODING, false);
@@ -2456,8 +2505,8 @@ public final class StringBuiltins extends PythonBuiltins {
 
         @Specialization
         static TruffleString doString(VirtualFrame frame, Object self, PSlice slice,
-                        @Bind("this") Node inliningTarget,
-                        @Exclusive @Cached CastToTruffleStringCheckedNode castToString,
+                        @Bind Node inliningTarget,
+                        @Exclusive @Cached CastToTruffleStringChecked3Node castToString,
                         @Cached CoerceToIntSlice sliceCast,
                         @Cached ComputeIndices compute,
                         @Cached StrGetItemNodeWithSlice getItemNodeWithSlice,
@@ -2469,8 +2518,8 @@ public final class StringBuiltins extends PythonBuiltins {
 
         @Specialization(guards = "!isPSlice(idx)")
         static TruffleString doString(VirtualFrame frame, Object self, Object idx,
-                        @Bind("this") Node inliningTarget,
-                        @Exclusive @Cached CastToTruffleStringCheckedNode castToString,
+                        @Bind Node inliningTarget,
+                        @Exclusive @Cached CastToTruffleStringChecked3Node castToString,
                         @Cached PyIndexCheckNode indexCheckNode,
                         @Cached PyNumberAsSizeNode asSizeNode,
                         @Shared("cpLen") @Cached TruffleString.CodePointLengthNode codePointLengthNode,
@@ -2503,8 +2552,8 @@ public final class StringBuiltins extends PythonBuiltins {
 
         @Specialization
         static PStringIterator doGeneric(Object self,
-                        @Bind("this") Node inliningTarget,
-                        @Cached CastToTruffleStringCheckedNode castSelfNode) {
+                        @Bind Node inliningTarget,
+                        @Cached CastToTruffleStringChecked2Node castSelfNode) {
             TruffleString string = castSelfNode.cast(inliningTarget, self, ErrorMessages.REQUIRES_STR_OBJECT_BUT_RECEIVED_P, T___ITER__, self);
             return PFactory.createStringIterator(PythonLanguage.get(inliningTarget), string);
         }
@@ -2528,7 +2577,7 @@ public final class StringBuiltins extends PythonBuiltins {
 
         @Specialization(replaces = "doString")
         static TruffleString doGeneric(Object self,
-                        @Bind("this") Node inliningTarget,
+                        @Bind Node inliningTarget,
                         @Cached CastToJavaStringCheckedNode castSelfNode,
                         @Shared("js2ts") @Cached TruffleString.FromJavaStringNode fromJavaStringNode) {
             return fromJavaStringNode.execute(doJavaString(castSelfNode.cast(inliningTarget, self, ErrorMessages.REQUIRES_STR_OBJECT_BUT_RECEIVED_P, "casefold", self)), TS_ENCODING);
@@ -2600,7 +2649,7 @@ public final class StringBuiltins extends PythonBuiltins {
 
         @Specialization(replaces = "doString")
         static TruffleString doGeneric(Object self,
-                        @Bind("this") Node inliningTarget,
+                        @Bind Node inliningTarget,
                         @Cached CastToJavaStringCheckedNode castSelfNode,
                         @Shared("js2ts") @Cached TruffleString.FromJavaStringNode fromJavaStringNode) {
             return fromJavaStringNode.execute(doJavaString(castSelfNode.cast(inliningTarget, self, ErrorMessages.REQUIRES_STR_OBJECT_BUT_RECEIVED_P, "swapcase", self)), TS_ENCODING);
@@ -2623,7 +2672,7 @@ public final class StringBuiltins extends PythonBuiltins {
             TruffleStringIterator it = createCodePointIteratorNode.execute(self, TS_ENCODING);
             // It's ok to iterate with charAt, we just pass surrogates through
             while (it.hasNext()) {
-                int cp = nextNode.execute(it);
+                int cp = nextNode.execute(it, TS_ENCODING);
                 if (cp == '\t') {
                     int incr = tabsize - (linePos % tabsize);
                     if (incr > 0) {
@@ -2660,7 +2709,7 @@ public final class StringBuiltins extends PythonBuiltins {
 
         @Specialization(replaces = "doString")
         static long doGeneric(Object self,
-                        @Bind("this") Node inliningTarget,
+                        @Bind Node inliningTarget,
                         @Cached CastToTruffleStringNode cast,
                         @Shared("hashCode") @Cached TruffleString.HashCodeNode hashCodeNode,
                         @Cached PRaiseNode raiseNode) {
@@ -2728,7 +2777,7 @@ public final class StringBuiltins extends PythonBuiltins {
 
         @Specialization
         static TruffleString remove(TruffleString self, TruffleString suffix,
-                        @Bind("this") Node inliningTarget,
+                        @Bind Node inliningTarget,
                         @Cached PrefixSuffixNode prefixSuffixNode,
                         @Cached TruffleString.CodePointLengthNode codePointLengthNode,
                         @Cached TruffleString.SubstringNode substringNode,

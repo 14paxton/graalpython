@@ -47,7 +47,7 @@ import java.util.List;
 import com.oracle.graal.python.PythonLanguage;
 import com.oracle.graal.python.annotations.Slot;
 import com.oracle.graal.python.annotations.Slot.SlotKind;
-import com.oracle.graal.python.builtins.Builtin;
+import com.oracle.graal.python.annotations.Builtin;
 import com.oracle.graal.python.builtins.CoreFunctions;
 import com.oracle.graal.python.builtins.PythonBuiltinClassType;
 import com.oracle.graal.python.builtins.PythonBuiltins;
@@ -107,7 +107,7 @@ public final class CArgObjectBuiltins extends PythonBuiltins {
 
         @Specialization
         TruffleString doit(PyCArgObject self,
-                        @Bind("this") Node inliningTarget,
+                        @Bind Node inliningTarget,
                         @Cached TruffleString.FromJavaStringNode fromJavaStringNode,
                         @Cached PointerNodes.ReadByteNode readByteNode) {
             String ret;
@@ -168,7 +168,7 @@ public final class CArgObjectBuiltins extends PythonBuiltins {
         @Specialization
         static PyCArgObject paramFunc(CDataObject self, StgDictObject stgDict,
                         @Bind PythonLanguage language,
-                        @Cached(inline = false) TruffleString.CodePointAtIndexNode codePointAtIndexNode) {
+                        @Cached TruffleString.CodePointAtIndexNode codePointAtIndexNode) {
             PyCArgObject parg = PFactory.createCArgObject(language);
             switch (stgDict.paramfunc) {
                 // Corresponds to PyCArrayType_paramfunc

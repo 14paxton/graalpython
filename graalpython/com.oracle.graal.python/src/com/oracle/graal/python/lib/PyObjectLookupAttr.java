@@ -66,6 +66,7 @@ import com.oracle.graal.python.nodes.call.CallNode;
 import com.oracle.graal.python.nodes.object.BuiltinClassProfiles.IsBuiltinObjectProfile;
 import com.oracle.graal.python.nodes.object.GetClassNode;
 import com.oracle.graal.python.runtime.exception.PException;
+import com.oracle.truffle.api.CompilerAsserts;
 import com.oracle.truffle.api.dsl.Bind;
 import com.oracle.truffle.api.dsl.Cached;
 import com.oracle.truffle.api.dsl.Cached.Exclusive;
@@ -106,7 +107,7 @@ public abstract class PyObjectLookupAttr extends Node {
     public abstract Object execute(Frame frame, Node inliningTarget, Object receiver, TruffleString name);
 
     protected static boolean hasNoGetAttr(Object lazyClass) {
-        // only used in asserts
+        CompilerAsserts.neverPartOfCompilation("only used in asserts");
         return LookupAttributeInMRONode.Dynamic.getUncached().execute(lazyClass, T___GETATTR__) == PNone.NO_VALUE;
     }
 
@@ -145,7 +146,7 @@ public abstract class PyObjectLookupAttr extends Node {
                     @Bind("getClass.execute(inliningTarget, object)") Object type,
                     @Cached("create(name)") LookupAttributeInMRONode lookupName,
                     @Bind("lookupName.execute(type)") Object descr,
-                    @Shared @Cached(inline = false) ReadAttributeFromObjectNode readNode) {
+                    @Shared @Cached ReadAttributeFromObjectNode readNode) {
         // It should not have __getattr__, because otherwise it would not have builtin
         // object#tp_getattro, but slot wrapper dispatching to __getattribute__ or __getattr__
         assert hasNoGetAttr(type);
@@ -205,8 +206,8 @@ public abstract class PyObjectLookupAttr extends Node {
                     @Exclusive @Cached InlinedConditionProfile noGetMethod,
                     @Exclusive @Cached CallSlotDescrGet callGetSlot,
                     /* GR-44836 @Shared */ @Exclusive @Cached IsBuiltinObjectProfile errorProfile,
-                    @Shared @Cached(inline = false) TruffleString.CodePointLengthNode codePointLengthNode,
-                    @Shared @Cached(inline = false) TruffleString.CodePointAtIndexNode codePointAtIndexNode) {
+                    @Shared @Cached TruffleString.CodePointLengthNode codePointLengthNode,
+                    @Shared @Cached TruffleString.CodePointAtIndexNode codePointAtIndexNode) {
         Object value = readNode.execute(object, name);
         if (valueFound.profile(inliningTarget, value != PNone.NO_VALUE)) {
             var valueSlots = getSlotsNode.execute(inliningTarget, value);
@@ -268,8 +269,8 @@ public abstract class PyObjectLookupAttr extends Node {
                     @Exclusive @Cached GetCachedTpSlotsNode getSlotsNode,
                     @Exclusive @Cached CallSlotGetAttrNode callGetattribute,
                     /* GR-44836 @Shared */ @Exclusive @Cached IsBuiltinObjectProfile errorProfile,
-                    @Shared @Cached(inline = false) TruffleString.CodePointLengthNode codePointLengthNode,
-                    @Shared @Cached(inline = false) TruffleString.CodePointAtIndexNode codePointAtIndexNode) {
+                    @Shared @Cached TruffleString.CodePointLengthNode codePointLengthNode,
+                    @Shared @Cached TruffleString.CodePointAtIndexNode codePointAtIndexNode) {
         Object type = getClass.execute(inliningTarget, receiver);
         TpSlots slots = getSlotsNode.execute(inliningTarget, type);
         if (!codePointLengthNode.isAdoptable()) {

@@ -307,6 +307,17 @@ public abstract class CArrayWrappers {
                         @CachedLibrary("this") InteropLibrary thisLib) throws UnsupportedMessageException, InvalidBufferOffsetException {
             return Double.longBitsToDouble(thisLib.readBufferLong(this, byteOrder, byteOffset));
         }
+
+        @ExportMessage
+        void readBuffer(long byteOffset, byte[] destination, int destinationOffset, int length,
+                        @CachedLibrary("this") InteropLibrary thisLib) throws UnsupportedMessageException, InvalidBufferOffsetException {
+            if (length < 0) {
+                throw InvalidBufferOffsetException.create(byteOffset, length);
+            }
+            for (int i = 0; i < length; i++) {
+                destination[destinationOffset + i] = thisLib.readBufferByte(this, byteOffset + i);
+            }
+        }
     }
 
     /**
@@ -431,7 +442,7 @@ public abstract class CArrayWrappers {
 
         @ExportMessage
         void toNative(
-                        @Bind("$node") Node node) {
+                        @Bind Node node) {
             if (!PythonContext.get(node).isNativeAccessAllowed()) {
                 CompilerDirectives.transferToInterpreterAndInvalidate();
                 throw new RuntimeException(ErrorMessages.NATIVE_ACCESS_NOT_ALLOWED.toJavaStringUncached());
@@ -493,7 +504,7 @@ public abstract class CArrayWrappers {
 
         @ExportMessage
         void toNative(
-                        @Bind("$node") Node node) {
+                        @Bind Node node) {
             if (!PythonContext.get(node).isNativeAccessAllowed()) {
                 CompilerDirectives.transferToInterpreterAndInvalidate();
                 throw new RuntimeException(ErrorMessages.NATIVE_ACCESS_NOT_ALLOWED.toJavaStringUncached());

@@ -70,7 +70,7 @@ public abstract class MatchKeysNode extends PNodeWithContext {
 
     @Specialization(guards = {"keys.length == keysLen", "keysLen > 0", "keysLen <= 32"}, limit = "1")
     static Object matchCached(VirtualFrame frame, Object map, @NeverDefault Object[] keys,
-                    @Bind("this") Node inliningTarget,
+                    @Bind Node inliningTarget,
                     @Cached("keys.length") int keysLen,
                     @Shared @Cached PyObjectRichCompareBool compareNode,
                     @Shared @Cached PyObjectCallMethodObjArgs callMethod,
@@ -110,7 +110,7 @@ public abstract class MatchKeysNode extends PNodeWithContext {
 
     @Specialization(guards = "keys.length > 0", replaces = "matchCached")
     static Object match(VirtualFrame frame, Object map, Object[] keys,
-                    @Bind("this") Node inliningTarget,
+                    @Bind Node inliningTarget,
                     @Shared @Cached PyObjectRichCompareBool compareNode,
                     @Shared @Cached PyObjectCallMethodObjArgs callMethod,
                     @Shared @Cached PRaiseNode raise) {
@@ -153,6 +153,7 @@ public abstract class MatchKeysNode extends PNodeWithContext {
         return PFactory.createTuple(language, PythonUtils.EMPTY_OBJECT_ARRAY);
     }
 
+    @NeverDefault
     public static MatchKeysNode create() {
         return MatchKeysNodeGen.create();
     }

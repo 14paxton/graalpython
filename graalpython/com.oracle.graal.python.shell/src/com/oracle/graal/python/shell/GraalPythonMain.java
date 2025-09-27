@@ -166,6 +166,9 @@ public final class GraalPythonMain extends AbstractLanguageLauncher {
         if (launcherName != null && (launcherName.endsWith("graalpy-polyglot-get") || launcherName.endsWith("graalpy-polyglot-get.exe"))) {
             polyglotGet(launcherName, givenArgs);
         }
+        if (launcherName != null && (launcherName.endsWith("graalpy-config") || launcherName.endsWith("graalpy-config.exe"))) {
+            givenArgs.addAll(0, List.of("-m", "graalpy-config"));
+        }
         ArrayList<String> unrecognized = new ArrayList<>();
         List<String> envVmArgs = getDefaultEnvironmentArgs("GRAAL_PYTHON_VM_ARGS");
         List<String> envArgs = getDefaultEnvironmentArgs("GRAAL_PYTHON_ARGS");
@@ -179,6 +182,7 @@ public final class GraalPythonMain extends AbstractLanguageLauncher {
         origArgs = new ArrayList<>();
         boolean posixBackendSpecified = false;
         boolean sha3BackendSpecified = false;
+        boolean compressionBackendSpecified = false;
         boolean installSignalHandlersSpecified = false;
         boolean isolateNativeModulesSpecified = false;
         for (Iterator<String> argumentIterator = arguments.iterator(); argumentIterator.hasNext();) {
@@ -268,7 +272,8 @@ public final class GraalPythonMain extends AbstractLanguageLauncher {
                                             matchesPythonOption(arg, "StdLibHome") ||
                                             matchesPythonOption(arg, "CAPI") ||
                                             matchesPythonOption(arg, "PosixModuleBackend") ||
-                                            matchesPythonOption(arg, "Sha3ModuleBackend")) {
+                                            matchesPythonOption(arg, "Sha3ModuleBackend") ||
+                                            matchesPythonOption(arg, "CompressionModulesBackend")) {
                                 addRelaunchArg(arg);
                             }
                             if (matchesPythonOption(arg, "PosixModuleBackend")) {
@@ -276,6 +281,9 @@ public final class GraalPythonMain extends AbstractLanguageLauncher {
                             }
                             if (matchesPythonOption(arg, "Sha3ModuleBackend")) {
                                 sha3BackendSpecified = true;
+                            }
+                            if (matchesPythonOption(arg, "CompressionModulesBackend")) {
+                                compressionBackendSpecified = true;
                             }
                             if (matchesPythonOption(arg, "InstallSignalHandlers")) {
                                 installSignalHandlersSpecified = true;
@@ -440,6 +448,9 @@ public final class GraalPythonMain extends AbstractLanguageLauncher {
         }
         if (!sha3BackendSpecified) {
             polyglotOptions.put("python.Sha3ModuleBackend", "native");
+        }
+        if (!compressionBackendSpecified) {
+            polyglotOptions.put("python.CompressionModulesBackend", "native");
         }
         if (!installSignalHandlersSpecified) {
             polyglotOptions.put("python.InstallSignalHandlers", "true");
@@ -1154,11 +1165,6 @@ public final class GraalPythonMain extends AbstractLanguageLauncher {
                                         "-LD            : run the linker used for generating GraalPython C extensions.\n" +
                                         "                 All following arguments are passed to the linker.\n" +
                                         "\nEnvironment variables specific to the Graal Python launcher:\n" : ""));
-    }
-
-    @Override
-    protected String[] getDefaultLanguages() {
-        return new String[]{getLanguageId(), "llvm", "regex"};
     }
 
     @Override

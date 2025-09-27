@@ -44,7 +44,7 @@ import com.oracle.graal.python.builtins.PythonBuiltinClassType;
 import com.oracle.graal.python.nodes.ErrorMessages;
 import com.oracle.graal.python.nodes.PRaiseNode;
 import com.oracle.graal.python.nodes.SpecialAttributeNames;
-import com.oracle.graal.python.nodes.attributes.ReadAttributeFromObjectNode;
+import com.oracle.graal.python.nodes.attributes.ReadAttributeFromModuleNode;
 import com.oracle.graal.python.nodes.util.CannotCastException;
 import com.oracle.graal.python.nodes.util.CastToTruffleStringNode;
 import com.oracle.truffle.api.dsl.Cached;
@@ -65,9 +65,13 @@ public abstract class ModuleGetNameNode extends Node {
 
     public abstract TruffleString execute(Node inliningTarget, Object module);
 
+    public static TruffleString executeUncached(Object module) {
+        return ModuleGetNameNodeGen.getUncached().execute(null, module);
+    }
+
     @Specialization
     static TruffleString doPythonModule(Node inliningTarget, PythonModule module,
-                    @Cached(inline = false) ReadAttributeFromObjectNode readNameNode,
+                    @Cached ReadAttributeFromModuleNode readNameNode,
                     @Cached CastToTruffleStringNode castToTruffleStringNode,
                     @Cached PRaiseNode raiseNode) {
 

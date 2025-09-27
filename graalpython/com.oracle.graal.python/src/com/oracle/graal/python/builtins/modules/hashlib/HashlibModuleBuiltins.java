@@ -42,6 +42,9 @@ package com.oracle.graal.python.builtins.modules.hashlib;
 
 import static com.oracle.graal.python.builtins.objects.PNone.NO_VALUE;
 import static com.oracle.graal.python.nodes.BuiltinNames.J_HASHLIB;
+import static com.oracle.graal.python.nodes.BuiltinNames.J_MD5;
+import static com.oracle.graal.python.nodes.BuiltinNames.J_SHA1;
+import static com.oracle.graal.python.nodes.BuiltinNames.J_SHA2;
 import static com.oracle.graal.python.nodes.BuiltinNames.J_SHA3;
 import static com.oracle.graal.python.nodes.BuiltinNames.T_HASHLIB;
 import static com.oracle.graal.python.nodes.BuiltinNames.T_SHA3;
@@ -72,7 +75,7 @@ import org.bouncycastle.jcajce.provider.util.DigestFactory;
 
 import com.oracle.graal.python.PythonLanguage;
 import com.oracle.graal.python.annotations.ArgumentClinic;
-import com.oracle.graal.python.builtins.Builtin;
+import com.oracle.graal.python.annotations.Builtin;
 import com.oracle.graal.python.builtins.CoreFunctions;
 import com.oracle.graal.python.builtins.Python3Core;
 import com.oracle.graal.python.builtins.PythonBuiltinClassType;
@@ -140,12 +143,12 @@ public final class HashlibModuleBuiltins extends PythonBuiltins {
                     "shake_256", "SHAKE256");
 
     private static final String[] DIGEST_ALIASES = new String[]{
-                    "md5", "_md5",
-                    "sha1", "_sha1",
-                    "sha224", "_sha256",
-                    "sha256", "_sha256",
-                    "sha384", "_sha512",
-                    "sha512", "_sha512",
+                    "md5", J_MD5,
+                    "sha1", J_SHA1,
+                    "sha224", J_SHA2,
+                    "sha256", J_SHA2,
+                    "sha384", J_SHA2,
+                    "sha512", J_SHA2,
                     "sha3_224", J_SHA3,
                     "sha3_256", J_SHA3,
                     "sha3_384", J_SHA3,
@@ -199,7 +202,7 @@ public final class HashlibModuleBuiltins extends PythonBuiltins {
     abstract static class CompareDigestNode extends PythonBinaryBuiltinNode {
         @Specialization(guards = {"isString(a)", "isString(b)"})
         static Object cmpStrings(Object a, Object b,
-                        @Bind("this") Node inliningTarget,
+                        @Bind Node inliningTarget,
                         @Cached TruffleString.CopyToByteArrayNode getByteArrayNode,
                         @Cached TruffleString.GetCodeRangeNode getCodeRangeNode,
                         @Cached CastToTruffleStringNode castA,
@@ -213,14 +216,14 @@ public final class HashlibModuleBuiltins extends PythonBuiltins {
                 throw raiseNode.raise(inliningTarget, PythonBuiltinClassType.TypeError, ErrorMessages.COMPARING_STRINGS_WITH_NON_ASCII);
             }
             byte[] bytesA = getByteArrayNode.execute(tsA, TS_ENCODING);
-            byte[] bytesB = getByteArrayNode.execute(castB.execute(inliningTarget, b), TS_ENCODING);
+            byte[] bytesB = getByteArrayNode.execute(tsB, TS_ENCODING);
             return cmp(bytesA, bytesB);
         }
 
         @Specialization(guards = {"!isString(a) || !isString(b)"})
         static boolean cmpBuffers(VirtualFrame frame, Object a, Object b,
-                        @Bind("this") Node inliningTarget,
-                        @Cached("createFor(this)") IndirectCallData indirectCallData,
+                        @Bind Node inliningTarget,
+                        @Cached("createFor($node)") IndirectCallData indirectCallData,
                         @CachedLibrary(limit = "3") PythonBufferAcquireLibrary acquireLib,
                         @CachedLibrary(limit = "1") PythonBufferAccessLibrary accessLib,
                         @Exclusive @Cached PRaiseNode raiseNode) {
@@ -254,7 +257,7 @@ public final class HashlibModuleBuiltins extends PythonBuiltins {
     abstract static class HmacDigestNode extends PythonQuaternaryBuiltinNode {
         @Specialization
         static Object hmacDigest(VirtualFrame frame, PythonModule self, Object key, Object msg, Object digest,
-                        @Bind("this") Node inliningTarget,
+                        @Bind Node inliningTarget,
                         @Cached HmacNewNode newNode,
                         @Cached DigestObjectBuiltins.DigestNode digestNode,
                         @Cached PRaiseNode raiseNode) {
@@ -275,13 +278,13 @@ public final class HashlibModuleBuiltins extends PythonBuiltins {
         @SuppressWarnings("unused")
         @Specialization
         static Object hmacNewError(PythonModule self, Object key, Object msg, PNone digest,
-                        @Bind("this") Node inliningTarget) {
+                        @Bind Node inliningTarget) {
             throw PRaiseNode.raiseStatic(inliningTarget, PythonBuiltinClassType.TypeError, ErrorMessages.MISSING_D_REQUIRED_S_ARGUMENT_S_POS, "hmac_new", "digestmod", 3);
         }
 
         @Specialization(guards = "!isString(digestmod)")
         static Object hmacNewFromFunction(VirtualFrame frame, PythonModule self, Object key, Object msg, Object digestmod,
-                        @Bind("this") Node inliningTarget,
+                        @Bind Node inliningTarget,
                         @Cached HashingStorageNodes.HashingStorageGetItem getItemNode,
                         @Exclusive @Cached CastToTruffleStringNode castStr,
                         @Exclusive @Cached CastToJavaStringNode castJStr,
@@ -302,7 +305,7 @@ public final class HashlibModuleBuiltins extends PythonBuiltins {
 
         @Specialization(guards = "isString(digestmodObj)")
         static Object hmacNew(@SuppressWarnings("unused") PythonModule self, Object keyObj, Object msgObj, Object digestmodObj,
-                        @Bind("this") Node inliningTarget,
+                        @Bind Node inliningTarget,
                         @Exclusive @Cached CastToTruffleStringNode castStr,
                         @Exclusive @Cached CastToJavaStringNode castJStr,
                         @Shared("concatStr") @Cached TruffleString.ConcatNode concatStr,
@@ -365,7 +368,7 @@ public final class HashlibModuleBuiltins extends PythonBuiltins {
 
         @Specialization
         static Object doIt(VirtualFrame frame, Node inliningTarget, PythonBuiltinClassType type, String pythonName, String javaName, Object value,
-                        @Cached("createFor(this)") IndirectCallData indirectCallData,
+                        @Cached("createFor($node)") IndirectCallData indirectCallData,
                         @CachedLibrary(limit = "2") PythonBufferAcquireLibrary acquireLib,
                         @CachedLibrary(limit = "2") PythonBufferAccessLibrary bufferLib,
                         @Cached PRaiseNode raise) {
@@ -416,7 +419,7 @@ public final class HashlibModuleBuiltins extends PythonBuiltins {
 
         @Specialization
         static Object newDigest(VirtualFrame frame, TruffleString name, Object buffer, @SuppressWarnings("unused") boolean usedForSecurity,
-                        @Bind("this") Node inliningTarget,
+                        @Bind Node inliningTarget,
                         @Cached CreateDigestNode createNode,
                         @Cached CastToJavaStringNode castStr) {
             String pythonDigestName = getPythonName(castStr.execute(name));
@@ -469,7 +472,7 @@ public final class HashlibModuleBuiltins extends PythonBuiltins {
 
         @Specialization(limit = "3")
         static Object pbkdf2(VirtualFrame frame, TruffleString hashName, Object password, Object salt, long iterations, Object dklenObj,
-                        @Bind("this") Node inliningTarget,
+                        @Bind Node inliningTarget,
                         @Bind PythonLanguage language,
                         @CachedLibrary("password") PythonBufferAccessLibrary passwordLib,
                         @CachedLibrary("salt") PythonBufferAccessLibrary saltLib,

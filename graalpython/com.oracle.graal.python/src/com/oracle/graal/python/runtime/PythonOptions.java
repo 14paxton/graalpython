@@ -61,7 +61,6 @@ import com.oracle.truffle.api.CompilerDirectives.CompilationFinal;
 import com.oracle.truffle.api.CompilerDirectives.TruffleBoundary;
 import com.oracle.truffle.api.Option;
 import com.oracle.truffle.api.TruffleLanguage.Env;
-import com.oracle.truffle.api.TruffleOptions;
 import com.oracle.truffle.api.dsl.Idempotent;
 import com.oracle.truffle.api.exception.AbstractTruffleException;
 import com.oracle.truffle.api.nodes.ExplodeLoop;
@@ -103,6 +102,12 @@ public final class PythonOptions {
     @Option(category = OptionCategory.EXPERT, help = "Set the home of Python. Equivalent of GRAAL_PYTHONHOME env variable. " +
                     "Determines default values for the CoreHome, StdLibHome, SysBasePrefix, SysPrefix.", usageSyntax = "<path>", stability = OptionStability.STABLE) //
     public static final OptionKey<String> PythonHome = new OptionKey<>("");
+
+    @EngineOption @Option(category = OptionCategory.EXPERT, help = "Allow running on unsupported platforms, making GraalPy behave as if running on macOS, Windows, or Linux. " +
+                    "This option is useful to run GraalPy on platforms with a compliant Java implementation, but without native support for GraalPy. " +
+                    "When this option is set, native libraries cannot be loaded and the Java backends must be used for common operating system libraries provided by Python.", //
+                    usageSyntax = "windows|macos|linux", stability = OptionStability.STABLE) //
+    public static final OptionKey<String> UnsupportedPlatformEmulates = new OptionKey<>("");
 
     @Option(category = OptionCategory.USER, help = "Set the location of sys.prefix. Overrides any environment variables or Java options.", usageSyntax = "<path>", stability = OptionStability.STABLE) //
     public static final OptionKey<TruffleString> SysPrefix = new OptionKey<>(T_EMPTY_STRING, TS_OPTION_TYPE);
@@ -196,11 +201,14 @@ public final class PythonOptions {
                         }
                     }));
 
-    @EngineOption @Option(category = OptionCategory.USER, help = "Choose the backend for the POSIX module.", usageSyntax = "java|native|llvm", stability = OptionStability.STABLE) //
+    @EngineOption @Option(category = OptionCategory.USER, help = "Choose the backend for the POSIX module.", usageSyntax = "java|native", stability = OptionStability.STABLE) //
     public static final OptionKey<TruffleString> PosixModuleBackend = new OptionKey<>(T_JAVA, TS_OPTION_TYPE);
 
     @EngineOption @Option(category = OptionCategory.USER, help = "Choose the backend for the Sha3 module.", usageSyntax = "java|native", stability = OptionStability.STABLE) //
     public static final OptionKey<TruffleString> Sha3ModuleBackend = new OptionKey<>(T_JAVA, TS_OPTION_TYPE);
+
+    @EngineOption @Option(category = OptionCategory.USER, help = "Choose the backend for the Zlib, Bz2, and LZMA modules.", usageSyntax = "java|native", stability = OptionStability.STABLE) //
+    public static final OptionKey<TruffleString> CompressionModulesBackend = new OptionKey<>(T_JAVA, TS_OPTION_TYPE);
 
     @Option(category = OptionCategory.USER, help = "Install default signal handlers on startup", usageSyntax = "true|false", stability = OptionStability.STABLE) //
     public static final OptionKey<Boolean> InstallSignalHandlers = new OptionKey<>(false);
@@ -261,9 +269,6 @@ public final class PythonOptions {
 
     @EngineOption @Option(category = OptionCategory.EXPERT, usageSyntax = "<limit>", help = "") //
     public static final OptionKey<Integer> NodeRecursionLimit = new OptionKey<>(1);
-
-    @EngineOption @Option(category = OptionCategory.EXPERT, usageSyntax = "true|false", help = "") //
-    public static final OptionKey<Boolean> ForceInlineGeneratorCalls = new OptionKey<>(false);
 
     @Option(category = OptionCategory.EXPERT, usageSyntax = "true|false", help = "Force to automatically import site.py module.", stability = OptionStability.STABLE) //
     public static final OptionKey<Boolean> ForceImportSite = new OptionKey<>(false);
@@ -364,7 +369,7 @@ public final class PythonOptions {
     public static final OptionKey<Long> InitialNativeMemory = new OptionKey<>(1L << 28);
 
     @Option(category = OptionCategory.EXPERT, usageSyntax = "true|false", help = "Use the panama backend for NFI.", stability = OptionStability.EXPERIMENTAL) //
-    public static final OptionKey<Boolean> UsePanama = new OptionKey<>(!TruffleOptions.AOT && Runtime.version().feature() >= 22);
+    public static final OptionKey<Boolean> UsePanama = new OptionKey<>(false); // see [GR-67358]
 
     @Option(category = OptionCategory.EXPERT, usageSyntax = "true|false", help = "Set by the launcher to true (false means that GraalPy is being embedded in an application).") //
     public static final OptionKey<Boolean> RunViaLauncher = new OptionKey<>(false);

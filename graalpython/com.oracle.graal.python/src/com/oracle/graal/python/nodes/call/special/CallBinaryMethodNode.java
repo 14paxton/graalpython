@@ -53,6 +53,7 @@ import com.oracle.truffle.api.dsl.Bind;
 import com.oracle.truffle.api.dsl.Cached;
 import com.oracle.truffle.api.dsl.Cached.Exclusive;
 import com.oracle.truffle.api.dsl.Cached.Shared;
+import com.oracle.truffle.api.dsl.GenerateInline;
 import com.oracle.truffle.api.dsl.GenerateUncached;
 import com.oracle.truffle.api.dsl.NeverDefault;
 import com.oracle.truffle.api.dsl.ReportPolymorphism.Megamorphic;
@@ -63,6 +64,7 @@ import com.oracle.truffle.api.nodes.Node;
 import com.oracle.truffle.api.nodes.UnexpectedResultException;
 import com.oracle.truffle.api.profiles.InlinedConditionProfile;
 
+@GenerateInline(false)
 @GenerateUncached
 public abstract class CallBinaryMethodNode extends AbstractCallMethodNode {
     @NeverDefault
@@ -139,7 +141,7 @@ public abstract class CallBinaryMethodNode extends AbstractCallMethodNode {
     @Megamorphic
     @InliningCutoff
     static Object call(VirtualFrame frame, Object func, Object arg1, Object arg2,
-                    @Bind("this") Node inliningTarget,
+                    @Bind Node inliningTarget,
                     @Cached CallNode callNode,
                     @Exclusive @Cached InlinedConditionProfile isBoundProfile) {
         if (isBoundProfile.profile(inliningTarget, func instanceof BoundDescriptor)) {

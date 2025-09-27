@@ -51,10 +51,10 @@ import static com.oracle.graal.python.util.PythonUtils.TS_ENCODING;
 import java.util.List;
 
 import com.oracle.graal.python.PythonLanguage;
+import com.oracle.graal.python.annotations.Builtin;
 import com.oracle.graal.python.annotations.Slot;
 import com.oracle.graal.python.annotations.Slot.SlotKind;
 import com.oracle.graal.python.annotations.Slot.SlotSignature;
-import com.oracle.graal.python.builtins.Builtin;
 import com.oracle.graal.python.builtins.CoreFunctions;
 import com.oracle.graal.python.builtins.PythonBuiltinClassType;
 import com.oracle.graal.python.builtins.PythonBuiltins;
@@ -63,11 +63,10 @@ import com.oracle.graal.python.builtins.objects.cell.CellBuiltins;
 import com.oracle.graal.python.builtins.objects.cell.PCell;
 import com.oracle.graal.python.builtins.objects.foreign.ForeignObjectBuiltins.ForeignGetattrNode;
 import com.oracle.graal.python.builtins.objects.frame.PFrame;
-import com.oracle.graal.python.builtins.objects.function.PArguments;
 import com.oracle.graal.python.builtins.objects.function.PKeyword;
 import com.oracle.graal.python.builtins.objects.object.ObjectBuiltins;
 import com.oracle.graal.python.builtins.objects.object.ObjectBuiltinsFactory;
-import com.oracle.graal.python.builtins.objects.str.StringNodes.CastToTruffleStringCheckedNode;
+import com.oracle.graal.python.builtins.objects.str.StringNodes.CastToTruffleStringChecked1Node;
 import com.oracle.graal.python.builtins.objects.str.StringUtils.SimpleTruffleStringFormatNode;
 import com.oracle.graal.python.builtins.objects.superobject.SuperBuiltinsFactory.GetObjectNodeGen;
 import com.oracle.graal.python.builtins.objects.superobject.SuperBuiltinsFactory.GetTypeNodeGen;
@@ -93,7 +92,6 @@ import com.oracle.graal.python.nodes.bytecode.PBytecodeRootNode;
 import com.oracle.graal.python.nodes.bytecode_dsl.PBytecodeDSLRootNode;
 import com.oracle.graal.python.nodes.classes.IsSubtypeNode;
 import com.oracle.graal.python.nodes.frame.ReadCallerFrameNode;
-import com.oracle.graal.python.nodes.frame.ReadCallerFrameNode.FrameSelector;
 import com.oracle.graal.python.nodes.function.BuiltinFunctionRootNode;
 import com.oracle.graal.python.nodes.function.PythonBuiltinBaseNode;
 import com.oracle.graal.python.nodes.function.builtins.PythonTernaryBuiltinNode;
@@ -108,6 +106,7 @@ import com.oracle.graal.python.runtime.object.PFactory;
 import com.oracle.truffle.api.CompilerDirectives;
 import com.oracle.truffle.api.dsl.Bind;
 import com.oracle.truffle.api.dsl.Cached;
+import com.oracle.truffle.api.dsl.Cached.Exclusive;
 import com.oracle.truffle.api.dsl.Cached.Shared;
 import com.oracle.truffle.api.dsl.Fallback;
 import com.oracle.truffle.api.dsl.GenerateCached;
@@ -253,8 +252,8 @@ public final class SuperBuiltins extends PythonBuiltins {
 
         @Specialization(guards = "!isNoValue(cls)")
         PNone init(VirtualFrame frame, SuperObject self, Object cls, Object obj,
-                        @Bind("this") Node inliningTarget,
-                        @Cached PRaiseNode raiseNode) {
+                        @Bind Node inliningTarget,
+                        @Cached @Exclusive PRaiseNode raiseNode) {
             if (!(obj instanceof PNone)) {
                 Object type = supercheck(frame, inliningTarget, cls, obj, raiseNode);
                 self.init(cls, type, obj);
@@ -274,7 +273,7 @@ public final class SuperBuiltins extends PythonBuiltins {
          */
         @Specialization(guards = {"!isInBuiltinFunctionRoot()", "isNoValue(clsArg)", "isNoValue(objArg)"})
         PNone initInPlace(VirtualFrame frame, SuperObject self, @SuppressWarnings("unused") PNone clsArg, @SuppressWarnings("unused") PNone objArg,
-                        @Bind("this") Node inliningTarget,
+                        @Bind Node inliningTarget,
                         @Shared @Cached PRaiseNode raiseNode,
                         @Shared @Cached CellBuiltins.GetRefNode getRefNode) {
             if (PythonOptions.ENABLE_BYTECODE_DSL_INTERPRETER) {
@@ -282,11 +281,7 @@ public final class SuperBuiltins extends PythonBuiltins {
                 return initFromLocalFrame(frame, inliningTarget, self, rootNode, frame, getRefNode, raiseNode);
             } else {
                 PBytecodeRootNode rootNode = (PBytecodeRootNode) getRootNode();
-                Frame localFrame = frame;
-                if (rootNode.getCodeUnit().isGeneratorOrCoroutine()) {
-                    localFrame = PArguments.getGeneratorFrame(frame);
-                }
-                return initFromLocalFrame(frame, inliningTarget, self, rootNode, localFrame, getRefNode, raiseNode);
+                return initFromLocalFrame(frame, inliningTarget, self, rootNode, rootNode.getLocalFrame(frame), getRefNode, raiseNode);
             }
         }
 
@@ -295,11 +290,11 @@ public final class SuperBuiltins extends PythonBuiltins {
          */
         @Specialization(guards = {"isInBuiltinFunctionRoot()", "isNoValue(clsArg)", "isNoValue(objArg)"})
         PNone init(VirtualFrame frame, SuperObject self, @SuppressWarnings("unused") PNone clsArg, @SuppressWarnings("unused") PNone objArg,
-                        @Bind("this") Node inliningTarget,
+                        @Bind Node inliningTarget,
                         @Shared @Cached PRaiseNode raiseNode,
                         @Cached ReadCallerFrameNode readCaller,
                         @Shared @Cached CellBuiltins.GetRefNode getRefNode) {
-            PFrame target = readCaller.executeWith(frame, FrameSelector.SKIP_PYTHON_BUILTIN, 0);
+            PFrame target = readCaller.executeWith(frame, ReadCallerFrameNode.SkipPythonBuiltinFramesSelector.INSTANCE, 0);
             if (target == null) {
                 throw raiseNode.raise(inliningTarget, RuntimeError, ErrorMessages.NO_CURRENT_FRAME, "super()");
             }
@@ -436,7 +431,7 @@ public final class SuperBuiltins extends PythonBuiltins {
     public abstract static class GetNode extends DescrGetBuiltinNode {
         @Specialization
         static Object doNoneOrBound(SuperObject self, Object obj, @SuppressWarnings("unused") Object type,
-                        @Bind("this") Node inliningTarget,
+                        @Bind Node inliningTarget,
                         @Cached InlinedConditionProfile objIsNoneProfile,
                         @Cached InlinedConditionProfile selfObjIsNullProfile,
                         @Cached GetObjectNode getObject,
@@ -472,7 +467,7 @@ public final class SuperBuiltins extends PythonBuiltins {
     @Slot(value = SlotKind.tp_getattro, isComplex = true)
     @GenerateNodeFactory
     public abstract static class GetattributeNode extends GetAttrBuiltinNode {
-        @Child private ReadAttributeFromObjectNode readFromDict = ReadAttributeFromObjectNode.createForceType();
+        @Child private ReadAttributeFromObjectNode readFromDict = ReadAttributeFromObjectNode.create();
         @Child private CallSlotDescrGet callGetSlotNode;
         @Child private GetTypeNode getType;
         @Child private GetObjectNode getObject = GetObjectNodeGen.create();
@@ -490,11 +485,11 @@ public final class SuperBuiltins extends PythonBuiltins {
 
         @Specialization
         Object get(VirtualFrame frame, SuperObject self, Object attr,
-                        @Bind("this") Node inliningTarget,
+                        @Bind Node inliningTarget,
                         @Cached GetObjectSlotsNode getSlotsNode,
                         @Cached TruffleString.EqualNode equalNode,
                         @Cached GetObjectTypeNode getObjectType,
-                        @Cached CastToTruffleStringCheckedNode castToTruffleStringNode,
+                        @Cached CastToTruffleStringChecked1Node castToTruffleStringNode,
                         @Cached InlinedConditionProfile hasDescrGetProfile,
                         @Cached InlinedConditionProfile getObjectIsStartObjectProfile,
                         @Cached IsForeignObjectNode isForeignObjectNode,
@@ -596,7 +591,7 @@ public final class SuperBuiltins extends PythonBuiltins {
 
         @Specialization
         Object getClass(SuperObject self,
-                        @Bind("this") Node inliningTarget,
+                        @Bind Node inliningTarget,
                         @Cached GetTypeNode getType) {
             Object type = getType.execute(inliningTarget, self);
             if (type == null) {
@@ -612,7 +607,7 @@ public final class SuperBuiltins extends PythonBuiltins {
 
         @Specialization
         Object getClass(SuperObject self,
-                        @Bind("this") Node inliningTarget,
+                        @Bind Node inliningTarget,
                         @Cached GetObjectNode getObject) {
             Object object = getObject.execute(inliningTarget, self);
             if (object == null) {
@@ -627,7 +622,7 @@ public final class SuperBuiltins extends PythonBuiltins {
     public abstract static class SelfClassNode extends PythonUnaryBuiltinNode {
         @Specialization
         Object getClass(SuperObject self,
-                        @Bind("this") Node inliningTarget,
+                        @Bind Node inliningTarget,
                         @Cached GetObjectTypeNode getObjectType) {
             Object objectType = getObjectType.execute(inliningTarget, self);
             if (objectType == null) {
@@ -642,7 +637,7 @@ public final class SuperBuiltins extends PythonBuiltins {
     public abstract static class SuperReprNode extends PythonUnaryBuiltinNode {
         @Specialization
         TruffleString repr(SuperObject self,
-                        @Bind("this") Node inliningTarget,
+                        @Bind Node inliningTarget,
                         @Cached TypeNodes.GetNameNode getNameNode,
                         @Cached GetTypeNode getType,
                         @Cached GetObjectTypeNode getObjectType,

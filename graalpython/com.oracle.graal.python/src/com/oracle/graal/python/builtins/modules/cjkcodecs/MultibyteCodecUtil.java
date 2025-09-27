@@ -155,7 +155,7 @@ public class MultibyteCodecUtil {
         }
     }
 
-    @SuppressWarnings("truffle-inlining")       // footprint reduction 120 -> 103
+    @GenerateInline(false)       // footprint reduction 120 -> 103
     abstract static class EncodeErrorNode extends Node {
 
         private static final CharBuffer REPLACEMENT = CharBuffer.wrap("?");
@@ -170,7 +170,7 @@ public class MultibyteCodecUtil {
         static int encerror(VirtualFrame frame, MultibyteCodec codec,
                         MultibyteCodecState state,
                         MultibyteEncodeBuffer buf, Object errors, int e,
-                        @Bind("this") Node inliningTarget,
+                        @Bind Node inliningTarget,
                         @Bind PythonLanguage language,
                         @Cached BaseExceptionAttrNode attrNode,
                         @Cached SequenceStorageNodes.GetInternalObjectArrayNode getArray,
@@ -313,7 +313,7 @@ public class MultibyteCodecUtil {
         }
     }
 
-    @SuppressWarnings("truffle-inlining")       // footprint reduction 88 -> 72
+    @GenerateInline(false)       // footprint reduction 88 -> 72
     abstract static class DecodeErrorNode extends Node {
 
         abstract void execute(VirtualFrame frame, MultibyteCodec codec,
@@ -325,7 +325,7 @@ public class MultibyteCodecUtil {
         static void decerror(VirtualFrame frame, MultibyteCodec codec,
                         // MultibyteCodecState state,
                         MultibyteDecodeBuffer buf, TruffleString errors, int e,
-                        @Bind("this") Node inliningTarget,
+                        @Bind Node inliningTarget,
                         @Bind PythonLanguage language,
                         @Cached BaseExceptionAttrNode attrNode,
                         @Cached SequenceStorageNodes.GetInternalObjectArrayNode getArray,

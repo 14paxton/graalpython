@@ -58,7 +58,7 @@ import java.util.List;
 import com.oracle.graal.python.PythonLanguage;
 import com.oracle.graal.python.annotations.Slot;
 import com.oracle.graal.python.annotations.Slot.SlotKind;
-import com.oracle.graal.python.builtins.Builtin;
+import com.oracle.graal.python.annotations.Builtin;
 import com.oracle.graal.python.builtins.CoreFunctions;
 import com.oracle.graal.python.builtins.PythonBuiltinClassType;
 import com.oracle.graal.python.builtins.PythonBuiltins;
@@ -122,7 +122,7 @@ public final class CSVReaderBuiltins extends PythonBuiltins {
 
         @Specialization
         static Object nextPos(VirtualFrame frame, CSVReader self,
-                        @Bind("this") Node inliningTarget,
+                        @Bind Node inliningTarget,
                         @Cached TruffleString.CreateCodePointIteratorNode createCodePointIteratorNode,
                         @Cached TruffleStringIterator.NextNode stringNextNode,
                         @Cached TruffleStringBuilder.AppendCodePointNode appendCodePointNode,
@@ -168,7 +168,7 @@ public final class CSVReaderBuiltins extends PythonBuiltins {
                 self.lineNum++;
                 TruffleStringIterator tsi = createCodePointIteratorNode.execute(line, TS_ENCODING);
                 while (tsi.hasNext()) {
-                    final int codepoint = stringNextNode.execute(tsi);
+                    final int codepoint = stringNextNode.execute(tsi, TS_ENCODING);
                     parseProcessCodePoint(inliningTarget, self, fields, codepoint, appendCodePointNode, toStringNode, pyNumberFloatNode, appendNode, raiseNode);
                 }
                 parseProcessCodePoint(inliningTarget, self, fields, EOL, appendCodePointNode, toStringNode, pyNumberFloatNode, appendNode, raiseNode);

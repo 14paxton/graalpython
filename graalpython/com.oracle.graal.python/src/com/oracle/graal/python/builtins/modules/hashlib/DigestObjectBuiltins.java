@@ -44,7 +44,7 @@ import java.util.List;
 
 import com.oracle.graal.python.PythonLanguage;
 import com.oracle.graal.python.annotations.ArgumentClinic;
-import com.oracle.graal.python.builtins.Builtin;
+import com.oracle.graal.python.annotations.Builtin;
 import com.oracle.graal.python.builtins.CoreFunctions;
 import com.oracle.graal.python.builtins.PythonBuiltinClassType;
 import com.oracle.graal.python.builtins.PythonBuiltins;
@@ -89,7 +89,7 @@ public final class DigestObjectBuiltins extends PythonBuiltins {
     abstract static class CopyNode extends PythonUnaryBuiltinNode {
         @Specialization
         static DigestObject copy(DigestObject self,
-                        @Bind("this") Node inliningTarget,
+                        @Bind Node inliningTarget,
                         @Cached PRaiseNode raiseNode) {
             try {
                 return self.copy();
@@ -114,7 +114,7 @@ public final class DigestObjectBuiltins extends PythonBuiltins {
     abstract static class HexdigestNode extends PythonUnaryBuiltinNode {
         @Specialization
         static TruffleString hexdigest(DigestObject self,
-                        @Bind("this") Node inliningTarget,
+                        @Bind Node inliningTarget,
                         @Cached BytesNodes.ByteToHexNode toHexNode) {
             byte[] digest = self.digest();
             return toHexNode.execute(inliningTarget, digest, digest.length, (byte) 0, 0);
@@ -132,8 +132,8 @@ public final class DigestObjectBuiltins extends PythonBuiltins {
 
         @Specialization(limit = "3")
         static PNone update(VirtualFrame frame, DigestObject self, Object buffer,
-                        @Bind("this") Node inliningTarget,
-                        @Cached("createFor(this)") IndirectCallData indirectCallData,
+                        @Bind Node inliningTarget,
+                        @Cached("createFor($node)") IndirectCallData indirectCallData,
                         @CachedLibrary("buffer") PythonBufferAccessLibrary bufferLib,
                         @Cached PRaiseNode raiseNode) {
             if (self.wasReset()) {

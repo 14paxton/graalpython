@@ -55,6 +55,7 @@ import com.oracle.graal.python.util.BiFunction;
 import com.oracle.graal.python.util.OverflowException;
 import com.oracle.truffle.api.dsl.Bind;
 import com.oracle.truffle.api.dsl.Cached;
+import com.oracle.truffle.api.dsl.GenerateInline;
 import com.oracle.truffle.api.dsl.ImportStatic;
 import com.oracle.truffle.api.dsl.NeverDefault;
 import com.oracle.truffle.api.dsl.Specialization;
@@ -62,6 +63,7 @@ import com.oracle.truffle.api.frame.VirtualFrame;
 import com.oracle.truffle.api.nodes.Node;
 import com.oracle.truffle.api.profiles.BranchProfile;
 
+@GenerateInline(false)
 @ImportStatic(PGuards.class)
 public abstract class CastToByteNode extends Node {
     public static final CastToByteNode UNCACHED_INSTANCE = CastToByteNode.create();
@@ -160,7 +162,7 @@ public abstract class CastToByteNode extends Node {
     @Specialization
     @SuppressWarnings("truffle-static-method")
     protected byte doObject(VirtualFrame frame, Object value,
-                    @Bind("this") Node inliningTarget,
+                    @Bind Node inliningTarget,
                     @Cached PyIndexCheckNode indexCheckNode,
                     @Cached PyNumberIndexNode indexNode,
                     @Cached CastToByteNode recursive) {

@@ -83,7 +83,7 @@ public abstract class CodePointConversionNode extends ArgumentCastNode {
     @Specialization(guards = "!isHandledPNone(useDefaultForNone, value)")
     @SuppressWarnings("truffle-static-method")
     int doOthers(Object value,
-                    @Bind("this") Node inliningTarget,
+                    @Bind Node inliningTarget,
                     @Cached CastToTruffleStringNode castToStringNode,
                     @Cached TruffleString.CodePointLengthNode codePointLengthNode,
                     @Cached TruffleString.CodePointAtIndexNode codePointAtIndexNode,
@@ -96,7 +96,7 @@ public abstract class CodePointConversionNode extends ArgumentCastNode {
         } catch (CannotCastException ex) {
             // handled below
         }
-        throw raiseNode.raise(inliningTarget, TypeError, ErrorMessages.S_BRACKETS_ARG_MUST_BE_S_NOT_P, builtinName, "unicode character", value);
+        throw raiseNode.raise(inliningTarget, TypeError, ErrorMessages.S_BRACKETS_ARG_MUST_BE_S_NOT_P, builtinName, "a unicode character", value);
     }
 
     @ClinicConverterFactory

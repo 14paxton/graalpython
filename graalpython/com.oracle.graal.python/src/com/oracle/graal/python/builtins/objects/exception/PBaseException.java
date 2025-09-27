@@ -234,7 +234,7 @@ public class PBaseException extends PythonObject {
     public String toString() {
         CompilerAsserts.neverPartOfCompilation();
         // We *MUST NOT* call anything here that may need a context!
-        StringBuilder sb = new StringBuilder(this.getInitialPythonClass().toString());
+        StringBuilder sb = new StringBuilder(this.getPythonClass().toString());
         if (messageArgs != null && messageArgs.length > 0) {
             sb.append("(fmt=\"").append(messageFormat.toJavaStringUncached()).append("\", args = (");
             for (Object arg : messageArgs) {
@@ -298,11 +298,11 @@ public class PBaseException extends PythonObject {
 
     @ExportMessage
     RuntimeException throwException(
-                    @Cached PRaiseNode raiseNode,
+                    @Bind Node node,
                     @Shared("gil") @Cached GilNode gil) {
         boolean mustRelease = gil.acquire();
         try {
-            throw raiseNode.raiseExceptionObject(this);
+            throw PRaiseNode.raiseExceptionObjectStatic(node, this);
         } finally {
             gil.release(mustRelease);
         }
@@ -310,7 +310,7 @@ public class PBaseException extends PythonObject {
 
     @ExportMessage
     ExceptionType getExceptionType(
-                    @Bind("$node") Node inliningTarget,
+                    @Bind Node inliningTarget,
                     @Exclusive @Cached GetClassNode getClassNode,
                     @Shared("gil") @Cached GilNode gil) {
         boolean mustRelease = gil.acquire();
@@ -358,7 +358,7 @@ public class PBaseException extends PythonObject {
     @ExportMessage
     int getExceptionExitStatus(
                     @Cached CastToJavaIntExactNode castToInt,
-                    @Bind("$node") Node inliningTarget,
+                    @Bind Node inliningTarget,
                     @Exclusive @Cached GetClassNode getClassNode,
                     @Cached ReadAttributeFromPythonObjectNode readNode,
                     @Exclusive @Cached InlinedBranchProfile unsupportedProfile,
@@ -396,7 +396,7 @@ public class PBaseException extends PythonObject {
 
     @ExportMessage
     Object getExceptionCause(
-                    @Bind("$node") Node inliningTarget,
+                    @Bind Node inliningTarget,
                     @Exclusive @Cached InlinedBranchProfile unsupportedProfile) throws UnsupportedMessageException {
         if (cause != null) {
             return cause;

@@ -64,7 +64,7 @@ Additionally, one can change the polyglot artifacts version with
         <maven.compiler.source>17</maven.compiler.source>
         <maven.compiler.target>17</maven.compiler.target>
         <project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>
-        <com.oracle.graal.python.test.polyglot.version>26.0.0</com.oracle.graal.python.test.polyglot.version>
+        <com.oracle.graal.python.test.polyglot.version>25.1.0</com.oracle.graal.python.test.polyglot.version>
     </properties>
 
     <build>
@@ -152,11 +152,6 @@ Additionally, one can change the polyglot artifacts version with
         </profile>
         <profile>
             <id>isolate</id>
-            <activation>
-                <property>
-                    <name>polyglot.engine.SpawnIsolate</name>
-                </property>
-            </activation>
             <dependencies>
                 <dependency>
                     <groupId>org.graalvm.polyglot</groupId>
@@ -181,11 +176,6 @@ Additionally, one can change the polyglot artifacts version with
             <version>${com.oracle.graal.python.test.polyglot.version}</version>
             <scope>runtime</scope>
             <type>pom</type>
-        </dependency>
-        <dependency>
-            <groupId>org.graalvm.python</groupId>
-            <artifactId>python-embedding</artifactId>
-            <version>${com.oracle.graal.python.test.polyglot.version}</version>
         </dependency>
         <dependency>
             <groupId>junit</groupId>

@@ -31,6 +31,13 @@ import static com.oracle.graal.python.builtins.modules.io.IONodes.T_READINTO;
 import static com.oracle.graal.python.builtins.modules.io.IONodes.T_WRITE;
 import static com.oracle.graal.python.nodes.StringLiterals.T_VERSION;
 import static com.oracle.graal.python.nodes.truffle.TruffleStringMigrationHelpers.isJavaString;
+import static com.oracle.graal.python.util.PythonUtils.EMPTY_BOOLEAN_ARRAY;
+import static com.oracle.graal.python.util.PythonUtils.EMPTY_DOUBLE_ARRAY;
+import static com.oracle.graal.python.util.PythonUtils.EMPTY_INT_ARRAY;
+import static com.oracle.graal.python.util.PythonUtils.EMPTY_LONG_ARRAY;
+import static com.oracle.graal.python.util.PythonUtils.EMPTY_OBJECT_ARRAY;
+import static com.oracle.graal.python.util.PythonUtils.EMPTY_SHORT_ARRAY;
+import static com.oracle.graal.python.util.PythonUtils.EMPTY_TRUFFLESTRING_ARRAY;
 import static com.oracle.graal.python.util.PythonUtils.TS_ENCODING;
 
 import java.io.ByteArrayInputStream;
@@ -53,7 +60,7 @@ import java.util.function.Supplier;
 import com.oracle.graal.python.PythonLanguage;
 import com.oracle.graal.python.annotations.ArgumentClinic;
 import com.oracle.graal.python.annotations.ArgumentClinic.ClinicConversion;
-import com.oracle.graal.python.builtins.Builtin;
+import com.oracle.graal.python.annotations.Builtin;
 import com.oracle.graal.python.builtins.CoreFunctions;
 import com.oracle.graal.python.builtins.Python3Core;
 import com.oracle.graal.python.builtins.PythonBuiltinClassType;
@@ -143,6 +150,7 @@ import com.oracle.truffle.api.memory.ByteArraySupport;
 import com.oracle.truffle.api.nodes.Node;
 import com.oracle.truffle.api.source.Source;
 import com.oracle.truffle.api.strings.InternalByteArray;
+import com.oracle.truffle.api.strings.TranscodingErrorHandler;
 import com.oracle.truffle.api.strings.TruffleString;
 import com.oracle.truffle.api.strings.TruffleString.Encoding;
 
@@ -172,9 +180,9 @@ public final class MarshalModuleBuiltins extends PythonBuiltins {
 
         @Specialization
         static Object doit(VirtualFrame frame, Object value, Object file, int version,
-                        @Bind("this") Node inliningTarget,
+                        @Bind Node inliningTarget,
                         @Bind PythonContext context,
-                        @Cached("createFor(this)") IndirectCallData indirectCallData,
+                        @Cached("createFor($node)") IndirectCallData indirectCallData,
                         @Cached PyObjectCallMethodObjArgs callMethod,
                         @Cached PRaiseNode raiseNode) {
             PythonLanguage language = context.getLanguage(inliningTarget);
@@ -205,9 +213,9 @@ public final class MarshalModuleBuiltins extends PythonBuiltins {
 
         @Specialization
         static Object doit(VirtualFrame frame, Object value, int version,
-                        @Bind("this") Node inliningTarget,
+                        @Bind Node inliningTarget,
                         @Bind PythonContext context,
-                        @Cached("createFor(this)") IndirectCallData indirectCallData,
+                        @Cached("createFor($node)") IndirectCallData indirectCallData,
                         @Cached PRaiseNode raiseNode) {
             PythonLanguage language = context.getLanguage(inliningTarget);
             PythonContext.PythonThreadState threadState = context.getThreadState(language);
@@ -234,7 +242,7 @@ public final class MarshalModuleBuiltins extends PythonBuiltins {
 
         @Specialization
         static Object doit(VirtualFrame frame, Object file,
-                        @Bind("this") Node inliningTarget,
+                        @Bind Node inliningTarget,
                         @Bind PythonContext context,
                         @Cached("createCallReadNode()") LookupAndCallBinaryNode callNode,
                         @CachedLibrary(limit = "3") PythonBufferAcquireLibrary bufferLib,
@@ -260,9 +268,9 @@ public final class MarshalModuleBuiltins extends PythonBuiltins {
 
         @Specialization
         static Object doit(VirtualFrame frame, Object buffer,
-                        @Bind("this") Node inliningTarget,
+                        @Bind Node inliningTarget,
                         @Bind PythonContext context,
-                        @Cached("createFor(this)") IndirectCallData indirectCallData,
+                        @Cached("createFor($node)") IndirectCallData indirectCallData,
                         @CachedLibrary(limit = "3") PythonBufferAccessLibrary bufferLib,
                         @Cached PRaiseNode raiseNode) {
             try {
@@ -1149,30 +1157,14 @@ public final class MarshalModuleBuiltins extends PythonBuiltins {
         }
 
         private void writeString(TruffleString v) {
-            /*
-             * Ugly workaround for GR-39571 - TruffleString UTF-8 doesn't support surrogate
-             * passthrough. If the string contains surrogates, we mark it and emit it as UTF-32.
-             */
-            Encoding encoding;
-            if (v.isValidUncached(TS_ENCODING)) {
-                encoding = Encoding.UTF_8;
-            } else {
-                encoding = Encoding.UTF_32LE;
-                writeInt(-1);
-            }
-            InternalByteArray ba = v.switchEncodingUncached(encoding).getInternalByteArrayUncached(encoding);
+            InternalByteArray ba = v.switchEncodingUncached(Encoding.UTF_8, TranscodingErrorHandler.DEFAULT_KEEP_SURROGATES_IN_UTF8).getInternalByteArrayUncached(Encoding.UTF_8);
             writeSize(ba.getLength());
             writeBytes(ba.getArray(), ba.getOffset(), ba.getLength());
         }
 
         private TruffleString readString() {
-            Encoding encoding = Encoding.UTF_8;
             int sz = readInt();
-            if (sz < 0) {
-                encoding = Encoding.UTF_32LE;
-                sz = readSize();
-            }
-            return TruffleString.fromByteArrayUncached(readNBytes(sz), 0, sz, encoding, true).switchEncodingUncached(TS_ENCODING);
+            return TruffleString.fromByteArrayUncached(readNBytes(sz), 0, sz, Encoding.UTF_8, true).switchEncodingUncached(TS_ENCODING, TranscodingErrorHandler.DEFAULT_KEEP_SURROGATES_IN_UTF8);
         }
 
         private void writeShortString(String v) throws IOException {
@@ -1234,6 +1226,9 @@ public final class MarshalModuleBuiltins extends PythonBuiltins {
 
         private int[] readIntArray() {
             int length = readInt();
+            if (length == 0) {
+                return EMPTY_INT_ARRAY;
+            }
             int[] a = new int[length];
             for (int i = 0; i < length; i++) {
                 a[i] = readInt();
@@ -1243,6 +1238,9 @@ public final class MarshalModuleBuiltins extends PythonBuiltins {
 
         private long[] readLongArray() {
             int length = readInt();
+            if (length == 0) {
+                return EMPTY_LONG_ARRAY;
+            }
             long[] a = new long[length];
             for (int i = 0; i < length; i++) {
                 a[i] = readLong();
@@ -1252,6 +1250,9 @@ public final class MarshalModuleBuiltins extends PythonBuiltins {
 
         private double[] readDoubleArray() {
             int length = readInt();
+            if (length == 0) {
+                return EMPTY_DOUBLE_ARRAY;
+            }
             double[] a = new double[length];
             for (int i = 0; i < length; i++) {
                 a[i] = readDouble();
@@ -1261,6 +1262,9 @@ public final class MarshalModuleBuiltins extends PythonBuiltins {
 
         private short[] readShortArray() {
             int length = readInt();
+            if (length == 0) {
+                return EMPTY_SHORT_ARRAY;
+            }
             short[] a = new short[length];
             for (int i = 0; i < length; i++) {
                 a[i] = readShort();
@@ -1270,6 +1274,9 @@ public final class MarshalModuleBuiltins extends PythonBuiltins {
 
         private boolean[] readBooleanArray() {
             int length = readInt();
+            if (length == 0) {
+                return EMPTY_BOOLEAN_ARRAY;
+            }
             boolean[] a = new boolean[length];
             for (int i = 0; i < length; i++) {
                 a[i] = readByte() != 0;
@@ -1279,6 +1286,9 @@ public final class MarshalModuleBuiltins extends PythonBuiltins {
 
         private TruffleString[] readStringArray() {
             int length = readInt();
+            if (length == 0) {
+                return EMPTY_TRUFFLESTRING_ARRAY;
+            }
             TruffleString[] a = new TruffleString[length];
             for (int i = 0; i < length; i++) {
                 a[i] = readString();
@@ -1288,6 +1298,9 @@ public final class MarshalModuleBuiltins extends PythonBuiltins {
 
         private Object[] readObjectArray() {
             int length = readInt();
+            if (length == 0) {
+                return EMPTY_OBJECT_ARRAY;
+            }
             Object[] a = new Object[length];
             for (int i = 0; i < length; i++) {
                 a[i] = readObject();
@@ -1310,29 +1323,6 @@ public final class MarshalModuleBuiltins extends PythonBuiltins {
                 // This should never happen when deserializing a bytecode DSL code unit, but could
                 // happen if the user tries to deserialize arbitrary bytes.
                 throw new MarshalError(ValueError, ErrorMessages.BAD_MARSHAL_DATA);
-            }
-        }
-
-        private void writeSparseTable(int[][] table) {
-            writeInt(table.length);
-            for (int i = 0; i < table.length; i++) {
-                if (table[i] != null && table[i].length > 0) {
-                    writeInt(i);
-                    writeIntArray(table[i]);
-                }
-            }
-            writeInt(-1);
-        }
-
-        private int[][] readSparseTable() {
-            int length = readInt();
-            int[][] table = new int[length][];
-            while (true) {
-                int i = readInt();
-                if (i == -1) {
-                    return table;
-                }
-                table[i] = readIntArray();
             }
         }
 
@@ -1381,14 +1371,16 @@ public final class MarshalModuleBuiltins extends PythonBuiltins {
             int startColumn = readInt();
             int endLine = readInt();
             int endColumn = readInt();
-            byte[] outputCanQuicken = readBytes();
             byte[] variableShouldUnbox = readBytes();
-            int[][] generalizeInputsMap = readSparseTable();
-            int[][] generalizeVarsMap = readSparseTable();
+            int[] generalizeInputsKeys = readIntArray();
+            int[] generalizeInputsIndices = readIntArray();
+            int[] generalizeInputsValues = readIntArray();
+            int[] generalizeVarsIndices = readIntArray();
+            int[] generalizeVarsValues = readIntArray();
             return new BytecodeCodeUnit(name, qualname, argCount, kwOnlyArgCount, positionalOnlyArgCount, flags, names, varnames,
                             cellvars, freevars, cell2arg, constants, startLine, startColumn, endLine, endColumn, code, srcOffsetTable,
                             primitiveConstants, exceptionHandlerRanges, stacksize, conditionProfileCount,
-                            outputCanQuicken, variableShouldUnbox, generalizeInputsMap, generalizeVarsMap);
+                            variableShouldUnbox, generalizeInputsKeys, generalizeInputsIndices, generalizeInputsValues, generalizeVarsIndices, generalizeVarsValues);
         }
 
         private BytecodeDSLCodeUnit readBytecodeDSLCodeUnit() {
@@ -1443,7 +1435,7 @@ public final class MarshalModuleBuiltins extends PythonBuiltins {
             writeInt(code.kwOnlyArgCount);
             writeInt(code.positionalOnlyArgCount);
             writeInt(code.stacksize);
-            writeBytes(code.getBytecodeForSerialization());
+            writeBytes(code.code);
             writeBytes(code.srcOffsetTable);
             writeInt(code.flags);
             writeStringArray(code.names);
@@ -1463,10 +1455,12 @@ public final class MarshalModuleBuiltins extends PythonBuiltins {
             writeInt(code.startColumn);
             writeInt(code.endLine);
             writeInt(code.endColumn);
-            writeBytes(code.outputCanQuicken);
             writeBytes(code.variableShouldUnbox);
-            writeSparseTable(code.generalizeInputsMap);
-            writeSparseTable(code.generalizeVarsMap);
+            writeIntArray(code.generalizeInputsKeys);
+            writeIntArray(code.generalizeInputsIndices);
+            writeIntArray(code.generalizeInputsValues);
+            writeIntArray(code.generalizeVarsIndices);
+            writeIntArray(code.generalizeVarsValues);
         }
 
         @SuppressWarnings("unchecked")

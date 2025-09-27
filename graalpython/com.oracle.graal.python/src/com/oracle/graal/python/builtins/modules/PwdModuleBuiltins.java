@@ -49,7 +49,7 @@ import java.util.List;
 import com.oracle.graal.python.PythonLanguage;
 import com.oracle.graal.python.annotations.ArgumentClinic;
 import com.oracle.graal.python.annotations.ArgumentClinic.ClinicConversion;
-import com.oracle.graal.python.builtins.Builtin;
+import com.oracle.graal.python.annotations.Builtin;
 import com.oracle.graal.python.builtins.CoreFunctions;
 import com.oracle.graal.python.builtins.Python3Core;
 import com.oracle.graal.python.builtins.PythonBuiltinClassType;
@@ -74,6 +74,7 @@ import com.oracle.graal.python.runtime.GilNode;
 import com.oracle.graal.python.runtime.PosixSupportLibrary;
 import com.oracle.graal.python.runtime.PosixSupportLibrary.PosixException;
 import com.oracle.graal.python.runtime.PosixSupportLibrary.PwdResult;
+import com.oracle.graal.python.runtime.PosixSupportLibrary.UnsupportedPosixFeatureException;
 import com.oracle.graal.python.runtime.PythonContext;
 import com.oracle.graal.python.runtime.exception.PException;
 import com.oracle.graal.python.runtime.object.PFactory;
@@ -138,7 +139,7 @@ public final class PwdModuleBuiltins extends PythonBuiltins {
     public abstract static class GetpwuidNode extends PythonUnaryBuiltinNode {
         @Specialization
         static Object doGetpwuid(VirtualFrame frame, Object uidObj,
-                        @Bind("this") Node inliningTarget,
+                        @Bind Node inliningTarget,
                         @Bind PythonContext context,
                         @Cached UidConversionNode uidConversionNode,
                         @Cached IsBuiltinObjectProfile classProfile,
@@ -166,6 +167,8 @@ public final class PwdModuleBuiltins extends PythonBuiltins {
                 }
             } catch (PosixException e) {
                 throw constructAndRaiseNode.get(inliningTarget).raiseOSErrorFromPosixException(frame, e);
+            } catch (UnsupportedPosixFeatureException e) {
+                throw constructAndRaiseNode.get(inliningTarget).raiseOSErrorUnsupported(frame, e);
             }
             if (pwd == null) {
                 throw raiseUidNotFound(inliningTarget, raiseNode);
@@ -191,7 +194,7 @@ public final class PwdModuleBuiltins extends PythonBuiltins {
 
         @Specialization
         static Object doGetpwname(VirtualFrame frame, TruffleString name,
-                        @Bind("this") Node inliningTarget,
+                        @Bind Node inliningTarget,
                         @Bind PythonContext context,
                         @Cached GilNode gil,
                         @Cached StringOrBytesToOpaquePathNode encodeFSDefault,
@@ -213,6 +216,8 @@ public final class PwdModuleBuiltins extends PythonBuiltins {
                 }
             } catch (PosixException e) {
                 throw constructAndRaiseNode.get(inliningTarget).raiseOSErrorFromPosixException(frame, e);
+            } catch (UnsupportedPosixFeatureException e) {
+                throw constructAndRaiseNode.get(inliningTarget).raiseOSErrorUnsupported(frame, e);
             }
             if (pwd == null) {
                 throw raiseNode.raise(inliningTarget, PythonBuiltinClassType.KeyError, ErrorMessages.GETPWNAM_NAME_NOT_FOUND, name);
@@ -226,7 +231,7 @@ public final class PwdModuleBuiltins extends PythonBuiltins {
     public abstract static class GetpwallNode extends PythonBuiltinNode {
         @Specialization
         static Object doGetpall(VirtualFrame frame,
-                        @Bind("this") Node inliningTarget,
+                        @Bind Node inliningTarget,
                         @Bind PythonContext context,
                         @CachedLibrary("context.getPosixSupport()") PosixSupportLibrary posixLib,
                         @Cached InlinedConditionProfile unsignedConversionProfile,
@@ -237,6 +242,8 @@ public final class PwdModuleBuiltins extends PythonBuiltins {
                 entries = posixLib.getpwentries(context.getPosixSupport());
             } catch (PosixException e) {
                 throw constructAndRaiseNode.get(inliningTarget).raiseOSErrorFromPosixException(frame, e);
+            } catch (UnsupportedPosixFeatureException e) {
+                throw constructAndRaiseNode.get(inliningTarget).raiseOSErrorUnsupported(frame, e);
             }
             PythonLanguage language = context.getLanguage(inliningTarget);
             Object[] result = new Object[entries.length];

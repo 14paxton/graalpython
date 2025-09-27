@@ -58,7 +58,7 @@ import com.oracle.graal.python.PythonLanguage;
 import com.oracle.graal.python.annotations.Slot;
 import com.oracle.graal.python.annotations.Slot.SlotKind;
 import com.oracle.graal.python.annotations.Slot.SlotSignature;
-import com.oracle.graal.python.builtins.Builtin;
+import com.oracle.graal.python.annotations.Builtin;
 import com.oracle.graal.python.builtins.CoreFunctions;
 import com.oracle.graal.python.builtins.PythonBuiltinClassType;
 import com.oracle.graal.python.builtins.PythonBuiltins;
@@ -82,7 +82,7 @@ import com.oracle.graal.python.lib.PySequenceCheckNode;
 import com.oracle.graal.python.nodes.PGuards;
 import com.oracle.graal.python.nodes.PNodeWithContext;
 import com.oracle.graal.python.nodes.PRaiseNode;
-import com.oracle.graal.python.nodes.attributes.GetAttributeNode;
+import com.oracle.graal.python.nodes.attributes.GetFixedAttributeNode;
 import com.oracle.graal.python.nodes.function.PythonBuiltinBaseNode;
 import com.oracle.graal.python.nodes.function.builtins.PythonUnaryBuiltinNode;
 import com.oracle.graal.python.nodes.function.builtins.PythonVarargsBuiltinNode;
@@ -139,7 +139,7 @@ public final class StgDictBuiltins extends PythonBuiltins {
 
         @Specialization
         Object doit(VirtualFrame frame, StgDictObject self,
-                        @Bind("this") Node inliningTarget,
+                        @Bind Node inliningTarget,
                         @Cached GetDictIfExistsNode getDict,
                         @Cached ObjectBuiltins.SizeOfNode sizeOfNode,
                         @Cached PyNumberAsSizeNode asSizeNode,
@@ -158,7 +158,7 @@ public final class StgDictBuiltins extends PythonBuiltins {
     }
 
     @ImportStatic(StructUnionTypeBuiltins.class)
-    @SuppressWarnings("truffle-inlining")       // footprint reduction 112 -> 94
+    @GenerateInline(false)       // footprint reduction 112 -> 94
     protected abstract static class MakeFieldsNode extends PNodeWithContext {
 
         abstract void execute(VirtualFrame frame, Object type, CFieldObject descr, int index, int offset);
@@ -176,7 +176,7 @@ public final class StgDictBuiltins extends PythonBuiltins {
          */
         @Specialization
         static void MakeFields(VirtualFrame frame, Object type, CFieldObject descr, int index, int offset,
-                        @Bind("this") Node inliningTarget,
+                        @Bind Node inliningTarget,
                         @Cached GetClassNode getClassNode,
                         @Cached PyObjectGetAttrO getAttributeNode,
                         @Cached PyObjectSetAttrO setAttributeNode,
@@ -184,11 +184,11 @@ public final class StgDictBuiltins extends PythonBuiltins {
                         @Cached PyObjectSizeNode sizeNode,
                         @Cached PyObjectGetItem getItemNode,
                         @Cached GetInternalObjectArrayNode getArray,
-                        @Cached("create(T__FIELDS_)") GetAttributeNode getAttrString,
+                        @Cached("create(T__FIELDS_)") GetFixedAttributeNode getAttrString,
                         @Cached MakeFieldsNode recursiveNode,
-                        @Cached("createFor(this)") IndirectCallData indirectCallData,
+                        @Cached("createFor($node)") IndirectCallData indirectCallData,
                         @Cached PRaiseNode raiseNode) {
-            Object fields = getAttrString.executeObject(frame, descr.proto);
+            Object fields = getAttrString.execute(frame, descr.proto);
             if (!sequenceCheckNode.execute(inliningTarget, fields)) {
                 throw raiseNode.raise(inliningTarget, TypeError, FIELDS_MUST_BE_A_SEQUENCE);
             }
@@ -292,7 +292,7 @@ public final class StgDictBuiltins extends PythonBuiltins {
     }
 
     @ImportStatic(StgDictBuiltins.class)
-    @SuppressWarnings("truffle-inlining")       // footprint reduction 132 -> 115
+    @GenerateInline(false)       // footprint reduction 132 -> 115
     protected abstract static class MakeAnonFieldsNode extends Node {
 
         abstract void execute(VirtualFrame frame, Object type);
@@ -302,7 +302,7 @@ public final class StgDictBuiltins extends PythonBuiltins {
          */
         @Specialization
         static void MakeAnonFields(VirtualFrame frame, Object type,
-                        @Bind("this") Node inliningTarget,
+                        @Bind Node inliningTarget,
                         @Cached PySequenceCheckNode sequenceCheckNode,
                         @Cached PyObjectSizeNode sizeNode,
                         @Cached PyObjectGetItem getItemNode,

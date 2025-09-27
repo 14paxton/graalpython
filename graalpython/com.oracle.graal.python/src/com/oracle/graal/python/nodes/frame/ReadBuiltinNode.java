@@ -48,7 +48,7 @@ import com.oracle.graal.python.nodes.BuiltinNames;
 import com.oracle.graal.python.nodes.ErrorMessages;
 import com.oracle.graal.python.nodes.PNodeWithContext;
 import com.oracle.graal.python.nodes.PRaiseNode;
-import com.oracle.graal.python.nodes.attributes.ReadAttributeFromObjectNode;
+import com.oracle.graal.python.nodes.attributes.ReadAttributeFromModuleNode;
 import com.oracle.graal.python.runtime.PythonContext;
 import com.oracle.graal.python.runtime.exception.PException;
 import com.oracle.truffle.api.CompilerAsserts;
@@ -57,6 +57,7 @@ import com.oracle.truffle.api.dsl.Bind;
 import com.oracle.truffle.api.dsl.Cached;
 import com.oracle.truffle.api.dsl.Cached.Exclusive;
 import com.oracle.truffle.api.dsl.Cached.Shared;
+import com.oracle.truffle.api.dsl.GenerateInline;
 import com.oracle.truffle.api.dsl.GenerateUncached;
 import com.oracle.truffle.api.dsl.NeverDefault;
 import com.oracle.truffle.api.dsl.Specialization;
@@ -65,7 +66,7 @@ import com.oracle.truffle.api.profiles.InlinedConditionProfile;
 import com.oracle.truffle.api.strings.TruffleString;
 
 @GenerateUncached
-@SuppressWarnings("truffle-inlining")       // footprint reduction 40 -> 21
+@GenerateInline(false)       // footprint reduction 40 -> 21
 public abstract class ReadBuiltinNode extends PNodeWithContext {
     public abstract Object execute(TruffleString attributeId);
 
@@ -73,11 +74,11 @@ public abstract class ReadBuiltinNode extends PNodeWithContext {
     // module so we can treat anything read from it as constant here.
     @Specialization(guards = "isSingleContext(this)")
     Object returnBuiltinFromConstantModule(TruffleString attributeId,
-                    @Bind("this") Node inliningTarget,
+                    @Bind Node inliningTarget,
                     @Exclusive @Cached PRaiseNode raiseNode,
                     @Exclusive @Cached InlinedConditionProfile isBuiltinProfile,
-                    @Shared @Cached ReadAttributeFromObjectNode readFromBuiltinsNode,
-                    @SuppressWarnings("unused") @Cached("getBuiltins()") PythonModule builtins) {
+                    @Shared @Cached ReadAttributeFromModuleNode readFromBuiltinsNode,
+                    @Cached(value = "getBuiltins()", allowUncached = true) PythonModule builtins) {
         return readBuiltinFromModule(attributeId, raiseNode, inliningTarget, isBuiltinProfile, builtins, readFromBuiltinsNode);
     }
 
@@ -89,10 +90,10 @@ public abstract class ReadBuiltinNode extends PNodeWithContext {
     @InliningCutoff
     @Specialization(replaces = "returnBuiltinFromConstantModule")
     Object returnBuiltin(TruffleString attributeId,
-                    @Bind("this") Node inliningTarget,
+                    @Bind Node inliningTarget,
                     @Exclusive @Cached PRaiseNode raiseNode,
                     @Exclusive @Cached InlinedConditionProfile isBuiltinProfile,
-                    @Shared @Cached ReadAttributeFromObjectNode readFromBuiltinsNode,
+                    @Shared @Cached ReadAttributeFromModuleNode readFromBuiltinsNode,
                     @Exclusive @Cached InlinedConditionProfile ctxInitializedProfile) {
         PythonModule builtins = getBuiltins(inliningTarget, ctxInitializedProfile);
         return returnBuiltinFromConstantModule(attributeId, inliningTarget, raiseNode, isBuiltinProfile, readFromBuiltinsNode, builtins);
@@ -100,7 +101,7 @@ public abstract class ReadBuiltinNode extends PNodeWithContext {
 
     private static Object readBuiltinFromModule(TruffleString attributeId, PRaiseNode raiseNode, Node inliningTarget,
                     InlinedConditionProfile isBuiltinProfile, PythonModule builtins,
-                    ReadAttributeFromObjectNode readFromBuiltinsNode) {
+                    ReadAttributeFromModuleNode readFromBuiltinsNode) {
         Object builtin = readFromBuiltinsNode.execute(builtins, attributeId);
         if (isBuiltinProfile.profile(inliningTarget, builtin != PNone.NO_VALUE)) {
             return builtin;

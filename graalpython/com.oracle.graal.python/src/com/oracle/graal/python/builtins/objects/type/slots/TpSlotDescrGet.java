@@ -76,11 +76,12 @@ import com.oracle.truffle.api.CompilerDirectives.TruffleBoundary;
 import com.oracle.truffle.api.HostCompilerDirectives.InliningCutoff;
 import com.oracle.truffle.api.RootCallTarget;
 import com.oracle.truffle.api.dsl.Cached;
-import com.oracle.truffle.api.dsl.Cached.Shared;
+import com.oracle.truffle.api.dsl.Cached.Exclusive;
 import com.oracle.truffle.api.dsl.GenerateCached;
 import com.oracle.truffle.api.dsl.GenerateInline;
 import com.oracle.truffle.api.dsl.GenerateUncached;
 import com.oracle.truffle.api.dsl.ImportStatic;
+import com.oracle.truffle.api.dsl.NeverDefault;
 import com.oracle.truffle.api.dsl.NodeFactory;
 import com.oracle.truffle.api.dsl.Specialization;
 import com.oracle.truffle.api.frame.VirtualFrame;
@@ -196,6 +197,7 @@ public abstract class TpSlotDescrGet {
             return execute(frame, this, slot, self, obj, type);
         }
 
+        @NeverDefault
         public static CallSlotDescrGet create() {
             return CallSlotDescrGetNodeGen.create();
         }
@@ -249,6 +251,22 @@ public abstract class TpSlotDescrGet {
             RootCallTarget callTarget = PythonLanguage.get(inliningTarget).getBuiltinSlotCallTarget(slot.callTargetIndex);
             return invoke.execute(frame, inliningTarget, callTarget, arguments);
         }
+
+        @GenerateInline
+        @GenerateCached(false)
+        public abstract static class Lazy extends Node {
+
+            public final CallSlotDescrGet get(Node inliningTarget) {
+                return execute(inliningTarget);
+            }
+
+            abstract CallSlotDescrGet execute(Node inliningTarget);
+
+            @Specialization
+            static CallSlotDescrGet doIt(@Cached(inline = false) CallSlotDescrGet node) {
+                return node;
+            }
+        }
     }
 
     /**
@@ -263,13 +281,14 @@ public abstract class TpSlotDescrGet {
     abstract static class DescrGetPythonSlotDispatcherNode extends PythonSlotDispatcherNodeBase {
         abstract Object execute(VirtualFrame frame, Node inliningTarget, Object callable, Object type, Object self, Object arg1, Object arg2);
 
+        // @Exclusive for truffle-interpreted-performance
         @Specialization(guards = {"isSingleContext()", "callee == cachedCallee", "isSimpleSignature(cachedCallee, 3)"}, //
                         limit = "getCallSiteInlineCacheMaxDepth()", assumptions = "cachedCallee.getCodeStableAssumption()")
         protected static Object doCachedPFunction(VirtualFrame frame, Node inliningTarget, @SuppressWarnings("unused") PFunction callee, @SuppressWarnings("unused") Object type, Object self,
                         Object arg1, Object arg2,
-                        @SuppressWarnings("unused") @Cached("callee") PFunction cachedCallee,
-                        @Cached @Shared InlinedConditionProfile arg1Profile,
-                        @Cached @Shared InlinedConditionProfile arg2Profile,
+                        @Cached("callee") PFunction cachedCallee,
+                        @Exclusive @Cached InlinedConditionProfile arg1Profile,
+                        @Exclusive @Cached InlinedConditionProfile arg2Profile,
                         @Cached("createDirectCallNodeFor(callee)") DirectCallNode callNode,
                         @Cached CallDispatchers.FunctionDirectInvokeNode invoke) {
             Object[] arguments = PArguments.create(3);
@@ -286,8 +305,8 @@ public abstract class TpSlotDescrGet {
         @Specialization(replaces = "doCachedPFunction")
         @InliningCutoff
         static Object doGeneric(VirtualFrame frame, Node inliningTarget, Object callable, @SuppressWarnings("unused") Object type, Object self, Object arg1, Object arg2,
-                        @Cached @Shared InlinedConditionProfile arg1Profile,
-                        @Cached @Shared InlinedConditionProfile arg2Profile,
+                        @Cached @Exclusive InlinedConditionProfile arg1Profile,
+                        @Cached @Exclusive InlinedConditionProfile arg2Profile,
                         @Cached(inline = false) CallNode callNode) {
             return callNode.execute(frame, callable, self, //
                             normalizeNoValue(arg1Profile, inliningTarget, arg1), //

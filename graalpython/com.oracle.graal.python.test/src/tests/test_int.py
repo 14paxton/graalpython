@@ -109,6 +109,37 @@ def test_bigint():
     assert isinstance(i, int)
     assert i == BIG_NUMBER
 
+def test_bigint_lshift():
+    INT_SHIFT = -2147483648
+    LONG_SHIFT = -2147483649
+
+    assert_raises(ValueError, lambda: 0 << INT_SHIFT)
+    assert_raises(ValueError, lambda: -1 << INT_SHIFT)
+    assert_raises(ValueError, lambda: ((1 << 32) - 1) << INT_SHIFT)
+    assert_raises(ValueError, lambda: ((1 << 64) - 1) << INT_SHIFT)
+    assert_raises(ValueError, lambda: BIG_NUMBER << INT_SHIFT)
+
+    assert_raises(ValueError, lambda: 0 << LONG_SHIFT)
+    assert_raises(ValueError, lambda: -1 << LONG_SHIFT)
+    assert_raises(ValueError, lambda: 2147483647 << LONG_SHIFT)
+    assert_raises(ValueError, lambda: 9223372036854775807 << LONG_SHIFT)
+    assert_raises(ValueError, lambda: BIG_NUMBER << LONG_SHIFT)
+
+def test_bigint_rshift():
+    INT_SHIFT = -2147483648
+    LONG_SHIFT = -2147483649
+
+    assert_raises(ValueError, lambda: 0 >> INT_SHIFT)
+    assert_raises(ValueError, lambda: -1 >> INT_SHIFT)
+    assert_raises(ValueError, lambda: ((1 >> 32) - 1) >> INT_SHIFT)
+    assert_raises(ValueError, lambda: ((1 >> 64) - 1) >> INT_SHIFT)
+    assert_raises(ValueError, lambda: BIG_NUMBER >> INT_SHIFT)
+
+    assert_raises(ValueError, lambda: 0 >> LONG_SHIFT)
+    assert_raises(ValueError, lambda: -1 >> LONG_SHIFT)
+    assert_raises(ValueError, lambda: 2147483647 >> LONG_SHIFT)
+    assert_raises(ValueError, lambda: 9223372036854775807 >> LONG_SHIFT)
+    assert_raises(ValueError, lambda: BIG_NUMBER >> LONG_SHIFT)
 
 def test_boolean2int():
     assert int(True) == 1
@@ -119,6 +150,10 @@ def test_bigint_mul():
     assert 99999937497465632974931 * 1223432423545234234123123 == 122343165886896325043539375228725106116626429513
     assert 99999937497465632974931 * (2**100) == 126764980791447734004805377032945185921379990352429056
 
+def test_floordiv():
+    assert 0 // (-92233720368547394651) == 0
+    assert -234 // (-92233720368547394651) == 0
+    assert 234 // (-92233720368547394651) == -1
 
 def test_pow():
     assert 2 ** 10 == 1024
@@ -425,10 +460,10 @@ def test_create_int_from_float():
         assert True
     else:
         assert False, "expected ValueError"
-        
+
     class FloatSub(float):
         pass
-    
+
     try:
         int(FloatSub(float('nan')))
     except ValueError:

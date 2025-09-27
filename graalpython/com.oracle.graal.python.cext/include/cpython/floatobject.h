@@ -1,4 +1,4 @@
-/* Copyright (c) 2023, 2024, Oracle and/or its affiliates.
+/* Copyright (c) 2023, 2025, Oracle and/or its affiliates.
  * Copyright (C) 1996-2023 Python Software Foundation
  *
  * Licensed under the PYTHON SOFTWARE FOUNDATION LICENSE VERSION 2
@@ -15,14 +15,14 @@ typedef struct {
 #define _PyFloat_CAST(op) \
     (assert(PyFloat_Check(op)), _Py_CAST(PyFloatObject*, op))
 
+// GraalPy public API
+PyAPI_FUNC(double) GraalPyFloat_AS_DOUBLE(PyObject* op);
+
 // Static inline version of PyFloat_AsDouble() trading safety for speed.
 // It doesn't check if op is a double object.
 static inline double PyFloat_AS_DOUBLE(PyObject *op) {
-#if 0 // GraalPy change
-    return _PyFloat_CAST(op)->ob_fval;
-#else // GraalPy change
-    return PyFloat_AsDouble(op);
-#endif // GraalPy change
+    // GraalPy change
+    return GraalPyFloat_AS_DOUBLE(op);
 }
 #define PyFloat_AS_DOUBLE(op) PyFloat_AS_DOUBLE(_PyObject_CAST(op))
 

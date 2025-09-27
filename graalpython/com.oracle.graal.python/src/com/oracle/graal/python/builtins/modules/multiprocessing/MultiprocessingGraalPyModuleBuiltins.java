@@ -47,7 +47,7 @@ import java.util.Objects;
 import java.util.concurrent.Semaphore;
 
 import com.oracle.graal.python.PythonLanguage;
-import com.oracle.graal.python.builtins.Builtin;
+import com.oracle.graal.python.annotations.Builtin;
 import com.oracle.graal.python.builtins.CoreFunctions;
 import com.oracle.graal.python.builtins.Python3Core;
 import com.oracle.graal.python.builtins.PythonBuiltins;
@@ -82,7 +82,6 @@ import com.oracle.graal.python.runtime.PosixSupportLibrary.Timeval;
 import com.oracle.graal.python.runtime.PythonContext;
 import com.oracle.graal.python.runtime.PythonContext.SharedMultiprocessingData;
 import com.oracle.graal.python.runtime.object.PFactory;
-import com.oracle.graal.python.runtime.sequence.PSequence;
 import com.oracle.graal.python.runtime.sequence.storage.SequenceStorage;
 import com.oracle.graal.python.util.ArrayBuilder;
 import com.oracle.graal.python.util.PythonUtils;
@@ -123,11 +122,11 @@ public final class MultiprocessingGraalPyModuleBuiltins extends PythonBuiltins {
     abstract static class SemUnlink extends PythonUnaryBuiltinNode {
         @Specialization
         PNone doit(VirtualFrame frame, TruffleString name,
-                        @Bind("this") Node inliningTarget,
+                        @Bind Node inliningTarget,
                         @Cached PConstructAndRaiseNode.Lazy constructAndRaiseNode) {
             Semaphore prev = getContext().getSharedMultiprocessingData().removeNamedSemaphore(name);
             if (prev == null) {
-                throw constructAndRaiseNode.get(inliningTarget).raiseFileNotFoundError(frame, ErrorMessages.NO_SUCH_FILE_OR_DIR, "semaphores", name);
+                throw constructAndRaiseNode.get(inliningTarget).raiseFileNotFoundError(frame, ErrorMessages.NO_SUCH_FILE_OR_DIR_WITH_LABEL, "semaphores", name);
             }
             return PNone.NONE;
         }
@@ -138,7 +137,7 @@ public final class MultiprocessingGraalPyModuleBuiltins extends PythonBuiltins {
     abstract static class SpawnContextNode extends PythonBuiltinNode {
         @Specialization
         long spawn(int fd, int sentinel, PList keepFds,
-                        @Bind("this") Node inliningTarget,
+                        @Bind Node inliningTarget,
                         @Cached SequenceStorageNodes.GetItemNode getItem,
                         @Cached CastToJavaIntExactNode castToJavaIntNode) {
             SequenceStorage storage = keepFds.getSequenceStorage();
@@ -160,7 +159,7 @@ public final class MultiprocessingGraalPyModuleBuiltins extends PythonBuiltins {
         @Specialization
         @TruffleBoundary
         long getTid(
-                        @Bind("this") Node inliningTarget) {
+                        @Bind Node inliningTarget) {
             return convertTid(PThread.getThreadId(Objects.requireNonNull(PythonContext.get(inliningTarget).getMainThread())));
         }
     }
@@ -345,7 +344,7 @@ public final class MultiprocessingGraalPyModuleBuiltins extends PythonBuiltins {
 
         @Specialization
         Object doGeneric(VirtualFrame frame, Object multiprocessingFdsList, Object multiprocessingObjsList, Object posixFileObjsList, Object timeoutObj,
-                        @Bind("this") Node inliningTarget,
+                        @Bind Node inliningTarget,
                         @Bind PythonLanguage language,
                         @Cached PosixModuleBuiltins.FileDescriptorConversionNode fdConvertor,
                         @Cached PyObjectSizeNode sizeNode,
@@ -359,11 +358,11 @@ public final class MultiprocessingGraalPyModuleBuiltins extends PythonBuiltins {
             PythonContext context = getContext();
             SharedMultiprocessingData sharedData = context.getSharedMultiprocessingData();
 
-            PSequence pSequence = constructListNode.execute(frame, inliningTarget, multiprocessingFdsList);
-            int size = sizeNode.execute(frame, inliningTarget, pSequence);
+            PList list = constructListNode.execute(frame, inliningTarget, multiprocessingFdsList);
+            int size = sizeNode.execute(frame, inliningTarget, list);
             int[] multiprocessingFds = new int[size];
             for (int i = 0; i < size; i++) {
-                Object pythonObject = getItem.execute(frame, inliningTarget, pSequence, i);
+                Object pythonObject = getItem.execute(frame, inliningTarget, list, i);
                 multiprocessingFds[i] = toInt(inliningTarget, castToJava, pythonObject);
             }
 

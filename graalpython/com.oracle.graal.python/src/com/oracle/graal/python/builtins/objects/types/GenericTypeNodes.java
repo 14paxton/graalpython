@@ -84,6 +84,7 @@ import com.oracle.truffle.api.CompilerDirectives.TruffleBoundary;
 import com.oracle.truffle.api.dsl.Bind;
 import com.oracle.truffle.api.dsl.Cached;
 import com.oracle.truffle.api.dsl.Fallback;
+import com.oracle.truffle.api.dsl.GenerateInline;
 import com.oracle.truffle.api.dsl.Specialization;
 import com.oracle.truffle.api.nodes.Node;
 import com.oracle.truffle.api.strings.TruffleString;
@@ -342,13 +343,13 @@ public abstract class GenericTypeNodes {
         return obj;
     }
 
-    @SuppressWarnings("truffle-inlining")       // footprint reduction 36 -> 20
+    @GenerateInline(false)       // footprint reduction 36 -> 20
     public abstract static class UnionTypeOrNode extends PNodeWithContext {
         public abstract Object execute(Object self, Object other);
 
         @Specialization(guards = {"isUnionable(inliningTarget, typeCheck, self)", "isUnionable(inliningTarget, typeCheck, other)"}, limit = "1")
         static Object union(Object self, Object other,
-                        @SuppressWarnings("unused") @Bind("this") Node inliningTarget,
+                        @SuppressWarnings("unused") @Bind Node inliningTarget,
                         @SuppressWarnings("unused") @Cached PyObjectTypeCheck typeCheck,
                         @Bind PythonLanguage language) {
             Object[] args = dedupAndFlattenArgs(new Object[]{self, other});

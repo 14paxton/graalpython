@@ -184,11 +184,6 @@ public abstract class ExternalFunctionNodes {
         return new PKeyword[]{new PKeyword(KW_CALLABLE, callable), new PKeyword(KW_CLOSURE, closure)};
     }
 
-    public abstract static class FinishArgNode extends PNodeWithContext {
-
-        public abstract void execute(Object value);
-    }
-
     /**
      * On Windows, "long" is 32 bits, so that we might need to convert int to long for consistency.
      */
@@ -303,7 +298,7 @@ public abstract class ExternalFunctionNodes {
     public abstract static class ToPythonStringNode extends CExtToJavaNode {
         @Specialization
         static Object doIt(Object object,
-                        @Bind("this") Node inliningTarget,
+                        @Bind Node inliningTarget,
                         @Cached CastToTruffleStringNode castToStringNode,
                         @Cached NativeToPythonNode nativeToPythonNode) {
             Object result = nativeToPythonNode.execute(object);
@@ -699,7 +694,7 @@ public abstract class ExternalFunctionNodes {
         @Override
         protected Object[] prepareCArguments(VirtualFrame frame) {
             // return a copy of the args array since it will be modified
-            Object[] varargs = PArguments.getVariableArguments(frame);
+            Object[] varargs = (Object[]) PArguments.getArgument(frame, SIGNATURE.varArgsPArgumentsIndex());
             return PythonUtils.arrayCopyOf(varargs, varargs.length);
         }
 
@@ -733,7 +728,7 @@ public abstract class ExternalFunctionNodes {
 
         @Specialization
         static Object invoke(VirtualFrame frame, Node inliningTarget, PythonThreadState threadState, CApiTiming timing, TruffleString name, Object callable, Object[] cArguments,
-                        @Cached(value = "createFor(this)", uncached = "getUncached()") IndirectCallData indirectCallData,
+                        @Cached(value = "createFor($node)", uncached = "getUncached()") IndirectCallData indirectCallData,
                         @CachedLibrary(limit = "2") InteropLibrary lib) {
 
             // If any code requested the caught exception (i.e. used 'sys.exc_info()'), we store
@@ -794,7 +789,7 @@ public abstract class ExternalFunctionNodes {
 
         @Specialization
         static Object invokeCached(VirtualFrame frame, PExternalFunctionWrapper provider, CApiTiming timing, TruffleString name, Object callable, Object[] cArguments,
-                        @Bind("this") Node inliningTarget,
+                        @Bind Node inliningTarget,
                         @Cached("createCheckResultNode(provider)") CheckFunctionResultNode checkResultNode,
                         @SuppressWarnings("truffle-neverdefault") @Cached("provider.createConvertRetNode()") CExtToJavaNode convertReturnValue,
                         @Cached PForeignToPTypeNode fromForeign,
@@ -971,8 +966,8 @@ public abstract class ExternalFunctionNodes {
 
         public MethKeywordsRoot(PythonLanguage language, TruffleString name, boolean isStatic, PExternalFunctionWrapper provider) {
             super(language, name, isStatic, provider);
-            this.readVarargsNode = ReadVarArgsNode.create(true);
-            this.readKwargsNode = ReadVarKeywordsNode.create(PythonUtils.EMPTY_TRUFFLESTRING_ARRAY);
+            this.readVarargsNode = ReadVarArgsNode.create(SIGNATURE.varArgsPArgumentsIndex());
+            this.readKwargsNode = ReadVarKeywordsNode.create(SIGNATURE.varKeywordsPArgumentsIndex());
             this.createArgsTupleNode = CreateArgsTupleNodeGen.create();
             this.freeNode = ReleaseNativeSequenceStorageNodeGen.create();
         }
@@ -980,10 +975,10 @@ public abstract class ExternalFunctionNodes {
         @Override
         protected Object[] prepareCArguments(VirtualFrame frame) {
             Object self = readSelf(frame);
-            Object[] args = readVarargsNode.executeObjectArray(frame);
-            PKeyword[] kwargs = readKwargsNode.executePKeyword(frame);
+            Object[] args = readVarargsNode.execute(frame);
+            PKeyword[] kwargs = readKwargsNode.execute(frame);
             PythonLanguage language = getLanguage(PythonLanguage.class);
-            return new Object[]{self, createArgsTupleNode.execute(language, args, seenNativeArgsTupleStorage), PFactory.createDict(language, kwargs)};
+            return new Object[]{self, createArgsTupleNode.execute(language, args, seenNativeArgsTupleStorage), kwargs.length > 0 ? PFactory.createDict(language, kwargs) : PNone.NO_VALUE};
         }
 
         @Override
@@ -1013,7 +1008,7 @@ public abstract class ExternalFunctionNodes {
 
         public MethVarargsRoot(PythonLanguage language, TruffleString name, boolean isStatic, PExternalFunctionWrapper provider) {
             super(language, name, isStatic, provider);
-            this.readVarargsNode = ReadVarArgsNode.create(true);
+            this.readVarargsNode = ReadVarArgsNode.create(SIGNATURE.varArgsPArgumentsIndex());
             this.createArgsTupleNode = CreateArgsTupleNodeGen.create();
             this.freeNode = ReleaseNativeSequenceStorageNodeGen.create();
         }
@@ -1021,7 +1016,7 @@ public abstract class ExternalFunctionNodes {
         @Override
         protected Object[] prepareCArguments(VirtualFrame frame) {
             Object self = readSelf(frame);
-            Object[] args = readVarargsNode.executeObjectArray(frame);
+            Object[] args = readVarargsNode.execute(frame);
             return new Object[]{self, createArgsTupleNode.execute(getLanguage(PythonLanguage.class), args, seenNativeArgsTupleStorage)};
         }
 
@@ -1100,13 +1095,13 @@ public abstract class ExternalFunctionNodes {
         @Override
         protected Object[] prepareCArguments(VirtualFrame frame) {
             Object methodSelf = readSelf(frame);
-            Object[] args = readVarargsNode.executeObjectArray(frame);
+            Object[] args = readVarargsNode.execute(frame);
             // TODO checks
             Object self = args[0];
             args = PythonUtils.arrayCopyOfRange(args, 1, args.length);
-            PKeyword[] kwargs = readKwargsNode.executePKeyword(frame);
+            PKeyword[] kwargs = readKwargsNode.execute(frame);
             PythonLanguage language = getLanguage(PythonLanguage.class);
-            return new Object[]{self, createArgsTupleNode.execute(language, args, seenNativeArgsTupleStorage), PFactory.createDict(language, kwargs)};
+            return new Object[]{self, createArgsTupleNode.execute(language, args, seenNativeArgsTupleStorage), kwargs.length > 0 ? PFactory.createDict(language, kwargs) : PNone.NO_VALUE};
         }
     }
 
@@ -1192,15 +1187,15 @@ public abstract class ExternalFunctionNodes {
 
         public MethFastcallWithKeywordsRoot(PythonLanguage language, TruffleString name, boolean isStatic, PExternalFunctionWrapper provider) {
             super(language, name, isStatic, provider);
-            this.readVarargsNode = ReadVarArgsNode.create(true);
-            this.readKwargsNode = ReadVarKeywordsNode.create(PythonUtils.EMPTY_TRUFFLESTRING_ARRAY);
+            this.readVarargsNode = ReadVarArgsNode.create(SIGNATURE.varArgsPArgumentsIndex());
+            this.readKwargsNode = ReadVarKeywordsNode.create(SIGNATURE.varKeywordsPArgumentsIndex());
         }
 
         @Override
         protected Object[] prepareCArguments(VirtualFrame frame) {
             Object self = readSelf(frame);
-            Object[] args = readVarargsNode.executeObjectArray(frame);
-            PKeyword[] kwargs = readKwargsNode.executePKeyword(frame);
+            Object[] args = readVarargsNode.execute(frame);
+            PKeyword[] kwargs = readKwargsNode.execute(frame);
             Object[] fastcallArgs = new Object[args.length + kwargs.length];
             Object kwnamesTuple = PNone.NO_VALUE;
             PythonUtils.arraycopy(args, 0, fastcallArgs, 0, args.length);
@@ -1240,16 +1235,16 @@ public abstract class ExternalFunctionNodes {
         public MethMethodRoot(PythonLanguage language, TruffleString name, boolean isStatic, PExternalFunctionWrapper provider) {
             super(language, name, isStatic, provider);
             this.readClsNode = ReadIndexedArgumentNode.create(1);
-            this.readVarargsNode = ReadVarArgsNode.create(true);
-            this.readKwargsNode = ReadVarKeywordsNode.create(PythonUtils.EMPTY_TRUFFLESTRING_ARRAY);
+            this.readVarargsNode = ReadVarArgsNode.create(SIGNATURE.varArgsPArgumentsIndex());
+            this.readKwargsNode = ReadVarKeywordsNode.create(SIGNATURE.varKeywordsPArgumentsIndex());
         }
 
         @Override
         protected Object[] prepareCArguments(VirtualFrame frame) {
             Object self = readSelf(frame);
             Object cls = readClsNode.execute(frame);
-            Object[] args = readVarargsNode.executeObjectArray(frame);
-            PKeyword[] kwargs = readKwargsNode.executePKeyword(frame);
+            Object[] args = readVarargsNode.execute(frame);
+            PKeyword[] kwargs = readKwargsNode.execute(frame);
             Object[] fastcallArgs = new Object[args.length + kwargs.length];
             Object[] fastcallKwnames = new Object[kwargs.length];
             PythonUtils.arraycopy(args, 0, fastcallArgs, 0, args.length);
@@ -1282,13 +1277,13 @@ public abstract class ExternalFunctionNodes {
 
         public MethFastcallRoot(PythonLanguage language, TruffleString name, boolean isStatic, PExternalFunctionWrapper provider) {
             super(language, name, isStatic, provider);
-            this.readVarargsNode = ReadVarArgsNode.create(true);
+            this.readVarargsNode = ReadVarArgsNode.create(SIGNATURE.varArgsPArgumentsIndex());
         }
 
         @Override
         protected Object[] prepareCArguments(VirtualFrame frame) {
             Object self = readSelf(frame);
-            Object[] args = readVarargsNode.executeObjectArray(frame);
+            Object[] args = readVarargsNode.execute(frame);
             return new Object[]{self, new CPyObjectArrayWrapper(args), args.length};
         }
 
@@ -1713,14 +1708,14 @@ public abstract class ExternalFunctionNodes {
 
         MethPowRootNode(PythonLanguage language, TruffleString name, PExternalFunctionWrapper provider) {
             super(language, name, false, provider);
-            this.readVarargsNode = ReadVarArgsNode.create(true);
+            this.readVarargsNode = ReadVarArgsNode.create(SIGNATURE.varArgsPArgumentsIndex());
             this.profile = ConditionProfile.create();
         }
 
         @Override
         protected final Object[] prepareCArguments(VirtualFrame frame) {
             Object self = readSelf(frame);
-            Object[] varargs = readVarargsNode.executeObjectArray(frame);
+            Object[] varargs = readVarargsNode.execute(frame);
             Object arg0 = varargs[0];
             Object arg1 = profile.profile(varargs.length > 1) ? varargs[1] : PNone.NONE;
             return getArguments(self, arg0, arg1);
@@ -1985,7 +1980,7 @@ public abstract class ExternalFunctionNodes {
         @Specialization(guards = {"args.length == cachedLen", "cachedLen <= 8", "eagerNative"}, limit = "1", replaces = "doCachedLen")
         @ExplodeLoop(kind = LoopExplosionKind.FULL_UNROLL)
         static PTuple doCachedLenEagerNative(PythonLanguage language, Object[] args, @SuppressWarnings("unused") boolean eagerNative,
-                        @Bind("this") Node inliningTarget,
+                        @Bind Node inliningTarget,
                         @Cached("args.length") int cachedLen,
                         @Cached("createMaterializeNodes(args.length)") MaterializePrimitiveNode[] materializePrimitiveNodes,
                         @Exclusive @Cached StorageToNativeNode storageToNativeNode) {
@@ -1998,7 +1993,7 @@ public abstract class ExternalFunctionNodes {
 
         @Specialization(replaces = {"doCachedLen", "doCachedLenEagerNative"})
         static PTuple doGeneric(PythonLanguage language, Object[] args, boolean eagerNative,
-                        @Bind("this") Node inliningTarget,
+                        @Bind Node inliningTarget,
                         @Cached MaterializePrimitiveNode materializePrimitiveNode,
                         @Exclusive @Cached StorageToNativeNode storageToNativeNode) {
 
@@ -2033,7 +2028,7 @@ public abstract class ExternalFunctionNodes {
         @Specialization(guards = {"storage.length() == cachedLen", "cachedLen <= 8"}, limit = "1")
         @ExplodeLoop(kind = LoopExplosionKind.FULL_UNROLL)
         static void doObjectCachedLen(NativeObjectSequenceStorage storage,
-                        @Bind("this") Node inliningTarget,
+                        @Bind Node inliningTarget,
                         @Cached("storage.length()") int cachedLen,
                         @Shared @Cached CStructAccess.ReadPointerNode readNode,
                         @Shared @Cached CExtNodes.XDecRefPointerNode decRefPointerNode,
@@ -2048,7 +2043,7 @@ public abstract class ExternalFunctionNodes {
 
         @Specialization(replaces = "doObjectCachedLen")
         static void doObjectGeneric(NativeObjectSequenceStorage storage,
-                        @Bind("this") Node inliningTarget,
+                        @Bind Node inliningTarget,
                         @Shared @Cached CStructAccess.ReadPointerNode readNode,
                         @Shared @Cached CExtNodes.XDecRefPointerNode decRefPointerNode,
                         @Shared @Cached CStructAccess.FreeNode freeNode) {
@@ -2107,7 +2102,7 @@ public abstract class ExternalFunctionNodes {
 
         @Specialization
         static Object doNativeWrapper(PythonThreadState state, TruffleString name, @SuppressWarnings("unused") PythonNativeWrapper result,
-                        @Bind("this") Node inliningTarget,
+                        @Bind Node inliningTarget,
                         @Shared @Cached TransformExceptionFromNativeNode transformExceptionFromNativeNode) {
             transformExceptionFromNativeNode.execute(inliningTarget, state, name, false, true);
             return result;
@@ -2115,7 +2110,7 @@ public abstract class ExternalFunctionNodes {
 
         @Specialization(guards = "isNoValue(result)")
         static Object doNoValue(PythonThreadState state, TruffleString name, @SuppressWarnings("unused") PNone result,
-                        @Bind("this") Node inliningTarget,
+                        @Bind Node inliningTarget,
                         @Shared @Cached TransformExceptionFromNativeNode transformExceptionFromNativeNode) {
             transformExceptionFromNativeNode.execute(inliningTarget, state, name, true, true);
             return PNone.NO_VALUE;
@@ -2123,7 +2118,7 @@ public abstract class ExternalFunctionNodes {
 
         @Specialization(guards = "!isNoValue(result)")
         static Object doPythonObject(PythonThreadState state, TruffleString name, @SuppressWarnings("unused") PythonAbstractObject result,
-                        @Bind("this") Node inliningTarget,
+                        @Bind Node inliningTarget,
                         @Shared @Cached TransformExceptionFromNativeNode transformExceptionFromNativeNode) {
             transformExceptionFromNativeNode.execute(inliningTarget, state, name, false, true);
             return result;
@@ -2131,7 +2126,7 @@ public abstract class ExternalFunctionNodes {
 
         @Specialization
         static Object doNativePointer(PythonThreadState state, TruffleString name, NativePointer result,
-                        @Bind("this") Node inliningTarget,
+                        @Bind Node inliningTarget,
                         @Shared @Cached TransformExceptionFromNativeNode transformExceptionFromNativeNode) {
             transformExceptionFromNativeNode.execute(inliningTarget, state, name, result.isNull(), true);
             return result;
@@ -2139,7 +2134,7 @@ public abstract class ExternalFunctionNodes {
 
         @Specialization
         static int doInteger(PythonThreadState state, TruffleString name, int result,
-                        @Bind("this") Node inliningTarget,
+                        @Bind Node inliningTarget,
                         @Shared @Cached TransformExceptionFromNativeNode transformExceptionFromNativeNode) {
             /*
              * If the native functions returns a primitive int, only a value '-1' indicates an
@@ -2151,7 +2146,7 @@ public abstract class ExternalFunctionNodes {
 
         @Specialization
         static long doLong(PythonThreadState state, TruffleString name, long result,
-                        @Bind("this") Node inliningTarget,
+                        @Bind Node inliningTarget,
                         @Shared @Cached TransformExceptionFromNativeNode transformExceptionFromNativeNode) {
             /*
              * If the native functions returns a primitive long, only a value '-1' indicates an
@@ -2169,7 +2164,7 @@ public abstract class ExternalFunctionNodes {
          */
         @Specialization(guards = {"!isPythonNativeWrapper(result)", "!isPNone(result)"})
         static Object doForeign(PythonThreadState state, TruffleString name, Object result,
-                        @Bind("this") Node inliningTarget,
+                        @Bind Node inliningTarget,
                         @Shared @Cached TransformExceptionFromNativeNode transformExceptionFromNativeNode,
                         @Exclusive @CachedLibrary(limit = "3") InteropLibrary lib) {
             transformExceptionFromNativeNode.execute(inliningTarget, state, name, lib.isNull(result), true);
@@ -2188,7 +2183,7 @@ public abstract class ExternalFunctionNodes {
     public abstract static class PyObjectCheckFunctionResultNode extends CheckFunctionResultNode {
         @Specialization(guards = "!isForeignObject.execute(inliningTarget, result)")
         static Object doPythonObject(PythonThreadState state, TruffleString name, Object result,
-                        @Bind("this") Node inliningTarget,
+                        @Bind Node inliningTarget,
                         @SuppressWarnings("unused") @Shared @Cached IsForeignObjectNode isForeignObject,
                         @Shared @Cached InlinedConditionProfile indicatesErrorProfile,
                         @Shared @Cached TransformExceptionFromNativeNode transformExceptionFromNativeNode) {
@@ -2200,7 +2195,7 @@ public abstract class ExternalFunctionNodes {
 
         @Specialization(guards = "isForeignObject.execute(inliningTarget, result)")
         static Object doForeign(PythonThreadState state, TruffleString name, Object result,
-                        @Bind("this") Node inliningTarget,
+                        @Bind Node inliningTarget,
                         @SuppressWarnings("unused") @Shared @Cached IsForeignObjectNode isForeignObject,
                         @Shared @Cached InlinedConditionProfile indicatesErrorProfile,
                         @Shared @Cached TransformExceptionFromNativeNode transformExceptionFromNativeNode,
@@ -2221,7 +2216,7 @@ public abstract class ExternalFunctionNodes {
 
         @Specialization(limit = "3")
         static Object doGeneric(PythonThreadState state, @SuppressWarnings("unused") TruffleString name, Object result,
-                        @Bind("this") Node inliningTarget,
+                        @Bind Node inliningTarget,
                         @CachedLibrary("result") InteropLibrary lib,
                         @Cached CExtCommonNodes.ReadAndClearNativeException readAndClearNativeException,
                         @Cached PRaiseNode raiseNode) {
@@ -2257,7 +2252,7 @@ public abstract class ExternalFunctionNodes {
         @Specialization
         @SuppressWarnings("unused")
         static Object doInt(PythonThreadState state, TruffleString name, int result,
-                        @Bind("this") Node inliningTarget,
+                        @Bind Node inliningTarget,
                         @Shared @Cached TransformExceptionFromNativeNode transformExceptionFromNativeNode) {
             transformExceptionFromNativeNode.execute(inliningTarget, state, name, result < 0, true);
             return PNone.NONE;
@@ -2267,7 +2262,7 @@ public abstract class ExternalFunctionNodes {
         @Specialization(replaces = "doInt")
         @InliningCutoff
         static Object notNumber(PythonThreadState state, @SuppressWarnings("unused") TruffleString name, Object result,
-                        @Bind("this") Node inliningTarget,
+                        @Bind Node inliningTarget,
                         @CachedLibrary(limit = "2") InteropLibrary lib,
                         @Shared @Cached TransformExceptionFromNativeNode transformExceptionFromNativeNode) {
             int ret = 0;
@@ -2306,7 +2301,7 @@ public abstract class ExternalFunctionNodes {
 
         @Specialization
         static long doLong(PythonThreadState threadState, TruffleString name, long result,
-                        @Bind("this") Node inliningTarget,
+                        @Bind Node inliningTarget,
                         @Shared @Cached TransformExceptionFromNativeNode transformExceptionFromNativeNode) {
             transformExceptionFromNativeNode.execute(inliningTarget, threadState, name, result == -1, false);
             return result;
@@ -2315,7 +2310,7 @@ public abstract class ExternalFunctionNodes {
         @Specialization(replaces = "doLong")
         @InliningCutoff
         static long doGeneric(PythonThreadState threadState, TruffleString name, Object result,
-                        @Bind("this") Node inliningTarget,
+                        @Bind Node inliningTarget,
                         @CachedLibrary(limit = "2") InteropLibrary lib,
                         @Shared @Cached TransformExceptionFromNativeNode transformExceptionFromNativeNode) {
             if (lib.fitsInLong(result)) {
@@ -2345,7 +2340,7 @@ public abstract class ExternalFunctionNodes {
 
         @Specialization
         static boolean doLong(PythonThreadState threadState, TruffleString name, long result,
-                        @Bind("this") Node inliningTarget,
+                        @Bind Node inliningTarget,
                         @Shared @Cached InlinedConditionProfile resultProfile,
                         @Shared @Cached TransformExceptionFromNativeNode transformExceptionFromNativeNode) {
             transformExceptionFromNativeNode.execute(inliningTarget, threadState, name, result == -1, false);
@@ -2355,7 +2350,7 @@ public abstract class ExternalFunctionNodes {
         @Specialization(replaces = "doLong")
         @InliningCutoff
         static boolean doGeneric(PythonThreadState threadState, TruffleString name, Object result,
-                        @Bind("this") Node inliningTarget,
+                        @Bind Node inliningTarget,
                         @Shared @Cached InlinedConditionProfile resultProfile,
                         @CachedLibrary(limit = "3") InteropLibrary lib,
                         @Shared @Cached TransformExceptionFromNativeNode transformExceptionFromNativeNode) {

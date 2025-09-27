@@ -1,0 +1,73 @@
+# Copyright (c) 2025, Oracle and/or its affiliates. All rights reserved.
+# DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
+#
+# The Universal Permissive License (UPL), Version 1.0
+#
+# Subject to the condition set forth below, permission is hereby granted to any
+# person obtaining a copy of this software, associated documentation and/or
+# data (collectively the "Software"), free of charge and under any and all
+# copyright rights in the Software, and any and all patent rights owned or
+# freely licensable by each licensor hereunder covering either (i) the
+# unmodified Software as contributed to or provided by such licensor, or (ii)
+# the Larger Works (as defined below), to deal in both
+#
+# (a) the Software, and
+#
+# (b) any piece of software and/or hardware listed in the lrgrwrks.txt file if
+# one is included with the Software each a "Larger Work" to which the Software
+# is contributed by such licensors),
+#
+# without restriction, including without limitation the rights to copy, create
+# derivative works of, display, perform, and distribute the Software and make,
+# use, sell, offer for sale, import, export, have made, and have sold the
+# Software and the Larger Work(s), and to sublicense the foregoing rights on
+# either these or other terms.
+#
+# This license is subject to the following condition:
+#
+# The above copyright notice and either this complete permission notice or at a
+# minimum a reference to the UPL must be included in all copies or substantial
+# portions of the Software.
+#
+# THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+# IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+# FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+# AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+# LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+# OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
+# SOFTWARE.
+
+import shlex
+import shutil
+import subprocess
+import sys
+
+
+def build_testlib(tmpdir, orig_testlib):
+    tmp_testlib = tmpdir / "testlib"
+    shutil.copytree(orig_testlib, tmp_testlib)
+    testlib_build = tmp_testlib / "build"
+    if testlib_build.exists():
+        shutil.rmtree(testlib_build)
+    testlib_build.mkdir(parents=True, exist_ok=True)
+
+    cmd = ["cmake", "-DCMAKE_BUILD_TYPE=Release", ".."]
+    if sys.platform == 'win32':
+        cmd += ["-G", "Ninja"]
+    print("Running:", shlex.join(cmd))
+    subprocess.check_call(cmd, cwd=str(testlib_build))
+    cmd = ["cmake", "--build", ".", "--config", "Release"]
+    print("Running:", shlex.join(cmd))
+    subprocess.check_call(cmd, cwd=str(testlib_build))
+
+    if sys.platform == 'win32':
+        lib_name = "answer.dll"
+    elif sys.platform == 'darwin':
+        lib_name = "libanswer.dylib"
+    else:
+        lib_name = 'libanswer.so'
+    lib_path = testlib_build / lib_name
+    if not lib_path.exists():
+        raise FileNotFoundError(f"Failed to locate built library at: {lib_path}")
+
+    return lib_path

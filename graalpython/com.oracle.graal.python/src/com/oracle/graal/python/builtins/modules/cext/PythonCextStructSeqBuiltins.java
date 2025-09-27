@@ -74,6 +74,7 @@ import com.oracle.graal.python.nodes.BuiltinNames;
 import com.oracle.graal.python.nodes.ErrorMessages;
 import com.oracle.graal.python.nodes.PRaiseNode;
 import com.oracle.graal.python.nodes.SpecialAttributeNames;
+import com.oracle.graal.python.nodes.attributes.ReadAttributeFromModuleNode;
 import com.oracle.graal.python.nodes.attributes.ReadAttributeFromObjectNode;
 import com.oracle.graal.python.nodes.call.CallNode;
 import com.oracle.graal.python.nodes.util.CannotCastException;
@@ -95,7 +96,7 @@ import com.oracle.truffle.api.strings.TruffleString;
 public final class PythonCextStructSeqBuiltins {
 
     @CApiBuiltin(ret = Int, args = {PyTypeObject, Pointer, Int}, call = Ignored)
-    abstract static class PyTruffleStructSequence_InitType2 extends CApiTernaryBuiltinNode {
+    abstract static class GraalPyPrivate_StructSequence_InitType2 extends CApiTernaryBuiltinNode {
 
         @Specialization
         @TruffleBoundary
@@ -131,13 +132,13 @@ public final class PythonCextStructSeqBuiltins {
     }
 
     @CApiBuiltin(ret = PyTypeObjectTransfer, args = {ConstCharPtrAsTruffleString, ConstCharPtrAsTruffleString, Pointer, Int}, call = Ignored)
-    abstract static class PyTruffleStructSequence_NewType extends CApiQuaternaryBuiltinNode {
+    abstract static class GraalPyPrivate_StructSequence_NewType extends CApiQuaternaryBuiltinNode {
 
         @Specialization
         @TruffleBoundary
         Object doGeneric(TruffleString typeName, TruffleString typeDoc, Object fields, int nInSequence,
-                        @Cached PyTruffleStructSequence_InitType2 initNode,
-                        @Cached ReadAttributeFromObjectNode readTypeBuiltinNode,
+                        @Cached GraalPyPrivate_StructSequence_InitType2 initNode,
+                        @Cached ReadAttributeFromModuleNode readTypeBuiltinNode,
                         @CachedLibrary(limit = "1") DynamicObjectLibrary dylib,
                         @Cached CallNode callTypeNewNode,
                         @Bind PythonLanguage language) {
@@ -158,8 +159,8 @@ public final class PythonCextStructSeqBuiltins {
 
         @Specialization
         static Object doGeneric(Object cls,
-                        @Bind("this") Node inliningTarget,
-                        @Cached("createForceType()") ReadAttributeFromObjectNode readRealSizeNode,
+                        @Bind Node inliningTarget,
+                        @Cached ReadAttributeFromObjectNode readRealSizeNode,
                         @Cached CastToJavaIntExactNode castToIntNode,
                         @Bind PythonLanguage language,
                         @Cached TypeNodes.GetInstanceShape getInstanceShape,

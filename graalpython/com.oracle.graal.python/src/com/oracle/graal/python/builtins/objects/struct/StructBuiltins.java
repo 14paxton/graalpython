@@ -75,11 +75,11 @@ import com.oracle.graal.python.annotations.ArgumentClinic;
 import com.oracle.graal.python.annotations.Slot;
 import com.oracle.graal.python.annotations.Slot.SlotKind;
 import com.oracle.graal.python.annotations.Slot.SlotSignature;
-import com.oracle.graal.python.builtins.Builtin;
+import com.oracle.graal.python.annotations.Builtin;
 import com.oracle.graal.python.builtins.CoreFunctions;
 import com.oracle.graal.python.builtins.PythonBuiltinClassType;
 import com.oracle.graal.python.builtins.PythonBuiltins;
-import com.oracle.graal.python.builtins.PythonOS;
+import com.oracle.graal.python.annotations.PythonOS;
 import com.oracle.graal.python.builtins.modules.StructModuleBuiltins;
 import com.oracle.graal.python.builtins.objects.PNone;
 import com.oracle.graal.python.builtins.objects.buffer.PythonBufferAccessLibrary;
@@ -209,12 +209,12 @@ public class StructBuiltins extends PythonBuiltins {
             setFormatDefEntry(FMT_TABLE_NATIVE, FMT_INT, T_LBL_INT, Integer.BYTES, INT_ALIGN, numBytes);
             setFormatDefEntry(FMT_TABLE_NATIVE, FMT_UNSIGNED_INT, T_LBL_UNSIGNED_INT, Integer.BYTES, INT_ALIGN, numBytes);
             setFormatDefEntry(FMT_TABLE_NATIVE, FMT_LONG, T_LBL_LONG,
-                            PythonOS.getPythonOS() == PythonOS.PLATFORM_WIN32 ? Integer.BYTES : Long.BYTES,
-                            PythonOS.getPythonOS() == PythonOS.PLATFORM_WIN32 ? INT_ALIGN : LONG_ALIGN,
+                            PythonLanguage.getPythonOS() == PythonOS.PLATFORM_WIN32 ? Integer.BYTES : Long.BYTES,
+                            PythonLanguage.getPythonOS() == PythonOS.PLATFORM_WIN32 ? INT_ALIGN : LONG_ALIGN,
                             numBytes);
             setFormatDefEntry(FMT_TABLE_NATIVE, FMT_UNSIGNED_LONG, T_LBL_UNSIGNED_LONG,
-                            PythonOS.getPythonOS() == PythonOS.PLATFORM_WIN32 ? Integer.BYTES : Long.BYTES,
-                            PythonOS.getPythonOS() == PythonOS.PLATFORM_WIN32 ? INT_ALIGN : LONG_ALIGN,
+                            PythonLanguage.getPythonOS() == PythonOS.PLATFORM_WIN32 ? Integer.BYTES : Long.BYTES,
+                            PythonLanguage.getPythonOS() == PythonOS.PLATFORM_WIN32 ? INT_ALIGN : LONG_ALIGN,
                             numBytes);
             setFormatDefEntry(FMT_TABLE_NATIVE, FMT_SIZE_T, T_LBL_SIZE_T, Long.BYTES, LONG_ALIGN, numBytes);
             setFormatDefEntry(FMT_TABLE_NATIVE, FMT_UNSIGNED_SIZE_T, T_LBL_UNSIGNED_SIZE_T, Long.BYTES, LONG_ALIGN, numBytes);
@@ -246,7 +246,7 @@ public class StructBuiltins extends PythonBuiltins {
 
         @Specialization(guards = "isAscii(format, getCodeRangeNode)")
         static PStruct struct(@SuppressWarnings("unused") Object cls, TruffleString format,
-                        @Bind("this") Node inliningTarget,
+                        @Bind Node inliningTarget,
                         @Cached.Shared @Cached TruffleString.CopyToByteArrayNode copyToByteArrayNode,
                         @Cached.Shared @Cached TruffleString.SwitchEncodingNode switchEncodingNode,
                         @SuppressWarnings("unused") @Cached.Shared @Cached TruffleString.GetCodeRangeNode getCodeRangeNode) {
@@ -256,7 +256,7 @@ public class StructBuiltins extends PythonBuiltins {
 
         @Specialization
         static PStruct struct(Object cls, PString format,
-                        @Bind("this") Node inliningTarget,
+                        @Bind Node inliningTarget,
                         @Cached CastToTruffleStringNode castToTruffleStringNode,
                         @Cached.Shared @Cached TruffleString.CopyToByteArrayNode copyToByteArrayNode,
                         @Cached.Shared @Cached TruffleString.SwitchEncodingNode switchEncodingNode,
@@ -266,7 +266,7 @@ public class StructBuiltins extends PythonBuiltins {
 
         @Specialization(limit = "1")
         static PStruct struct(@SuppressWarnings("unused") Object cls, PBytes format,
-                        @Bind("this") Node inliningTarget,
+                        @Bind Node inliningTarget,
                         @CachedLibrary("format") PythonBufferAccessLibrary bufferLib) {
             byte[] fmt = bufferLib.getCopiedByteArray(format);
             return PFactory.createStruct(PythonLanguage.get(inliningTarget), createStructInternal(inliningTarget, fmt));
@@ -275,7 +275,7 @@ public class StructBuiltins extends PythonBuiltins {
         @Specialization(guards = {"!isPBytes(format)", "!isPString(format)", "!isAsciiTruffleString(format, getCodeRangeNode)"})
         static PStruct fallback(@SuppressWarnings("unused") Object cls, Object format,
                         @SuppressWarnings("unused") @Cached.Shared @Cached TruffleString.GetCodeRangeNode getCodeRangeNode,
-                        @Bind("this") Node inliningTarget) {
+                        @Bind Node inliningTarget) {
             throw PRaiseNode.raiseStatic(inliningTarget, StructError, ARG_MUST_BE_STR_OR_BYTES, "Struct()", format);
         }
 
@@ -447,7 +447,7 @@ public class StructBuiltins extends PythonBuiltins {
 
         @Specialization
         static Object pack(VirtualFrame frame, PStruct self, Object[] args, PKeyword[] keywords,
-                        @Bind("this") Node inliningTarget,
+                        @Bind Node inliningTarget,
                         @Bind PythonLanguage language,
                         @Cached StructNodes.PackValueNode packValueNode,
                         @Cached PRaiseNode raiseNode) {
@@ -477,8 +477,8 @@ public class StructBuiltins extends PythonBuiltins {
 
         @Specialization(limit = "3")
         static Object packInto(VirtualFrame frame, PStruct self, Object buffer, int offset, Object[] args,
-                        @Bind("this") Node inliningTarget,
-                        @Cached("createFor(this)") IndirectCallData indirectCallData,
+                        @Bind Node inliningTarget,
+                        @Cached("createFor($node)") IndirectCallData indirectCallData,
                         @CachedLibrary("buffer") PythonBufferAccessLibrary bufferLib,
                         @Cached StructNodes.PackValueNode packValueNode,
                         @Cached PRaiseNode raiseNode) {
@@ -550,9 +550,9 @@ public class StructBuiltins extends PythonBuiltins {
 
         @Specialization(limit = "3")
         static Object unpack(VirtualFrame frame, PStruct self, Object buffer,
-                        @Bind("this") Node inliningTarget,
+                        @Bind Node inliningTarget,
                         @Bind PythonLanguage language,
-                        @Cached("createFor(this)") IndirectCallData indirectCallData,
+                        @Cached("createFor($node)") IndirectCallData indirectCallData,
                         @CachedLibrary("buffer") PythonBufferAccessLibrary bufferLib,
                         @Cached StructNodes.UnpackValueNode unpackValueNode,
                         @Cached PRaiseNode raiseNode) {
@@ -582,9 +582,9 @@ public class StructBuiltins extends PythonBuiltins {
 
         @Specialization(limit = "3")
         static Object iterUnpack(VirtualFrame frame, PStruct self, Object buffer,
-                        @Bind("this") Node inliningTarget,
+                        @Bind Node inliningTarget,
                         @Bind PythonLanguage language,
-                        @Cached("createFor(this)") IndirectCallData indirectCallData,
+                        @Cached("createFor($node)") IndirectCallData indirectCallData,
                         @CachedLibrary("buffer") PythonBufferAccessLibrary bufferLib,
                         @Cached PRaiseNode raiseNode) {
             try {
@@ -621,9 +621,9 @@ public class StructBuiltins extends PythonBuiltins {
 
         @Specialization(limit = "3")
         static Object unpackFrom(VirtualFrame frame, PStruct self, Object buffer, int offset,
-                        @Bind("this") Node inliningTarget,
+                        @Bind Node inliningTarget,
                         @Bind PythonLanguage language,
-                        @Cached("createFor(this)") IndirectCallData indirectCallData,
+                        @Cached("createFor($node)") IndirectCallData indirectCallData,
                         @CachedLibrary("buffer") PythonBufferAccessLibrary bufferLib,
                         @Cached StructNodes.UnpackValueNode unpackValueNode,
                         @Cached PRaiseNode raiseNode) {

@@ -56,14 +56,13 @@ import com.oracle.graal.python.nodes.PRootNode;
 import com.oracle.graal.python.nodes.bytecode.PBytecodeGeneratorFunctionRootNode;
 import com.oracle.graal.python.nodes.bytecode.PBytecodeRootNode;
 import com.oracle.graal.python.nodes.bytecode_dsl.BytecodeDSLCodeUnit;
-import com.oracle.graal.python.nodes.bytecode_dsl.PBytecodeDSLGeneratorFunctionRootNode;
-import com.oracle.graal.python.nodes.bytecode_dsl.PBytecodeDSLRootNode;
 import com.oracle.graal.python.nodes.util.BadOPCodeNode;
 import com.oracle.graal.python.runtime.ExecutionContext.IndirectCallContext;
 import com.oracle.graal.python.runtime.IndirectCallData;
 import com.oracle.graal.python.runtime.PythonContext;
 import com.oracle.graal.python.runtime.PythonOptions;
 import com.oracle.graal.python.runtime.object.PFactory;
+import com.oracle.graal.python.util.LazySource;
 import com.oracle.graal.python.util.PythonUtils;
 import com.oracle.graal.python.util.Supplier;
 import com.oracle.truffle.api.CallTarget;
@@ -162,9 +161,6 @@ public abstract class CodeNodes {
             if (PythonOptions.ENABLE_BYTECODE_DSL_INTERPRETER) {
                 BytecodeDSLCodeUnit code = (BytecodeDSLCodeUnit) codeUnit;
                 rootNode = code.createRootNode(context, PythonUtils.createFakeSource());
-                if (code.isGeneratorOrCoroutine()) {
-                    rootNode = new PBytecodeDSLGeneratorFunctionRootNode(language, rootNode.getFrameDescriptor(), (PBytecodeDSLRootNode) rootNode, code.name);
-                }
             } else {
                 BytecodeCodeUnit code = (BytecodeCodeUnit) codeUnit;
                 if (cellvars != null && !Arrays.equals(code.cellvars, cellvars) || freevars != null && !Arrays.equals(code.freevars, freevars)) {
@@ -173,10 +169,10 @@ public abstract class CodeNodes {
                                     code.constants, code.startLine,
                                     code.startColumn, code.endLine, code.endColumn, code.code, code.srcOffsetTable,
                                     code.primitiveConstants, code.exceptionHandlerRanges, code.stacksize, code.conditionProfileCount,
-                                    code.outputCanQuicken, code.variableShouldUnbox,
-                                    code.generalizeInputsMap, code.generalizeVarsMap);
+                                    code.variableShouldUnbox,
+                                    code.generalizeInputsKeys, code.generalizeInputsIndices, code.generalizeInputsValues, code.generalizeVarsIndices, code.generalizeVarsValues);
                 }
-                rootNode = PBytecodeRootNode.create(context.getLanguage(), code, PythonUtils.createFakeSource());
+                rootNode = PBytecodeRootNode.create(context.getLanguage(), code, new LazySource(PythonUtils.createFakeSource()), false);
                 if (code.isGeneratorOrCoroutine()) {
                     rootNode = new PBytecodeGeneratorFunctionRootNode(context.getLanguage(), rootNode.getFrameDescriptor(), (PBytecodeRootNode) rootNode, code.name);
                 }

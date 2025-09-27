@@ -41,10 +41,10 @@ import java.math.BigInteger;
 import java.util.List;
 
 import com.oracle.graal.python.PythonLanguage;
+import com.oracle.graal.python.annotations.Builtin;
 import com.oracle.graal.python.annotations.Slot;
 import com.oracle.graal.python.annotations.Slot.SlotKind;
 import com.oracle.graal.python.annotations.Slot.SlotSignature;
-import com.oracle.graal.python.builtins.Builtin;
 import com.oracle.graal.python.builtins.CoreFunctions;
 import com.oracle.graal.python.builtins.PythonBuiltinClassType;
 import com.oracle.graal.python.builtins.PythonBuiltins;
@@ -80,7 +80,7 @@ import com.oracle.graal.python.nodes.util.CastToTruffleStringNode;
 import com.oracle.graal.python.runtime.exception.PException;
 import com.oracle.graal.python.runtime.object.PFactory;
 import com.oracle.graal.python.util.OverflowException;
-import com.oracle.truffle.api.CompilerDirectives;
+import com.oracle.truffle.api.CompilerDirectives.TruffleBoundary;
 import com.oracle.truffle.api.dsl.Bind;
 import com.oracle.truffle.api.dsl.Cached;
 import com.oracle.truffle.api.dsl.Cached.Shared;
@@ -116,7 +116,7 @@ public final class ReversedBuiltins extends PythonBuiltins {
 
         @Specialization
         static PythonObject reversed(@SuppressWarnings("unused") Object cls, PIntRange range,
-                        @Bind("this") Node inliningTarget,
+                        @Bind Node inliningTarget,
                         @Bind PythonLanguage language,
                         @Cached InlinedBranchProfile overflowProfile) {
             int lstart = range.getIntStart();
@@ -132,7 +132,7 @@ public final class ReversedBuiltins extends PythonBuiltins {
             }
         }
 
-        @CompilerDirectives.TruffleBoundary
+        @TruffleBoundary
         private static PBigRangeIterator handleOverflow(PythonLanguage language, int lstart, int lstep, int ulen) {
             BigInteger bstart = BigInteger.valueOf(lstart);
             BigInteger bstep = BigInteger.valueOf(lstep);
@@ -144,7 +144,7 @@ public final class ReversedBuiltins extends PythonBuiltins {
         }
 
         @Specialization
-        @CompilerDirectives.TruffleBoundary
+        @TruffleBoundary
         static PythonObject reversed(@SuppressWarnings("unused") Object cls, PBigRange range) {
             BigInteger lstart = range.getBigIntegerStart();
             BigInteger lstep = range.getBigIntegerStep();
@@ -158,23 +158,23 @@ public final class ReversedBuiltins extends PythonBuiltins {
 
         @Specialization
         static PythonObject reversed(Object cls, PString value,
-                        @Bind("this") Node inliningTarget,
+                        @Bind Node inliningTarget,
                         @Cached CastToTruffleStringNode castToStringNode,
                         @Bind PythonLanguage language,
-                        @Cached TypeNodes.GetInstanceShape getInstanceShape) {
+                        @Cached @Shared TypeNodes.GetInstanceShape getInstanceShape) {
             return PFactory.createStringReverseIterator(language, cls, getInstanceShape.execute(cls), castToStringNode.execute(inliningTarget, value));
         }
 
         @Specialization
         static PythonObject reversed(Object cls, TruffleString value,
                         @Bind PythonLanguage language,
-                        @Cached TypeNodes.GetInstanceShape getInstanceShape) {
+                        @Cached @Shared TypeNodes.GetInstanceShape getInstanceShape) {
             return PFactory.createStringReverseIterator(language, cls, getInstanceShape.execute(cls), value);
         }
 
         @Specialization(guards = {"!isString(sequence)", "!isPRange(sequence)"})
         static Object reversed(VirtualFrame frame, Object cls, Object sequence,
-                        @Bind("this") Node inliningTarget,
+                        @Bind Node inliningTarget,
                         @Cached GetClassNode getClassNode,
                         @Cached("create(T___REVERSED__)") LookupSpecialMethodNode lookupReversed,
                         @Cached CallUnaryMethodNode callReversed,
@@ -182,7 +182,7 @@ public final class ReversedBuiltins extends PythonBuiltins {
                         @Cached InlinedConditionProfile noReversedProfile,
                         @Cached PySequenceCheckNode pySequenceCheck,
                         @Bind PythonLanguage language,
-                        @Cached TypeNodes.GetInstanceShape getInstanceShape,
+                        @Cached @Shared TypeNodes.GetInstanceShape getInstanceShape,
                         @Cached PRaiseNode raiseNode) {
             Object sequenceKlass = getClassNode.execute(inliningTarget, sequence);
             Object reversed = lookupReversed.execute(frame, sequenceKlass, sequence);
@@ -210,7 +210,7 @@ public final class ReversedBuiltins extends PythonBuiltins {
 
         @Specialization(guards = "!self.isExhausted()")
         static Object next(VirtualFrame frame, PSequenceReverseIterator self,
-                        @Bind("this") Node inliningTarget,
+                        @Bind Node inliningTarget,
                         @Cached PySequenceGetItemNode getItemNode,
                         @Cached IsBuiltinObjectProfile profile) {
             if (self.index >= 0) {
@@ -261,10 +261,10 @@ public final class ReversedBuiltins extends PythonBuiltins {
 
         @Specialization(guards = {"!self.isExhausted()", "self.isPSequence()"})
         static int lengthHint(PSequenceReverseIterator self,
-                        @Bind("this") Node inliningTarget,
-                        @Cached SequenceNodes.LenNode lenNode,
+                        @Bind Node inliningTarget,
+                        @Cached SequenceNodes.GetSequenceStorageNode getSequenceStorageNode,
                         @Cached PRaiseNode raiseNode) {
-            int len = lenNode.execute(inliningTarget, self.getPSequence());
+            int len = getSequenceStorageNode.execute(inliningTarget, self.getPSequence()).length();
             if (len == -1) {
                 throw raiseNode.raise(inliningTarget, TypeError, OBJ_HAS_NO_LEN, self);
             }
@@ -276,7 +276,7 @@ public final class ReversedBuiltins extends PythonBuiltins {
 
         @Specialization(guards = {"!self.isExhausted()", "!self.isPSequence()"})
         static int lengthHint(VirtualFrame frame, PSequenceReverseIterator self,
-                        @Bind("this") Node inliningTarget,
+                        @Bind Node inliningTarget,
                         @Cached PyObjectSizeNode sizeNode) {
             int len = sizeNode.execute(frame, inliningTarget, self.getObject());
             if (len < self.index) {
@@ -292,7 +292,7 @@ public final class ReversedBuiltins extends PythonBuiltins {
 
         @Specialization
         static Object reduce(PStringReverseIterator self,
-                        @Bind("this") Node inliningTarget,
+                        @Bind Node inliningTarget,
                         @Shared("getClassNode") @Cached GetClassNode getClassNode,
                         @Bind PythonLanguage language) {
             if (self.isExhausted()) {
@@ -303,7 +303,7 @@ public final class ReversedBuiltins extends PythonBuiltins {
 
         @Specialization(guards = "self.isPSequence()")
         static Object reduce(PSequenceReverseIterator self,
-                        @Bind("this") Node inliningTarget,
+                        @Bind Node inliningTarget,
                         @Shared("getClassNode") @Cached GetClassNode getClassNode,
                         @Bind PythonLanguage language) {
             if (self.isExhausted()) {
@@ -314,7 +314,7 @@ public final class ReversedBuiltins extends PythonBuiltins {
 
         @Specialization(guards = "!self.isPSequence()")
         static Object reduce(VirtualFrame frame, PSequenceReverseIterator self,
-                        @Bind("this") Node inliningTarget,
+                        @Bind Node inliningTarget,
                         @Cached("create(T___REDUCE__)") LookupAndCallUnaryNode callReduce,
                         @Shared("getClassNode") @Cached GetClassNode getClassNode,
                         @Bind PythonLanguage language) {
@@ -339,7 +339,7 @@ public final class ReversedBuiltins extends PythonBuiltins {
     public abstract static class SetStateNode extends PythonBinaryBuiltinNode {
         @Specialization
         public static Object setState(VirtualFrame frame, PBuiltinIterator self, Object index,
-                        @Bind("this") Node inliningTarget,
+                        @Bind Node inliningTarget,
                         @Cached PyNumberAsSizeNode asSizeNode) {
             int idx = asSizeNode.executeExact(frame, inliningTarget, index);
             if (idx < -1) {

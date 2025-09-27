@@ -82,7 +82,7 @@ public abstract class PyObjectDelItem extends Node {
 
     public abstract void execute(Frame frame, Node inliningTarget, Object container, Object index);
 
-    @Specialization(guards = "isBuiltinList(object)")
+    @Specialization(guards = "isBuiltinList(object)", excludeForUncached = true)
     static void doList(VirtualFrame frame, PList object, Object key,
                     @Cached(inline = false) ListBuiltins.SetSubscriptNode setItemNode) {
         setItemNode.executeVoid(frame, object, key, PNone.NO_VALUE);
@@ -127,7 +127,7 @@ public abstract class PyObjectDelItem extends Node {
         @Fallback
         @InliningCutoff
         static void error(Object object, @SuppressWarnings("unused") TpSlots slots, @SuppressWarnings("unused") Object key,
-                        @Bind("this") Node inliningTarget) {
+                        @Bind Node inliningTarget) {
             throw PRaiseNode.raiseStatic(inliningTarget, TypeError, ErrorMessages.OBJ_DOES_NOT_SUPPORT_ITEM_DELETION, object);
         }
     }

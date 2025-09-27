@@ -44,7 +44,7 @@ import static com.oracle.graal.python.nodes.BuiltinNames.J__CONTEXTVARS;
 
 import java.util.List;
 
-import com.oracle.graal.python.builtins.Builtin;
+import com.oracle.graal.python.annotations.Builtin;
 import com.oracle.graal.python.builtins.CoreFunctions;
 import com.oracle.graal.python.builtins.PythonBuiltins;
 import com.oracle.graal.python.builtins.objects.contextvars.PContextVarsContext;
@@ -71,7 +71,7 @@ public final class ContextvarsModuleBuiltins extends PythonBuiltins {
     public abstract static class GetDefaultEncodingNode extends PythonBuiltinNode {
         @Specialization
         protected static PContextVarsContext copyCtx(
-                        @Bind("this") Node inliningTarget,
+                        @Bind Node inliningTarget,
                         @Cached PyContextCopyCurrent copyCurrent) {
             return copyCurrent.execute(inliningTarget);
         }

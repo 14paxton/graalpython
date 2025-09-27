@@ -78,7 +78,7 @@ import com.oracle.graal.python.annotations.ArgumentClinic.ClinicConversion;
 import com.oracle.graal.python.annotations.Slot;
 import com.oracle.graal.python.annotations.Slot.SlotKind;
 import com.oracle.graal.python.annotations.Slot.SlotSignature;
-import com.oracle.graal.python.builtins.Builtin;
+import com.oracle.graal.python.annotations.Builtin;
 import com.oracle.graal.python.builtins.CoreFunctions;
 import com.oracle.graal.python.builtins.PythonBuiltinClassType;
 import com.oracle.graal.python.builtins.PythonBuiltins;
@@ -141,7 +141,6 @@ import com.oracle.truffle.api.TruffleLanguage;
 import com.oracle.truffle.api.dsl.Bind;
 import com.oracle.truffle.api.dsl.Cached;
 import com.oracle.truffle.api.dsl.Cached.Exclusive;
-import com.oracle.truffle.api.dsl.Cached.Shared;
 import com.oracle.truffle.api.dsl.GenerateNodeFactory;
 import com.oracle.truffle.api.dsl.GenerateUncached;
 import com.oracle.truffle.api.dsl.NodeFactory;
@@ -202,7 +201,7 @@ public final class MMapBuiltins extends PythonBuiltins {
         // mmap(fileno, length, tagname=None, access=ACCESS_DEFAULT[, offset=0])
         @Specialization(guards = "!isIllegal(fd)")
         static PMMap doFile(VirtualFrame frame, Object clazz, int fd, long lengthIn, int flagsIn, int protIn, @SuppressWarnings("unused") int accessIn, long offset,
-                        @Bind("this") Node inliningTarget,
+                        @Bind Node inliningTarget,
                         @Cached SysModuleBuiltins.AuditNode auditNode,
                         @CachedLibrary("getPosixSupport()") PosixSupportLibrary posixSupport,
                         @Cached PConstructAndRaiseNode.Lazy constructAndRaiseNode,
@@ -298,7 +297,7 @@ public final class MMapBuiltins extends PythonBuiltins {
         @Specialization(guards = "isIllegal(fd)")
         @SuppressWarnings("unused")
         static PMMap doIllegal(Object clazz, int fd, long lengthIn, int flagsIn, int protIn, int accessIn, long offset,
-                        @Bind("this") Node inliningTarget) {
+                        @Bind Node inliningTarget) {
             throw PRaiseNode.raiseStatic(inliningTarget, PythonBuiltinClassType.OSError);
         }
 
@@ -312,7 +311,7 @@ public final class MMapBuiltins extends PythonBuiltins {
     public abstract static class MMapSqItemNode extends SqItemBuiltinNode {
         @Specialization
         static PBytes doInt(VirtualFrame frame, PMMap self, int index,
-                        @Bind("this") Node inliningTarget,
+                        @Bind Node inliningTarget,
                         @Bind PythonContext context,
                         @Cached PRaiseNode raiseNode,
                         @Cached PConstructAndRaiseNode.Lazy constructAndRaiseNode,
@@ -336,7 +335,7 @@ public final class MMapBuiltins extends PythonBuiltins {
 
         @Specialization(guards = "!isPSlice(idxObj)")
         static int doSingle(VirtualFrame frame, PMMap self, Object idxObj,
-                        @Bind("this") Node inliningTarget,
+                        @Bind Node inliningTarget,
                         @Bind PythonContext context,
                         @Exclusive @Cached InlinedConditionProfile negativeIndexProfile,
                         @CachedLibrary("context.getPosixSupport()") PosixSupportLibrary posixSupportLib,
@@ -356,7 +355,7 @@ public final class MMapBuiltins extends PythonBuiltins {
 
         @Specialization
         static Object doSlice(VirtualFrame frame, PMMap self, PSlice idx,
-                        @Bind("this") Node inliningTarget,
+                        @Bind Node inliningTarget,
                         @Bind PythonContext context,
                         @CachedLibrary("context.getPosixSupport()") PosixSupportLibrary posixSupportLib,
                         @Exclusive @Cached InlinedConditionProfile emptyProfile,
@@ -385,7 +384,7 @@ public final class MMapBuiltins extends PythonBuiltins {
 
         @Specialization
         static void doSingle(VirtualFrame frame, PMMap self, int index, Object val,
-                        @Bind("this") Node inliningTarget,
+                        @Bind Node inliningTarget,
                         @Bind PythonContext context,
                         @CachedLibrary("context.getPosixSupport()") PosixSupportLibrary posixSupportLib,
                         @CachedLibrary(limit = "1") PythonBufferAccessLibrary bufferLib,
@@ -426,13 +425,13 @@ public final class MMapBuiltins extends PythonBuiltins {
 
         @Specialization(guards = "!isPSlice(idxObj)")
         static void doSingle(VirtualFrame frame, PMMap self, Object idxObj, Object valueObj,
-                        @Bind("this") Node inliningTarget,
+                        @Bind Node inliningTarget,
                         @Bind PythonContext context,
                         @CachedLibrary("context.getPosixSupport()") PosixSupportLibrary posixSupportLib,
                         @Cached PyIndexCheckNode checkNode,
                         @Cached PyNumberAsSizeNode asSizeNode,
-                        @Shared @Cached PConstructAndRaiseNode.Lazy constructAndRaiseNode,
-                        @Shared @Cached PRaiseNode raiseNode) {
+                        @Exclusive @Cached PConstructAndRaiseNode.Lazy constructAndRaiseNode,
+                        @Exclusive @Cached PRaiseNode raiseNode) {
             // NB: sq_ass_item and mp_ass_subscript implementations behave differently even with
             // integer indices
             if (self.isClosed()) {
@@ -467,9 +466,10 @@ public final class MMapBuiltins extends PythonBuiltins {
             }
         }
 
+        // @Exclusive for truffle-interpreted-performance
         @Specialization
         static void doSlice(VirtualFrame frame, PMMap self, PSlice slice, Object valueObj,
-                        @Bind("this") Node inliningTarget,
+                        @Bind Node inliningTarget,
                         @Bind PythonContext context,
                         @CachedLibrary("context.getPosixSupport()") PosixSupportLibrary posixSupportLib,
                         @CachedLibrary(limit = "3") PythonBufferAcquireLibrary acquireLib,
@@ -477,8 +477,8 @@ public final class MMapBuiltins extends PythonBuiltins {
                         @Cached SliceNodes.SliceUnpack sliceUnpack,
                         @Cached SliceNodes.AdjustIndices adjustIndices,
                         @Cached InlinedConditionProfile step1Profile,
-                        @Shared @Cached PConstructAndRaiseNode.Lazy constructAndRaiseNode,
-                        @Shared @Cached PRaiseNode raiseNode) {
+                        @Exclusive @Cached PConstructAndRaiseNode.Lazy constructAndRaiseNode,
+                        @Exclusive @Cached PRaiseNode raiseNode) {
             if (self.isClosed()) {
                 throw raiseNode.raise(inliningTarget, PythonBuiltinClassType.ValueError, MMAP_CLOSED_OR_INVALID);
             }
@@ -528,7 +528,7 @@ public final class MMapBuiltins extends PythonBuiltins {
     public abstract static class LenNode extends LenBuiltinNode {
         @Specialization
         static int len(PMMap self,
-                        @Bind("this") Node inliningTarget,
+                        @Bind Node inliningTarget,
                         @Cached PRaiseNode raiseNode) {
             return PyNumberAsSizeNode.doLongExact(inliningTarget, self.getLength(), PythonBuiltinClassType.OverflowError, raiseNode);
         }
@@ -595,7 +595,7 @@ public final class MMapBuiltins extends PythonBuiltins {
         @Specialization
         @SuppressWarnings("unused")
         static long resize(PMMap self, Object n,
-                        @Bind("this") Node inliningTarget) {
+                        @Bind Node inliningTarget) {
             // TODO: implement resize in NFI
             throw PRaiseNode.raiseStatic(inliningTarget, PythonBuiltinClassType.SystemError, ErrorMessages.RESIZING_NOT_AVAILABLE);
         }
@@ -616,7 +616,7 @@ public final class MMapBuiltins extends PythonBuiltins {
 
         @Specialization
         static int readByte(VirtualFrame frame, PMMap self,
-                        @Bind("this") Node inliningTarget,
+                        @Bind Node inliningTarget,
                         @Bind PythonContext context,
                         @CachedLibrary("context.getPosixSupport()") PosixSupportLibrary posixSupportLib,
                         @Cached PConstructAndRaiseNode.Lazy constructAndRaiseNode,
@@ -640,7 +640,7 @@ public final class MMapBuiltins extends PythonBuiltins {
 
         @Specialization
         static PBytes read(VirtualFrame frame, PMMap self, Object n,
-                        @Bind("this") Node inliningTarget,
+                        @Bind Node inliningTarget,
                         @Bind PythonContext context,
                         @Cached InlinedConditionProfile noneProfile,
                         @Cached InlinedConditionProfile emptyProfile,
@@ -687,7 +687,7 @@ public final class MMapBuiltins extends PythonBuiltins {
 
         @Specialization
         static Object readline(VirtualFrame frame, PMMap self,
-                        @Bind("this") Node inliningTarget,
+                        @Bind Node inliningTarget,
                         @Bind PythonContext context,
                         @CachedLibrary("context.getPosixSupport()") PosixSupportLibrary posixLib,
                         @Cached SequenceStorageNodes.AppendNode appendNode,
@@ -730,9 +730,9 @@ public final class MMapBuiltins extends PythonBuiltins {
 
         @Specialization(limit = "3")
         static int doIt(VirtualFrame frame, PMMap self, Object dataBuffer,
-                        @Bind("this") Node inliningTarget,
+                        @Bind Node inliningTarget,
                         @Bind PythonContext context,
-                        @Cached("createFor(this)") IndirectCallData indirectCallData,
+                        @Cached("createFor($node)") IndirectCallData indirectCallData,
                         @CachedLibrary("dataBuffer") PythonBufferAccessLibrary bufferLib,
                         @CachedLibrary("context.getPosixSupport()") PosixSupportLibrary posixLib,
                         @Cached PConstructAndRaiseNode.Lazy constructAndRaiseNode,
@@ -769,7 +769,7 @@ public final class MMapBuiltins extends PythonBuiltins {
 
         @Specialization
         static Object seek(PMMap self, long dist, int how,
-                        @Bind("this") Node inliningTarget,
+                        @Bind Node inliningTarget,
                         @Cached InlinedBranchProfile errorProfile,
                         @Cached PRaiseNode raiseNode) {
             long where;
@@ -808,9 +808,9 @@ public final class MMapBuiltins extends PythonBuiltins {
 
         @Specialization(limit = "3")
         static long find(VirtualFrame frame, PMMap self, Object subBuffer, Object startIn, Object endIn,
-                        @Bind("this") Node inliningTarget,
+                        @Bind Node inliningTarget,
                         @Bind PythonContext context,
-                        @Cached("createFor(this)") IndirectCallData indirectCallData,
+                        @Cached("createFor($node)") IndirectCallData indirectCallData,
                         @CachedLibrary("subBuffer") PythonBufferAccessLibrary bufferLib,
                         @Cached LongIndexConverterNode startConverter,
                         @Cached LongIndexConverterNode endConverter,
@@ -917,7 +917,7 @@ public final class MMapBuiltins extends PythonBuiltins {
 
         @Specialization
         static Object flush(VirtualFrame frame, PMMap self, long offset, Object sizeObj,
-                        @Bind("this") Node inliningTarget,
+                        @Bind Node inliningTarget,
                         @Bind PythonContext context,
                         @Cached LongIndexConverterNode sizeConversion,
                         @CachedLibrary("context.getPosixSupport()") PosixSupportLibrary posixLib,

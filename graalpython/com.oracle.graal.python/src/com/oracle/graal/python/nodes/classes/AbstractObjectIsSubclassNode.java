@@ -50,6 +50,7 @@ import com.oracle.truffle.api.CompilerDirectives;
 import com.oracle.truffle.api.dsl.Bind;
 import com.oracle.truffle.api.dsl.Cached;
 import com.oracle.truffle.api.dsl.Cached.Shared;
+import com.oracle.truffle.api.dsl.GenerateInline;
 import com.oracle.truffle.api.dsl.GenerateUncached;
 import com.oracle.truffle.api.dsl.ImportStatic;
 import com.oracle.truffle.api.dsl.NeverDefault;
@@ -61,7 +62,7 @@ import com.oracle.truffle.api.nodes.Node;
 
 @GenerateUncached
 @ImportStatic(PythonOptions.class)
-@SuppressWarnings("truffle-inlining")       // footprint reduction 44 -> 26
+@GenerateInline(false)       // footprint reduction 44 -> 26
 public abstract class AbstractObjectIsSubclassNode extends PNodeWithContext {
     static final int MAX_RECURSION = 3; // Don't use PythonOptions to avoid language reference
 
@@ -83,7 +84,7 @@ public abstract class AbstractObjectIsSubclassNode extends PNodeWithContext {
     @Specialization(guards = "isSameMetaObject(inliningTarget, isSameTypeNode, derived, cls)")
     @SuppressWarnings("unused")
     static boolean doSameClass(Object derived, Object cls, @SuppressWarnings("unused") int depth,
-                    @Bind("this") Node inliningTarget,
+                    @Bind Node inliningTarget,
                     @Shared("isSameType") @Cached IsSameTypeNode isSameTypeNode) {
         return true;
     }
@@ -97,7 +98,7 @@ public abstract class AbstractObjectIsSubclassNode extends PNodeWithContext {
     @Specialization(guards = {"depth < MAX_RECURSION", "!isSameMetaObject(inliningTarget, isSameTypeNode, derived, cls)", "derived == cachedDerived",
                     "cls == cachedCls"}, limit = "getCallSiteInlineCacheMaxDepth()")
     static boolean doSubclass(VirtualFrame frame, @SuppressWarnings("unused") Object derived, @SuppressWarnings("unused") Object cls, int depth,
-                    @Bind("this") Node inliningTarget,
+                    @Bind Node inliningTarget,
                     @Cached(value = "observedSize()", dimensions = 1) int[] observedSizeArray,
                     @Cached("derived") Object cachedDerived,
                     @Cached("cls") Object cachedCls,
@@ -148,7 +149,7 @@ public abstract class AbstractObjectIsSubclassNode extends PNodeWithContext {
 
     @Specialization(replaces = {"doSubclass", "doSameClass"})
     static boolean doGeneric(VirtualFrame frame, Object derived, Object cls, int depth,
-                    @Bind("this") Node inliningTarget,
+                    @Bind Node inliningTarget,
                     @Shared @Cached AbstractObjectGetBasesNode getBasesNode,
                     @Cached("createRecursive(depth)") AbstractObjectIsSubclassNode isSubclassNode,
                     @Shared("isSameType") @Cached IsSameTypeNode isSameTypeNode,

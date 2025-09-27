@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2018, 2024, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2018, 2025, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * The Universal Permissive License (UPL), Version 1.0
@@ -52,6 +52,7 @@ import com.oracle.truffle.api.CompilerDirectives;
 import com.oracle.truffle.api.dsl.Bind;
 import com.oracle.truffle.api.dsl.Cached;
 import com.oracle.truffle.api.dsl.Cached.Shared;
+import com.oracle.truffle.api.dsl.GenerateInline;
 import com.oracle.truffle.api.dsl.GenerateUncached;
 import com.oracle.truffle.api.dsl.Specialization;
 import com.oracle.truffle.api.interop.InteropLibrary;
@@ -65,7 +66,7 @@ import com.oracle.truffle.api.strings.TruffleString;
  * because the object is not a Python string, the node will throw a {@link CannotCastException}.
  */
 @GenerateUncached
-@SuppressWarnings("truffle-inlining")       // footprint reduction 36 -> 17
+@GenerateInline(false)       // footprint reduction 36 -> 17
 public abstract class CastToJavaStringNode extends PNodeWithContext {
 
     public abstract String execute(Object x) throws CannotCastException;
@@ -84,7 +85,7 @@ public abstract class CastToJavaStringNode extends PNodeWithContext {
 
     @Specialization(guards = "!x.isMaterialized()")
     static String doPStringGeneric(PString x,
-                    @Bind("this") Node inliningTarget,
+                    @Bind Node inliningTarget,
                     @Cached StringMaterializeNode materializeNode,
                     @Shared @Cached TruffleString.ToJavaStringNode toJavaString) {
         return toJavaString.execute(materializeNode.execute(inliningTarget, x));
@@ -92,7 +93,7 @@ public abstract class CastToJavaStringNode extends PNodeWithContext {
 
     @Specialization
     static String doNativeObject(PythonNativeObject x,
-                    @Bind("this") Node inliningTarget,
+                    @Bind Node inliningTarget,
                     @Cached GetClassNode getClassNode,
                     @Cached IsSubtypeNode isSubtypeNode,
                     @Shared @Cached TruffleString.ToJavaStringNode toJavaString,

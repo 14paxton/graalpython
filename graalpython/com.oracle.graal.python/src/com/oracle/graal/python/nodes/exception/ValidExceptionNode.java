@@ -49,6 +49,7 @@ import com.oracle.graal.python.nodes.object.IsForeignObjectNode;
 import com.oracle.truffle.api.dsl.Bind;
 import com.oracle.truffle.api.dsl.Cached;
 import com.oracle.truffle.api.dsl.Fallback;
+import com.oracle.truffle.api.dsl.GenerateInline;
 import com.oracle.truffle.api.dsl.GenerateUncached;
 import com.oracle.truffle.api.dsl.Specialization;
 import com.oracle.truffle.api.frame.Frame;
@@ -57,7 +58,7 @@ import com.oracle.truffle.api.library.CachedLibrary;
 import com.oracle.truffle.api.nodes.Node;
 
 @GenerateUncached
-@SuppressWarnings("truffle-inlining")       // footprint reduction 36 -> 18
+@GenerateInline(false)       // footprint reduction 36 -> 18
 public abstract class ValidExceptionNode extends PNodeWithContext {
     public abstract boolean execute(Frame frame, Object type);
 
@@ -88,7 +89,7 @@ public abstract class ValidExceptionNode extends PNodeWithContext {
 
     @Specialization(guards = "isTypeNode.execute(inliningTarget, type)", limit = "1", replaces = {"isPythonExceptionTypeCached", "isPythonExceptionClassCached"})
     static boolean isPythonException(Object type,
-                    @SuppressWarnings("unused") @Bind("this") Node inliningTarget,
+                    @SuppressWarnings("unused") @Bind Node inliningTarget,
                     @SuppressWarnings("unused") @Cached TypeNodes.IsTypeNode isTypeNode,
                     @Cached IsSubtypeNode isSubtype) {
         return isSubtype.execute(type, PythonBuiltinClassType.PBaseException);
@@ -96,7 +97,7 @@ public abstract class ValidExceptionNode extends PNodeWithContext {
 
     @Specialization(guards = "isForeignObjectNode.execute(inliningTarget, type)", limit = "1")
     static boolean isForeign(Object type,
-                    @Bind("this") Node inliningTarget,
+                    @Bind Node inliningTarget,
                     @Cached IsForeignObjectNode isForeignObjectNode,
                     @CachedLibrary(limit = "getCallSiteInlineCacheMaxDepth()") InteropLibrary interop) {
         /*

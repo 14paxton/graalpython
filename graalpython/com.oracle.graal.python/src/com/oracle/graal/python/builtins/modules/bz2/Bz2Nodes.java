@@ -95,7 +95,7 @@ public class Bz2Nodes {
 
     protected static final int INITIAL_BUFFER_SIZE = 8192;
 
-    @SuppressWarnings("truffle-inlining")       // footprint reduction 40 -> 21
+    @GenerateInline(false)       // footprint reduction 40 -> 21
     public abstract static class Bz2NativeCompress extends Node {
 
         public abstract byte[] execute(BZ2Object.BZ2Compressor self, PythonContext context, byte[] bytes, int len, int action);
@@ -110,7 +110,7 @@ public class Bz2Nodes {
 
         @Specialization
         static byte[] nativeCompress(BZ2Object.BZ2Compressor self, PythonContext context, byte[] bytes, int len, int action,
-                        @Bind("this") Node inliningTarget,
+                        @Bind Node inliningTarget,
                         @Cached NativeLibrary.InvokeNativeFunction compress,
                         @Cached GetOutputNativeBufferNode getBuffer,
                         @Cached PRaiseNode raiseNode) {
@@ -222,14 +222,14 @@ public class Bz2Nodes {
         }
     }
 
-    @SuppressWarnings("truffle-inlining")       // footprint reduction 40 -> 21
+    @GenerateInline(false)       // footprint reduction 40 -> 21
     public abstract static class Bz2NativeInternalDecompress extends Node {
 
         public abstract byte[] execute(BZ2Object.BZ2Decompressor self, int maxLength);
 
         @Specialization
         static byte[] nativeInternalDecompress(BZ2Object.BZ2Decompressor self, int maxLength,
-                        @Bind("this") Node inliningTarget,
+                        @Bind Node inliningTarget,
                         @Cached NativeLibrary.InvokeNativeFunction decompress,
                         @Cached NativeLibrary.InvokeNativeFunction getBzsAvailInReal,
                         @Cached NativeLibrary.InvokeNativeFunction getNextInIndex,

@@ -47,7 +47,7 @@ import java.util.List;
 import com.oracle.graal.python.PythonLanguage;
 import com.oracle.graal.python.annotations.Slot;
 import com.oracle.graal.python.annotations.Slot.SlotKind;
-import com.oracle.graal.python.builtins.Builtin;
+import com.oracle.graal.python.annotations.Builtin;
 import com.oracle.graal.python.builtins.CoreFunctions;
 import com.oracle.graal.python.builtins.PythonBuiltinClassType;
 import com.oracle.graal.python.builtins.PythonBuiltins;
@@ -63,7 +63,7 @@ import com.oracle.graal.python.builtins.objects.type.TypeNodes;
 import com.oracle.graal.python.builtins.objects.type.slots.TpSlotDescrGet.DescrGetBuiltinNode;
 import com.oracle.graal.python.builtins.objects.type.slots.TpSlotDescrSet.DescrSetBuiltinNode;
 import com.oracle.graal.python.nodes.BuiltinNames;
-import com.oracle.graal.python.nodes.attributes.ReadAttributeFromObjectNode;
+import com.oracle.graal.python.nodes.attributes.ReadAttributeFromModuleNode;
 import com.oracle.graal.python.nodes.function.PythonBuiltinBaseNode;
 import com.oracle.graal.python.nodes.function.builtins.PythonUnaryBuiltinNode;
 import com.oracle.graal.python.runtime.object.PFactory;
@@ -95,7 +95,7 @@ public final class MemberDescriptorBuiltins extends PythonBuiltins {
     abstract static class MemberDescriptorReprNode extends PythonUnaryBuiltinNode {
         @Specialization
         static TruffleString repr(GetSetDescriptor descr,
-                        @Bind("this") Node inliningTarget,
+                        @Bind Node inliningTarget,
                         @Cached TypeNodes.GetNameNode getName,
                         @Cached SimpleTruffleStringFormatNode simpleTruffleStringFormatNode) {
             return simpleTruffleStringFormatNode.format("<member '%s' of '%s' objects>", descr.getName(), getName.execute(inliningTarget, descr.getType()));
@@ -107,7 +107,7 @@ public final class MemberDescriptorBuiltins extends PythonBuiltins {
     abstract static class MemberDescriptorReduceNode extends PythonUnaryBuiltinNode {
         @Specialization
         Object doGeneric(GetSetDescriptor descr,
-                        @Cached ReadAttributeFromObjectNode readAttributeFromObjectNode,
+                        @Cached ReadAttributeFromModuleNode readAttributeFromObjectNode,
                         @Cached GetIdNode getIdNode,
                         @Bind PythonLanguage language) {
             Object getattr = readAttributeFromObjectNode.execute(getContext().getBuiltins(), BuiltinNames.T_GETATTR);
@@ -128,7 +128,7 @@ public final class MemberDescriptorBuiltins extends PythonBuiltins {
 
         @Specialization(guards = "!isNoValue(obj)")
         static Object doGetSetDescriptor(VirtualFrame frame, GetSetDescriptor descr, Object obj, @SuppressWarnings("unused") Object type,
-                        @Bind("this") Node inliningTarget,
+                        @Bind Node inliningTarget,
                         @Cached DescriptorCheckNode descriptorCheckNode,
                         @Cached DescrGetNode getNode) {
             descriptorCheckNode.execute(inliningTarget, descr.getType(), descr.getName(), obj);
@@ -142,7 +142,7 @@ public final class MemberDescriptorBuiltins extends PythonBuiltins {
     abstract static class DescrSet extends DescrSetBuiltinNode {
         @Specialization(guards = "!isNoValue(value)")
         static void doGetSetDescriptorSet(VirtualFrame frame, GetSetDescriptor descr, Object obj, Object value,
-                        @Bind("this") Node inliningTarget,
+                        @Bind Node inliningTarget,
                         @Shared @Cached DescriptorCheckNode descriptorCheckNode,
                         @Cached DescrSetNode setNode) {
             descriptorCheckNode.execute(inliningTarget, descr.getType(), descr.getName(), obj);
@@ -151,7 +151,7 @@ public final class MemberDescriptorBuiltins extends PythonBuiltins {
 
         @Specialization(guards = "isNoValue(value)")
         static void doGetSetDescriptorDel(VirtualFrame frame, GetSetDescriptor descr, Object obj, Object value,
-                        @Bind("this") Node inliningTarget,
+                        @Bind Node inliningTarget,
                         @Shared @Cached DescriptorCheckNode descriptorCheckNode,
                         @Cached DescrDeleteNode deleteNode) {
             descriptorCheckNode.execute(inliningTarget, descr.getType(), descr.getName(), obj);

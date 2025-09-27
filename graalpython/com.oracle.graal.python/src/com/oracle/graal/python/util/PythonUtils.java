@@ -66,7 +66,7 @@ import org.graalvm.nativeimage.VMRuntime;
 import org.graalvm.polyglot.io.ByteSequence;
 
 import com.oracle.graal.python.PythonLanguage;
-import com.oracle.graal.python.builtins.Builtin;
+import com.oracle.graal.python.annotations.Builtin;
 import com.oracle.graal.python.builtins.objects.PNone;
 import com.oracle.graal.python.builtins.objects.ellipsis.PEllipsis;
 import com.oracle.graal.python.builtins.objects.function.PBuiltinFunction;
@@ -83,6 +83,7 @@ import com.oracle.graal.python.pegparser.sst.ConstantValue;
 import com.oracle.graal.python.pegparser.tokenizer.CodePoints;
 import com.oracle.graal.python.runtime.PythonOptions;
 import com.oracle.graal.python.runtime.object.PFactory;
+import com.oracle.truffle.api.Assumption;
 import com.oracle.truffle.api.CallTarget;
 import com.oracle.truffle.api.CompilerAsserts;
 import com.oracle.truffle.api.CompilerDirectives;
@@ -91,8 +92,6 @@ import com.oracle.truffle.api.RootCallTarget;
 import com.oracle.truffle.api.TruffleOptions;
 import com.oracle.truffle.api.dsl.GeneratedBy;
 import com.oracle.truffle.api.dsl.NodeFactory;
-import com.oracle.truffle.api.frame.Frame;
-import com.oracle.truffle.api.frame.MaterializedFrame;
 import com.oracle.truffle.api.interop.InteropLibrary;
 import com.oracle.truffle.api.interop.UnsupportedMessageException;
 import com.oracle.truffle.api.memory.ByteArraySupport;
@@ -143,8 +142,11 @@ public final class PythonUtils {
     public static final byte[] EMPTY_BYTE_ARRAY = new byte[0];
     public static final int[] EMPTY_INT_ARRAY = new int[0];
     public static final long[] EMPTY_LONG_ARRAY = new long[0];
+    public static final short[] EMPTY_SHORT_ARRAY = new short[0];
+    public static final boolean[] EMPTY_BOOLEAN_ARRAY = new boolean[0];
     public static final double[] EMPTY_DOUBLE_ARRAY = new double[0];
     public static final char[] EMPTY_CHAR_ARRAY = new char[0];
+    public static final Assumption[] EMPTY_ASSUMPTION_ARRAY = new Assumption[0];
     public static final ByteSequence EMPTY_BYTE_SEQUENCE = ByteSequence.create(EMPTY_BYTE_ARRAY);
 
     /**
@@ -246,7 +248,7 @@ public final class PythonUtils {
         TruffleStringIterator it = ts.createCodePointIteratorUncached(TS_ENCODING);
         int i = 0;
         while (it.hasNext()) {
-            buf[i++] = it.nextUncached();
+            buf[i++] = it.nextUncached(TS_ENCODING);
         }
         return CodePoints.fromBuffer(buf, 0, i);
     }
@@ -719,7 +721,7 @@ public final class PythonUtils {
         TruffleString name = toTruffleStringUncached(builtin.name());
         PBuiltinFunction function = PFactory.createBuiltinFunction(PythonLanguage.get(null), name, type, numDefaults, flags, callTarget);
         if (klass != null) {
-            WriteAttributeToObjectNode.getUncached(true).execute(klass, name, function);
+            WriteAttributeToObjectNode.getUncached().execute(klass, name, function);
         }
         return function;
     }
@@ -735,24 +737,6 @@ public final class PythonUtils {
             } catch (Exception e) {
                 throw new UnsupportedOperationException("Cannot initialize Unsafe for the native backends", e);
             }
-        }
-    }
-
-    public static void copyFrameSlot(Frame frameToSync, MaterializedFrame target, int slot) {
-        if (frameToSync.isObject(slot)) {
-            target.setObject(slot, frameToSync.getObject(slot));
-        } else if (frameToSync.isInt(slot)) {
-            target.setInt(slot, frameToSync.getInt(slot));
-        } else if (frameToSync.isLong(slot)) {
-            target.setLong(slot, frameToSync.getLong(slot));
-        } else if (frameToSync.isBoolean(slot)) {
-            target.setBoolean(slot, frameToSync.getBoolean(slot));
-        } else if (frameToSync.isDouble(slot)) {
-            target.setDouble(slot, frameToSync.getDouble(slot));
-        } else if (frameToSync.isFloat(slot)) {
-            target.setFloat(slot, frameToSync.getFloat(slot));
-        } else if (frameToSync.isByte(slot)) {
-            target.setByte(slot, frameToSync.getByte(slot));
         }
     }
 

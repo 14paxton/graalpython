@@ -1,4 +1,4 @@
-/* Copyright (c) 2018, 2024, Oracle and/or its affiliates.
+/* Copyright (c) 2018, 2025, Oracle and/or its affiliates.
  * Copyright (C) 1996-2017 Python Software Foundation
  *
  * Licensed under the PYTHON SOFTWARE FOUNDATION LICENSE VERSION 2
@@ -145,11 +145,20 @@ PyFloat_GetInfo(void)
 
     return floatinfo;
 }
+#endif
 
 PyObject *
 PyFloat_FromDouble(double fval)
 {
     PyFloatObject *op;
+    // GraalPy: different implementation
+    if (fval == (float)fval) {
+        return float_to_pointer(fval);
+    } else {
+        return GraalPyPrivate_Float_FromDouble(fval);
+    }
+}
+#if 0 // GraalPy change
 #if PyFloat_MAXFREELIST > 0
     struct _Py_float_state *state = get_float_state();
     op = state->free_list;
@@ -308,20 +317,6 @@ float_dealloc(PyObject *op)
 double
 PyFloat_AsDouble(PyObject *op)
 {
-    // GraalPy change: read from native object stub or upcall for managed
-    if (points_to_py_handle_space(op)) {
-        if (PyFloat_Check(op)) {
-            double val = ((GraalPyFloatObject*) pointer_to_stub(op))->ob_fval;
-#ifndef NDEBUG
-            if (PyTruffle_Debug_CAPI() && GraalPyTruffleFloat_AsDouble(op) != val) {
-                Py_FatalError("ob_size of native stub and managed object differ");
-            }
-#endif
-            return val;
-        }
-        return GraalPyTruffleFloat_AsDouble(op);
-    }
-
     PyNumberMethods *nb;
     PyObject *res;
     double val;
@@ -332,8 +327,15 @@ PyFloat_AsDouble(PyObject *op)
     }
 
     if (PyFloat_Check(op)) {
-        // GraalPy change: avoid macro recursion
-        return ((PyFloatObject*) op)->ob_fval;
+        return PyFloat_AS_DOUBLE(op);
+    }
+
+    // GraalPy change: upcall for managed
+    if (points_to_py_handle_space(op)) {
+        if (points_to_py_int_handle(op)) {
+            return (double)pointer_to_int64(op);
+        }
+        return GraalPyPrivate_Float_AsDouble(op);
     }
 
     nb = Py_TYPE(op)->tp_as_number;
@@ -374,8 +376,7 @@ PyFloat_AsDouble(PyObject *op)
         }
     }
 
-    // GraalPy change: avoid macro recursion
-    val = PyFloat_AsDouble(res);
+    val = PyFloat_AS_DOUBLE(res);
     Py_DECREF(res);
     return val;
 }
@@ -2666,4 +2667,31 @@ PyFloat_Unpack8(const char *data, int le)
 
         return x;
     }
+}
+
+// GraalPy additions
+
+double GraalPyFloat_AS_DOUBLE(PyObject *op) {
+    if (points_to_py_handle_space(op)) {
+        if (points_to_py_float_handle(op)) {
+            return pointer_to_double(op);
+        }
+        return ((GraalPyFloatObject*) pointer_to_stub(op))->ob_fval;
+    } else {
+        return _PyFloat_CAST(op)->ob_fval;
+    }
+}
+
+// not quite as in CPython, this assumes that x is already a double. The rest of
+// the implementation is in the Float constructor in Java
+PyAPI_FUNC(PyObject*)
+GraalPyPrivate_Float_SubtypeNew(PyTypeObject *type, double x)
+{
+    PyObject* newobj = type->tp_alloc(type, 0);
+    if (newobj == NULL) {
+        Py_DECREF(newobj);
+        return NULL;
+    }
+    ((PyFloatObject *)newobj)->ob_fval = x;
+    return newobj;
 }

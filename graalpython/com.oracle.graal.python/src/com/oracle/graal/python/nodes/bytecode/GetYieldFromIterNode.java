@@ -55,7 +55,7 @@ import com.oracle.truffle.api.nodes.Node;
 
 @GenerateUncached
 @GenerateInline(false) // used in BCI root node
-@OperationProxy.Proxyable
+@OperationProxy.Proxyable(storeBytecodeIndex = false)
 public abstract class GetYieldFromIterNode extends Node {
     public abstract Object execute(VirtualFrame frame, Object receiver);
 
@@ -67,7 +67,7 @@ public abstract class GetYieldFromIterNode extends Node {
 
     @Specialization
     public static Object getGeneric(VirtualFrame frame, Object arg,
-                    @Bind("this") Node inliningTarget,
+                    @Bind Node inliningTarget,
                     @Cached PyObjectGetIter getIter,
                     @Cached IsBuiltinObjectExactProfile isCoro) {
         if (isCoro.profileObject(inliningTarget, arg, PythonBuiltinClassType.PCoroutine)) {

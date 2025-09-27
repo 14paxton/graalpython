@@ -73,6 +73,7 @@ test.test_capi.test_float.CAPIFloatTest.test_asdouble @ darwin-arm64,darwin-x86_
 test.test_capi.test_float.CAPIFloatTest.test_check @ darwin-arm64,darwin-x86_64,linux-aarch64,linux-x86_64,win32-AMD64
 test.test_capi.test_float.CAPIFloatTest.test_checkexact @ darwin-arm64,darwin-x86_64,linux-aarch64,linux-x86_64,win32-AMD64
 test.test_capi.test_float.CAPIFloatTest.test_fromdouble @ darwin-arm64,darwin-x86_64,linux-aarch64,linux-x86_64,win32-AMD64
+test.test_capi.test_float.CAPIFloatTest.test_fromstring @ darwin-arm64,darwin-x86_64,linux-aarch64,linux-x86_64,win32-AMD64
 test.test_capi.test_float.CAPIFloatTest.test_pack @ darwin-arm64,darwin-x86_64,linux-aarch64,linux-x86_64,win32-AMD64
 test.test_capi.test_float.CAPIFloatTest.test_pack_unpack_roundtrip @ darwin-arm64,darwin-x86_64,linux-aarch64,linux-x86_64,win32-AMD64
 test.test_capi.test_float.CAPIFloatTest.test_unpack @ darwin-arm64,darwin-x86_64,linux-aarch64,linux-x86_64,win32-AMD64
@@ -123,6 +124,10 @@ test.test_capi.test_getargs.Signed_TestCase.test_n @ darwin-arm64,darwin-x86_64,
 test.test_capi.test_getargs.SkipitemTest.test_skipitem @ darwin-arm64,darwin-x86_64,linux-aarch64,linux-x86_64,win32-AMD64
 test.test_capi.test_getargs.SkipitemTest.test_skipitem_with_suffix @ darwin-arm64,darwin-x86_64,linux-aarch64,linux-x86_64,win32-AMD64
 test.test_capi.test_getargs.String_TestCase.test_C @ darwin-arm64,darwin-x86_64,linux-aarch64,linux-x86_64,win32-AMD64
+test.test_capi.test_getargs.String_TestCase.test_es @ darwin-arm64,darwin-x86_64,linux-aarch64,linux-x86_64,win32-AMD64
+test.test_capi.test_getargs.String_TestCase.test_es_hash @ darwin-arm64,darwin-x86_64,linux-aarch64,linux-x86_64,win32-AMD64
+test.test_capi.test_getargs.String_TestCase.test_et @ darwin-arm64,darwin-x86_64,linux-aarch64,linux-x86_64,win32-AMD64
+test.test_capi.test_getargs.String_TestCase.test_et_hash @ darwin-arm64,darwin-x86_64,linux-aarch64,linux-x86_64,win32-AMD64
 test.test_capi.test_getargs.String_TestCase.test_gh_99240_clear_args @ darwin-arm64,darwin-x86_64,linux-aarch64,linux-x86_64,win32-AMD64
 test.test_capi.test_getargs.String_TestCase.test_s @ darwin-arm64,darwin-x86_64,linux-aarch64,linux-x86_64,win32-AMD64
 test.test_capi.test_getargs.String_TestCase.test_s_hash @ darwin-arm64,darwin-x86_64,linux-aarch64,linux-x86_64,win32-AMD64
@@ -159,10 +164,12 @@ test.test_capi.test_list.CAPITest.test_list_setitem @ darwin-arm64,darwin-x86_64
 test.test_capi.test_list.CAPITest.test_list_setslice @ darwin-arm64,darwin-x86_64,linux-aarch64,linux-x86_64,win32-AMD64
 test.test_capi.test_list.CAPITest.test_list_size @ darwin-arm64,darwin-x86_64,linux-aarch64,linux-x86_64,win32-AMD64
 test.test_capi.test_list.CAPITest.test_list_sort @ darwin-arm64,darwin-x86_64,linux-aarch64,linux-x86_64,win32-AMD64
-test.test_capi.test_long.LongTests.test_compact @ darwin-arm64,linux-aarch64
+test.test_capi.test_long.LongTests.test_compact @ darwin-arm64,linux-aarch64,linux-x86_64,win32-AMD64
 test.test_capi.test_long.LongTests.test_long_aslongandoverflow @ darwin-arm64,darwin-x86_64,linux-aarch64,linux-x86_64,win32-AMD64
 test.test_capi.test_long.LongTests.test_long_aslonglong @ darwin-arm64,darwin-x86_64,linux-aarch64,linux-x86_64,win32-AMD64
 test.test_capi.test_long.LongTests.test_long_aslonglongandoverflow @ darwin-arm64,darwin-x86_64,linux-aarch64,linux-x86_64,win32-AMD64
+# Transiently fails with OverflowError: Python int too large to convert to C int
+!test.test_capi.test_long.LongTests.test_long_aspid @ linux-x86_64
 test.test_capi.test_long.LongTests.test_long_asunsignedlong @ darwin-arm64,darwin-x86_64,linux-aarch64,linux-x86_64,win32-AMD64
 test.test_capi.test_long.LongTests.test_long_asunsignedlonglong @ darwin-arm64,darwin-x86_64,linux-aarch64,linux-x86_64,win32-AMD64
 test.test_capi.test_long.LongTests.test_long_asunsignedlonglongmask @ darwin-arm64,darwin-x86_64,linux-aarch64,linux-x86_64,win32-AMD64

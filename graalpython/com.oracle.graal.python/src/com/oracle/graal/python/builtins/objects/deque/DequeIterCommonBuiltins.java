@@ -51,7 +51,7 @@ import java.util.NoSuchElementException;
 import com.oracle.graal.python.PythonLanguage;
 import com.oracle.graal.python.annotations.Slot;
 import com.oracle.graal.python.annotations.Slot.SlotKind;
-import com.oracle.graal.python.builtins.Builtin;
+import com.oracle.graal.python.annotations.Builtin;
 import com.oracle.graal.python.builtins.CoreFunctions;
 import com.oracle.graal.python.builtins.PythonBuiltinClassType;
 import com.oracle.graal.python.builtins.PythonBuiltins;
@@ -139,7 +139,7 @@ public final class DequeIterCommonBuiltins extends PythonBuiltins {
 
         @Specialization
         static PTuple doGeneric(PDequeIter self,
-                        @Bind("this") Node inliningTarget,
+                        @Bind Node inliningTarget,
                         @Cached GetClassNode getClassNode,
                         @Bind PythonLanguage language) {
             Object clazz = getClassNode.execute(inliningTarget, self);

@@ -52,6 +52,7 @@ import com.oracle.graal.python.lib.PyExceptionInstanceCheckNode;
 import com.oracle.graal.python.runtime.PythonOptions;
 import com.oracle.graal.python.runtime.exception.PException;
 import com.oracle.graal.python.runtime.object.PFactory;
+import com.oracle.truffle.api.HostCompilerDirectives.InliningCutoff;
 import com.oracle.truffle.api.dsl.Cached;
 import com.oracle.truffle.api.dsl.GenerateCached;
 import com.oracle.truffle.api.dsl.GenerateInline;
@@ -80,10 +81,11 @@ public abstract class PRaiseNode extends Node {
         throw raiseStatic(inliningTarget, type);
     }
 
+    @InliningCutoff
     public static PException raiseStatic(Node node, PythonBuiltinClassType type) {
         PythonLanguage language = PythonLanguage.get(node);
         PBaseException pythonException = PFactory.createBaseException(language, type);
-        throw raiseExceptionObject(node, pythonException, language);
+        throw raiseExceptionObjectStatic(node, pythonException, language);
     }
 
     public final PException raise(Node inliningTarget, PythonBuiltinClassType type, TruffleString message) {
@@ -91,10 +93,11 @@ public abstract class PRaiseNode extends Node {
         throw raiseStatic(inliningTarget, type, message);
     }
 
+    @InliningCutoff
     public static PException raiseStatic(Node node, PythonBuiltinClassType type, TruffleString message) {
         PythonLanguage language = PythonLanguage.get(node);
         PBaseException pythonException = PFactory.createBaseException(language, type, message);
-        throw raiseExceptionObject(node, pythonException, language);
+        throw raiseExceptionObjectStatic(node, pythonException, language);
     }
 
     public final PException raise(Node inliningTarget, PythonBuiltinClassType type, TruffleString format, Object... formatArgs) {
@@ -102,10 +105,11 @@ public abstract class PRaiseNode extends Node {
         throw raiseStatic(inliningTarget, type, format, formatArgs);
     }
 
+    @InliningCutoff
     public static PException raiseStatic(Node node, PythonBuiltinClassType type, TruffleString message, Object... formatArgs) {
         PythonLanguage language = PythonLanguage.get(node);
         PBaseException pythonException = PFactory.createBaseException(language, type, message, formatArgs);
-        throw raiseExceptionObject(node, pythonException, language);
+        throw raiseExceptionObjectStatic(node, pythonException, language);
     }
 
     public final PException raise(Node inliningTarget, PythonBuiltinClassType type, Object[] arguments) {
@@ -113,10 +117,11 @@ public abstract class PRaiseNode extends Node {
         throw raiseStatic(inliningTarget, type, arguments);
     }
 
+    @InliningCutoff
     public static PException raiseStatic(Node node, PythonBuiltinClassType type, Object[] arguments) {
         PythonLanguage language = PythonLanguage.get(node);
         PBaseException pythonException = PFactory.createBaseException(language, type, PFactory.createTuple(language, arguments));
-        throw raiseExceptionObject(node, pythonException, language);
+        throw raiseExceptionObjectStatic(node, pythonException, language);
     }
 
     public final PException raiseWithData(Node inliningTarget, PythonBuiltinClassType type, Object[] data) {
@@ -124,19 +129,21 @@ public abstract class PRaiseNode extends Node {
         throw raiseWithDataStatic(inliningTarget, type, data);
     }
 
+    @InliningCutoff
     public static PException raiseWithDataStatic(Node node, PythonBuiltinClassType type, Object[] data) {
         PythonLanguage language = PythonLanguage.get(node);
         PBaseException pythonException = PFactory.createBaseException(language, type, data, null);
-        throw raiseExceptionObject(node, pythonException, language);
+        throw raiseExceptionObjectStatic(node, pythonException, language);
     }
 
-    public final PException raiseAttributeError(Node inliningTarget, Object obj, Object key) {
+    public final PException raiseAttributeError(Node inliningTarget, TruffleString errorMessage, Object obj, Object key) {
         executeEnterProfile(inliningTarget);
-        throw raiseAttributeErrorStatic(inliningTarget, obj, key);
+        throw raiseAttributeErrorStatic(inliningTarget, errorMessage, obj, key);
     }
 
-    public static PException raiseAttributeErrorStatic(Node inliningTarget, Object obj, Object key) {
-        throw raiseWithDataStatic(inliningTarget, PythonBuiltinClassType.AttributeError, AttributeErrorBuiltins.dataForObjKey(obj, key), ErrorMessages.OBJ_P_HAS_NO_ATTR_S, obj, key);
+    @InliningCutoff
+    public static PException raiseAttributeErrorStatic(Node inliningTarget, TruffleString errorMessage, Object obj, Object key) {
+        throw raiseWithDataStatic(inliningTarget, PythonBuiltinClassType.AttributeError, AttributeErrorBuiltins.dataForObjKey(obj, key), errorMessage, obj, key);
     }
 
     public final PException raiseWithData(Node inliningTarget, PythonBuiltinClassType type, Object[] data, TruffleString format, Object... formatArgs) {
@@ -144,10 +151,11 @@ public abstract class PRaiseNode extends Node {
         throw raiseWithDataStatic(inliningTarget, type, data, format, formatArgs);
     }
 
+    @InliningCutoff
     public static PException raiseWithDataStatic(Node node, PythonBuiltinClassType type, Object[] data, TruffleString format, Object... formatArgs) {
         PythonLanguage language = PythonLanguage.get(node);
         PBaseException pythonException = PFactory.createBaseException(language, type, data, format, formatArgs);
-        throw raiseExceptionObject(node, pythonException, language);
+        throw raiseExceptionObjectStatic(node, pythonException, language);
     }
 
     public final PException raiseWithData(Node inliningTarget, PythonBuiltinClassType type, Object[] data, Object... arguments) {
@@ -155,10 +163,11 @@ public abstract class PRaiseNode extends Node {
         throw raiseWithDataStatic(inliningTarget, type, data, arguments);
     }
 
+    @InliningCutoff
     public static PException raiseWithDataStatic(Node node, PythonBuiltinClassType type, Object[] data, Object[] arguments) {
         PythonLanguage language = PythonLanguage.get(node);
         PBaseException pythonException = PFactory.createBaseException(language, type, data, PFactory.createTuple(language, arguments));
-        throw raiseExceptionObject(node, pythonException, language);
+        throw raiseExceptionObjectStatic(node, pythonException, language);
     }
 
     public final PException raise(Node inliningTarget, PythonBuiltinClassType type, Exception e) {
@@ -166,10 +175,11 @@ public abstract class PRaiseNode extends Node {
         throw raiseStatic(inliningTarget, type, e);
     }
 
+    @InliningCutoff
     public static PException raiseStatic(Node node, PythonBuiltinClassType type, Exception e) {
         PythonLanguage language = PythonLanguage.get(node);
         PBaseException pythonException = PFactory.createBaseException(language, type, ErrorMessages.M, new Object[]{e});
-        throw raiseExceptionObject(node, pythonException, language);
+        throw raiseExceptionObjectStatic(node, pythonException, language);
     }
 
     private static void setCause(PBaseException pythonException, PException cause) {
@@ -184,11 +194,12 @@ public abstract class PRaiseNode extends Node {
         throw raiseWithCauseStatic(inliningTarget, type, cause, format);
     }
 
+    @InliningCutoff
     public static PException raiseWithCauseStatic(Node node, PythonBuiltinClassType type, PException cause, TruffleString format) {
         PythonLanguage language = PythonLanguage.get(node);
         PBaseException pythonException = PFactory.createBaseException(language, type, format);
         setCause(pythonException, cause);
-        throw raiseExceptionObject(node, pythonException, language);
+        throw raiseExceptionObjectStatic(node, pythonException, language);
     }
 
     public final PException raiseWithCause(Node inliningTarget, PythonBuiltinClassType type, PException cause, TruffleString format, Object... arguments) {
@@ -197,18 +208,20 @@ public abstract class PRaiseNode extends Node {
         throw raiseWithCauseStatic(inliningTarget, type, cause, format, arguments);
     }
 
+    @InliningCutoff
     public static PException raiseWithCauseStatic(Node node, PythonBuiltinClassType type, PException cause, TruffleString format, Object... formatArgs) {
         assert PyExceptionInstanceCheckNode.executeUncached(cause);
         PythonLanguage language = PythonLanguage.get(node);
         PBaseException pythonException = PFactory.createBaseException(language, type, format, formatArgs);
         setCause(pythonException, cause);
-        throw raiseExceptionObject(node, pythonException, language);
+        throw raiseExceptionObjectStatic(node, pythonException, language);
     }
 
     public final PException raiseOverflow(Node inliningTarget) {
         throw raise(inliningTarget, OverflowError, ErrorMessages.CANNOT_FIT_P_INTO_INDEXSIZED_INT, 0);
     }
 
+    @InliningCutoff
     public static PException raiseSystemExitStatic(Node inliningTarget, Object code) {
         throw raiseWithDataStatic(inliningTarget, PythonBuiltinClassType.SystemExit, new Object[]{code}, new Object[]{code});
     }
@@ -229,19 +242,29 @@ public abstract class PRaiseNode extends Node {
         throw raise(inliningTarget, PythonBuiltinClassType.SystemError, BAD_ARG_TO_INTERNAL_FUNC);
     }
 
-    public final PException raiseExceptionObject(Object exc) {
-        throw raiseExceptionObject(this, exc, PythonOptions.isPExceptionWithJavaStacktrace(PythonLanguage.get(this)));
+    public final PException raiseExceptionObject(Node inliningTarget, Object exc) {
+        executeEnterProfile(inliningTarget);
+        throw raiseExceptionObjectStaticCutoff(inliningTarget, exc);
     }
 
-    public static PException raiseExceptionObject(Node raisingNode, Object exc) {
-        throw raiseExceptionObject(raisingNode, exc, PythonOptions.isPExceptionWithJavaStacktrace(PythonLanguage.get(raisingNode)));
+    @InliningCutoff
+    private static PException raiseExceptionObjectStaticCutoff(Node inliningTarget, Object exc) {
+        return raiseExceptionObjectStatic(inliningTarget, exc);
     }
 
-    public static PException raiseExceptionObject(Node raisingNode, Object exc, PythonLanguage language) {
-        throw raiseExceptionObject(raisingNode, exc, PythonOptions.isPExceptionWithJavaStacktrace(language));
+    // No @InliningCutoff, callers either cutoff already, or they are nodes which only throw an
+    // exception and so we want to host inline
+    public static PException raiseExceptionObjectStatic(Node raisingNode, Object exc) {
+        throw raiseExceptionObjectStatic(raisingNode, exc, PythonOptions.isPExceptionWithJavaStacktrace(PythonLanguage.get(raisingNode)));
     }
 
-    public static PException raiseExceptionObject(Node raisingNode, Object exc, boolean withJavaStacktrace) {
+    // No @InliningCutoff, done in callers already
+    private static PException raiseExceptionObjectStatic(Node raisingNode, Object exc, PythonLanguage language) {
+        throw raiseExceptionObjectStatic(raisingNode, exc, PythonOptions.isPExceptionWithJavaStacktrace(language));
+    }
+
+    // No @InliningCutoff, done in callers already
+    public static PException raiseExceptionObjectStatic(Node raisingNode, Object exc, boolean withJavaStacktrace) {
         if (raisingNode != null && raisingNode.isAdoptable()) {
             throw PException.fromObject(exc, raisingNode, withJavaStacktrace);
         } else {

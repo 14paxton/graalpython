@@ -42,7 +42,7 @@ package com.oracle.graal.python.builtins.modules.hashlib;
 
 import java.util.List;
 
-import com.oracle.graal.python.builtins.Builtin;
+import com.oracle.graal.python.annotations.Builtin;
 import com.oracle.graal.python.builtins.CoreFunctions;
 import com.oracle.graal.python.builtins.PythonBuiltinClassType;
 import com.oracle.graal.python.builtins.PythonBuiltins;
@@ -68,7 +68,7 @@ public final class Md5ModuleBuiltins extends PythonBuiltins {
     abstract static class Md5FunctionNode extends PythonBuiltinNode {
         @Specialization
         static Object newDigest(VirtualFrame frame, Object buffer, @SuppressWarnings("unused") Object usedForSecurity,
-                        @Bind("this") Node inliningTarget,
+                        @Bind Node inliningTarget,
                         @Cached HashlibModuleBuiltins.CreateDigestNode createNode) {
             return createNode.execute(frame, inliningTarget, PythonBuiltinClassType.MD5Type, "md5", "md5", buffer);
         }

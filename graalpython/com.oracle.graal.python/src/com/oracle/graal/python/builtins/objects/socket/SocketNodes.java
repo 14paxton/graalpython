@@ -124,7 +124,7 @@ public abstract class SocketNodes {
 
         @Specialization(guards = "isInet(socket)")
         static UniversalSockAddr doInet(VirtualFrame frame, @SuppressWarnings("unused") PSocket socket, Object address, String caller,
-                        @Bind("this") Node inliningTarget,
+                        @Bind Node inliningTarget,
                         @CachedLibrary(limit = "1") @Shared("posixLib") PosixSupportLibrary posixLib,
                         @CachedLibrary(limit = "1") @Shared("sockAddrLib") UniversalSockAddrLibrary sockAddrLib,
                         @Cached @Shared("getObjectArray") SequenceNodes.GetObjectArrayNode getObjectArrayNode,
@@ -150,7 +150,7 @@ public abstract class SocketNodes {
 
         @Specialization(guards = "isInet6(socket)")
         static UniversalSockAddr doInet6(VirtualFrame frame, @SuppressWarnings("unused") PSocket socket, Object address, String caller,
-                        @Bind("this") Node inliningTarget,
+                        @Bind Node inliningTarget,
                         @CachedLibrary(limit = "1") @Shared("posixLib") PosixSupportLibrary posixLib,
                         @CachedLibrary(limit = "1") @Shared("sockAddrLib") UniversalSockAddrLibrary sockAddrLib,
                         @Cached @Shared("getObjectArray") SequenceNodes.GetObjectArrayNode getObjectArrayNode,
@@ -187,8 +187,8 @@ public abstract class SocketNodes {
 
         @Specialization(guards = "isUnix(socket)")
         static UniversalSockAddr doUnix(VirtualFrame frame, @SuppressWarnings("unused") PSocket socket, Object address, String caller,
-                        @Bind("this") Node inliningTarget,
-                        @Cached("createFor(this)") IndirectCallData indirectCallData,
+                        @Bind Node inliningTarget,
+                        @Cached("createFor($node)") IndirectCallData indirectCallData,
                         @Cached PyUnicodeCheckNode unicodeCheckNode,
                         @Cached CastToTruffleStringNode toTruffleStringNode,
                         @Cached TruffleString.SwitchEncodingNode switchEncodingNode,
@@ -228,7 +228,7 @@ public abstract class SocketNodes {
         @Specialization(guards = {"!isInet(socket)", "!isInet6(socket)", "!isUnix(socket)"})
         @SuppressWarnings("unused")
         static UniversalSockAddr getSockAddr(VirtualFrame frame, PSocket socket, Object address, String caller,
-                        @Bind("this") Node inliningTarget) {
+                        @Bind Node inliningTarget) {
             throw PRaiseNode.raiseStatic(inliningTarget, OSError, ErrorMessages.BAD_FAMILY, caller);
         }
 
@@ -263,7 +263,7 @@ public abstract class SocketNodes {
     /**
      * Equivalent of CPython's {@code socketmodule.c:setipaddr}.
      */
-    @SuppressWarnings("truffle-inlining")       // footprint reduction 48 -> 29
+    @GenerateInline(false)       // footprint reduction 48 -> 29
     public abstract static class SetIpAddrNode extends Node {
 
         private static final byte[] BROADCAST_IP = "255.255.255.255".getBytes();
@@ -273,7 +273,7 @@ public abstract class SocketNodes {
 
         @Specialization
         static UniversalSockAddr setipaddr(VirtualFrame frame, byte[] name, int family,
-                        @Bind("this") Node inliningTarget,
+                        @Bind Node inliningTarget,
                         @CachedLibrary(limit = "1") PosixSupportLibrary posixLib,
                         @CachedLibrary(limit = "1") AddrInfoCursorLibrary addrInfoLib,
                         @Cached InetPtoNCachedPNode inetPtoNCachedPNode,
@@ -395,9 +395,9 @@ public abstract class SocketNodes {
                         @CachedLibrary(limit = "1") PosixSupportLibrary posixLib,
                         @CachedLibrary("addr") UniversalSockAddrLibrary addrLib,
                         @Cached PConstructAndRaiseNode.Lazy constructAndRaiseNode,
-                        @Cached(inline = false) TruffleString.FromJavaStringNode fromJavaStringNode,
-                        @Cached(inline = false) TruffleString.FromByteArrayNode fromByteArrayNode,
-                        @Cached(inline = false) TruffleString.SwitchEncodingNode switchEncodingNode,
+                        @Cached TruffleString.FromJavaStringNode fromJavaStringNode,
+                        @Cached TruffleString.FromByteArrayNode fromByteArrayNode,
+                        @Cached TruffleString.SwitchEncodingNode switchEncodingNode,
                         @Cached PRaiseNode raiseNode) {
             try {
                 PythonContext context = PythonContext.get(inliningTarget);
@@ -456,7 +456,7 @@ public abstract class SocketNodes {
                         @CachedLibrary(limit = "1") PosixSupportLibrary posixLib,
                         @CachedLibrary("addr") UniversalSockAddrLibrary addrLib,
                         @Cached PConstructAndRaiseNode.Lazy constructAndRaiseNode,
-                        @Cached(inline = false) TruffleString.FromJavaStringNode fromJavaStringNode,
+                        @Cached TruffleString.FromJavaStringNode fromJavaStringNode,
                         @Cached PRaiseNode raiseNode) {
             try {
                 PythonContext context = PythonContext.get(inliningTarget);
@@ -491,7 +491,7 @@ public abstract class SocketNodes {
 
         @Specialization
         byte[] convert(VirtualFrame frame, Object value,
-                        @Bind("this") Node inliningTarget,
+                        @Bind Node inliningTarget,
                         @CachedLibrary(limit = "2") PythonBufferAccessLibrary bufferLib,
                         @Cached PyUnicodeCheckNode unicodeCheckNode,
                         @Cached BytesNodes.BytesLikeCheck bytesLikeCheck,

@@ -45,6 +45,7 @@ import static com.oracle.graal.python.builtins.modules.cext.PythonCextBuiltins.C
 import static com.oracle.graal.python.builtins.modules.cext.PythonCextBuiltins.CApiCallPath.Ignored;
 import static com.oracle.graal.python.builtins.objects.cext.capi.transitions.ArgDescriptor.CONST_UNSIGNED_CHAR_PTR;
 import static com.oracle.graal.python.builtins.objects.cext.capi.transitions.ArgDescriptor.CharPtrAsTruffleString;
+import static com.oracle.graal.python.builtins.objects.cext.capi.transitions.ArgDescriptor.ConstPyLongObject;
 import static com.oracle.graal.python.builtins.objects.cext.capi.transitions.ArgDescriptor.Int;
 import static com.oracle.graal.python.builtins.objects.cext.capi.transitions.ArgDescriptor.LONG_LONG;
 import static com.oracle.graal.python.builtins.objects.cext.capi.transitions.ArgDescriptor.Pointer;
@@ -73,9 +74,8 @@ import com.oracle.graal.python.builtins.objects.cext.capi.CExtNodes;
 import com.oracle.graal.python.builtins.objects.cext.capi.CExtNodes.CastToNativeLongNode;
 import com.oracle.graal.python.builtins.objects.cext.capi.transitions.ArgDescriptor;
 import com.oracle.graal.python.builtins.objects.cext.common.CExtCommonNodes.ConvertPIntToPrimitiveNode;
-import com.oracle.graal.python.builtins.objects.cext.common.CExtCommonNodes.TransformExceptionToNativeNode;
+import com.oracle.graal.python.builtins.objects.cext.common.CExtCommonNodes.TransformPExceptionToNativeCachedNode;
 import com.oracle.graal.python.builtins.objects.cext.common.CExtCommonNodesFactory.ConvertPIntToPrimitiveNodeGen;
-import com.oracle.graal.python.builtins.objects.cext.common.CExtCommonNodesFactory.TransformExceptionToNativeNodeGen;
 import com.oracle.graal.python.builtins.objects.cext.structs.CStructAccess;
 import com.oracle.graal.python.builtins.objects.ints.IntBuiltins;
 import com.oracle.graal.python.builtins.objects.ints.IntNodes;
@@ -161,7 +161,7 @@ public final class PythonCextLongBuiltins {
 
         @Specialization
         static int sign(PInt n,
-                        @Bind("this") Node inliningTarget,
+                        @Bind Node inliningTarget,
                         @Cached InlinedBranchProfile zeroProfile,
                         @Cached InlinedBranchProfile negProfile) {
             if (n.isNegative()) {
@@ -178,7 +178,7 @@ public final class PythonCextLongBuiltins {
         @SuppressWarnings("unused")
         @Specialization(guards = {"!canBeInteger(obj)", "isPIntSubtype(inliningTarget, obj, getClassNode, isSubtypeNode)"})
         static Object signNative(Object obj,
-                        @Bind("this") Node inliningTarget,
+                        @Bind Node inliningTarget,
                         @Shared @Cached GetClassNode getClassNode,
                         @Shared @Cached IsSubtypeNode isSubtypeNode) {
             // function returns int, but -1 is expected result for 'n < 0'
@@ -187,7 +187,7 @@ public final class PythonCextLongBuiltins {
 
         @Specialization(guards = {"!isInteger(obj)", "!isPInt(obj)", "!isPIntSubtype(inliningTarget, obj,getClassNode,isSubtypeNode)"})
         static Object sign(@SuppressWarnings("unused") Object obj,
-                        @Bind("this") Node inliningTarget,
+                        @Bind Node inliningTarget,
                         @SuppressWarnings("unused") @Shared @Cached GetClassNode getClassNode,
                         @SuppressWarnings("unused") @Shared @Cached IsSubtypeNode isSubtypeNode) {
             // assert(PyLong_Check(v));
@@ -200,11 +200,11 @@ public final class PythonCextLongBuiltins {
     }
 
     @CApiBuiltin(ret = Py_ssize_t, args = {PyLongObject}, call = Ignored)
-    abstract static class PyTruffleLong_DigitCount extends CApiUnaryBuiltinNode {
+    abstract static class GraalPyPrivate_Long_DigitCount extends CApiUnaryBuiltinNode {
 
         @Specialization
         static long getDC(Object n,
-                        @Bind("this") Node inliningTarget,
+                        @Bind Node inliningTarget,
                         @Cached CExtNodes.LvTagNode lvTagNode) {
             return lvTagNode.getDigitCount(inliningTarget, n);
         }
@@ -215,29 +215,43 @@ public final class PythonCextLongBuiltins {
 
         @Specialization
         static Object fromDouble(double d,
-                        @Bind("this") Node inliningTarget,
+                        @Bind Node inliningTarget,
                         @Cached PyLongFromDoubleNode pyLongFromDoubleNode) {
             return pyLongFromDoubleNode.execute(inliningTarget, d);
         }
     }
 
     @CApiBuiltin(ret = PyObjectTransfer, args = {CharPtrAsTruffleString, Int}, call = Ignored)
-    abstract static class PyTruffleLong_FromString extends CApiBinaryBuiltinNode {
+    abstract static class GraalPyPrivate_Long_FromString extends CApiBinaryBuiltinNode {
 
         @Specialization
         Object fromString(Object s, int base,
-                        @Bind("this") Node inliningTarget,
+                        @Bind Node inliningTarget,
                         @Cached PyLongFromUnicodeObject fromUnicodeObject) {
             return fromUnicodeObject.execute(inliningTarget, s, base);
         }
     }
 
+    @CApiBuiltin(ret = Int, args = {ConstPyLongObject}, call = Direct)
+    abstract static class PyUnstable_Long_IsCompact extends CApiUnaryBuiltinNode {
+        @Specialization
+        @TruffleBoundary
+        static int doI(Object value) {
+            if (value instanceof Integer || value instanceof Long) {
+                return 1;
+            } else if (value instanceof PInt pInt) {
+                return pInt.fitsIn(PInt.MIN_LONG, PInt.MAX_LONG) ? 1 : 0;
+            }
+            return 0;
+        }
+    }
+
     @CApiBuiltin(ret = LONG_LONG, args = {PyObject, Int, SIZE_T}, call = Ignored)
-    abstract static class PyTruffleLong_AsPrimitive extends CApiTernaryBuiltinNode {
+    abstract static class GraalPyPrivate_Long_AsPrimitive extends CApiTernaryBuiltinNode {
 
         @Specialization
         static Object doGeneric(Object object, int mode, long targetTypeSize,
-                        @Bind("this") Node inliningTarget,
+                        @Bind Node inliningTarget,
                         @Cached IsSubtypeNode isSubtypeNode,
                         @Cached GetClassNode getClassNode,
                         @Cached ConvertPIntToPrimitiveNode convertPIntToPrimitiveNode,
@@ -274,13 +288,7 @@ public final class PythonCextLongBuiltins {
     }
 
     @CApiBuiltin(ret = PyObjectTransfer, args = {LONG_LONG}, call = Ignored)
-    abstract static class PyTruffleLong_FromLongLong extends CApiUnaryBuiltinNode {
-
-        @Specialization
-        static int doSignedInt(int n) {
-            return n;
-        }
-
+    abstract static class GraalPyPrivate_Long_FromLongLong extends CApiUnaryBuiltinNode {
         @Specialization
         static long doSignedLong(long n) {
             return n;
@@ -350,7 +358,7 @@ public final class PythonCextLongBuiltins {
     @CApiBuiltin(ret = Pointer, args = {PyObject}, call = Direct)
     public abstract static class PyLong_AsVoidPtr extends CApiUnaryBuiltinNode {
         @Child private ConvertPIntToPrimitiveNode asPrimitiveNode;
-        @Child private TransformExceptionToNativeNode transformExceptionToNativeNode;
+        @Child private TransformPExceptionToNativeCachedNode transformExceptionToNativeNode;
 
         @Specialization
         static long doPointer(int n) {
@@ -364,7 +372,7 @@ public final class PythonCextLongBuiltins {
 
         @Specialization
         long doPointer(PInt n,
-                        @Bind("this") Node inliningTarget,
+                        @Bind Node inliningTarget,
                         @Cached InlinedBranchProfile overflowProfile,
                         @Exclusive @Cached PRaiseNode raiseNode) {
             try {
@@ -374,7 +382,7 @@ public final class PythonCextLongBuiltins {
                 try {
                     throw raiseNode.raise(inliningTarget, OverflowError, ErrorMessages.PYTHON_INT_TOO_LARGE_TO_CONV_TO, "C long");
                 } catch (PException pe) {
-                    ensureTransformExcNode().executeCached(pe);
+                    ensureTransformExcNode().execute(pe);
                     return 0;
                 }
             }
@@ -387,7 +395,7 @@ public final class PythonCextLongBuiltins {
 
         @Fallback
         long doGeneric(Object n,
-                        @Bind("this") Node inliningTarget,
+                        @Bind Node inliningTarget,
                         @Exclusive @Cached PRaiseNode raiseNode) {
             if (asPrimitiveNode == null) {
                 CompilerDirectives.transferToInterpreterAndInvalidate();
@@ -400,15 +408,15 @@ public final class PythonCextLongBuiltins {
                     throw raiseNode.raise(inliningTarget, OverflowError, ErrorMessages.PYTHON_INT_TOO_LARGE_TO_CONV_TO, "C long");
                 }
             } catch (PException e) {
-                ensureTransformExcNode().executeCached(e);
+                ensureTransformExcNode().execute(e);
                 return 0;
             }
         }
 
-        private TransformExceptionToNativeNode ensureTransformExcNode() {
+        private TransformPExceptionToNativeCachedNode ensureTransformExcNode() {
             if (transformExceptionToNativeNode == null) {
                 CompilerDirectives.transferToInterpreterAndInvalidate();
-                transformExceptionToNativeNode = insert(TransformExceptionToNativeNodeGen.create());
+                transformExceptionToNativeNode = insert(TransformPExceptionToNativeCachedNode.create());
             }
             return transformExceptionToNativeNode;
         }
@@ -426,7 +434,7 @@ public final class PythonCextLongBuiltins {
 
         @Specialization
         static Object get(int value, Object bytes, long n, int littleEndian, int isSigned,
-                        @Bind("this") Node inliningTarget,
+                        @Bind Node inliningTarget,
                         @Shared @Cached InlinedConditionProfile profile,
                         @Shared @Cached CStructAccess.WriteByteNode write,
                         @Shared @Cached PRaiseNode raiseNode) {
@@ -438,7 +446,7 @@ public final class PythonCextLongBuiltins {
 
         @Specialization
         static Object get(long value, Object bytes, long n, int littleEndian, int isSigned,
-                        @Bind("this") Node inliningTarget,
+                        @Bind Node inliningTarget,
                         @Shared @Cached InlinedConditionProfile profile,
                         @Shared @Cached CStructAccess.WriteByteNode write,
                         @Shared @Cached PRaiseNode raiseNode) {
@@ -450,7 +458,7 @@ public final class PythonCextLongBuiltins {
 
         @Specialization
         static Object get(PInt value, Object bytes, long n, int littleEndian, int isSigned,
-                        @Bind("this") Node inliningTarget,
+                        @Bind Node inliningTarget,
                         @Shared @Cached InlinedConditionProfile profile,
                         @Shared @Cached CStructAccess.WriteByteNode write,
                         @Shared @Cached PRaiseNode raiseNode) {
@@ -465,7 +473,7 @@ public final class PythonCextLongBuiltins {
     abstract static class PyLong_FromUnicodeObject extends CApiBinaryBuiltinNode {
         @Specialization
         static Object convert(Object s, int base,
-                        @Bind("this") Node inliningTarget,
+                        @Bind Node inliningTarget,
                         @Cached PyLongFromUnicodeObject pyLongFromUnicodeObject) {
             return pyLongFromUnicodeObject.execute(inliningTarget, s, base);
         }
@@ -475,7 +483,7 @@ public final class PythonCextLongBuiltins {
     abstract static class _PyLong_FromByteArray extends CApiQuaternaryBuiltinNode {
         @Specialization
         static Object convert(Object charPtr, long size, int littleEndian, int signed,
-                        @Bind("this") Node inliningTarget,
+                        @Bind Node inliningTarget,
                         @Cached CStructAccess.ReadByteNode readByteNode,
                         @Cached IntNodes.PyLongFromByteArray fromByteArray,
                         @Cached PRaiseNode raiseNode) {

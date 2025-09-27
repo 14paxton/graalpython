@@ -42,12 +42,12 @@ package com.oracle.graal.python.builtins.objects.cext.capi;
 
 import static com.oracle.graal.python.builtins.modules.cext.PythonCextBuiltins.checkThrowableBeforeNative;
 
-import com.oracle.graal.python.builtins.Builtin;
+import com.oracle.graal.python.annotations.Builtin;
 import com.oracle.graal.python.builtins.objects.PNone;
 import com.oracle.graal.python.builtins.objects.cext.capi.transitions.CApiTiming;
 import com.oracle.graal.python.builtins.objects.cext.capi.transitions.CApiTransitions.NativeToPythonNode;
 import com.oracle.graal.python.builtins.objects.cext.capi.transitions.CApiTransitions.PythonToNativeNewRefNode;
-import com.oracle.graal.python.builtins.objects.cext.common.CExtCommonNodes.TransformExceptionToNativeNode;
+import com.oracle.graal.python.builtins.objects.cext.common.CExtCommonNodes.TransformPExceptionToNativeNode;
 import com.oracle.graal.python.builtins.objects.cext.common.CExtContext;
 import com.oracle.graal.python.builtins.objects.function.PBuiltinFunction;
 import com.oracle.graal.python.builtins.objects.function.PKeyword;
@@ -211,12 +211,12 @@ public abstract class PyCFunctionWrapper implements TruffleObject {
 
         @ExportMessage
         Object execute(Object[] arguments,
-                        @Bind("$node") Node inliningTarget,
+                        @Bind Node inliningTarget,
                         @Cached PythonToNativeNewRefNode toNativeNode,
                         @Cached CreateArgumentsNode createArgsNode,
                         @Cached CallDispatchers.CallTargetCachedInvokeNode invokeNode,
                         @Cached NativeToPythonNode toJavaNode,
-                        @Cached TransformExceptionToNativeNode transformExceptionToNativeNode,
+                        @Cached TransformPExceptionToNativeNode transformExceptionToNativeNode,
                         @Exclusive @Cached GilNode gil) throws ArityException {
             boolean mustRelease = gil.acquire();
             CApiTiming.enter();
@@ -268,12 +268,12 @@ public abstract class PyCFunctionWrapper implements TruffleObject {
 
         @ExportMessage
         Object execute(Object[] arguments,
-                        @Bind("$node") Node inliningTarget,
+                        @Bind Node inliningTarget,
                         @Cached PythonToNativeNewRefNode toNativeNode,
                         @Cached CallDispatchers.CallTargetCachedInvokeNode invokeNode,
                         @Cached CreateArgumentsNode createArgsNode,
                         @Cached NativeToPythonNode toJavaNode,
-                        @Cached TransformExceptionToNativeNode transformExceptionToNativeNode,
+                        @Cached TransformPExceptionToNativeNode transformExceptionToNativeNode,
                         @Exclusive @Cached GilNode gil) throws ArityException {
             boolean mustRelease = gil.acquire();
             CApiTiming.enter();
@@ -322,13 +322,13 @@ public abstract class PyCFunctionWrapper implements TruffleObject {
 
         @ExportMessage
         Object execute(Object[] arguments,
-                        @Bind("$node") Node inliningTarget,
+                        @Bind Node inliningTarget,
                         @Cached PythonToNativeNewRefNode toNativeNode,
                         @Cached ExecutePositionalStarargsNode posStarargsNode,
                         @Cached CreateArgumentsNode createArgsNode,
                         @Cached CallDispatchers.CallTargetCachedInvokeNode invokeNode,
                         @Cached NativeToPythonNode toJavaNode,
-                        @Cached TransformExceptionToNativeNode transformExceptionToNativeNode,
+                        @Cached TransformPExceptionToNativeNode transformExceptionToNativeNode,
                         @Exclusive @Cached GilNode gil) throws ArityException {
             boolean mustRelease = gil.acquire();
             CApiTiming.enter();
@@ -378,14 +378,14 @@ public abstract class PyCFunctionWrapper implements TruffleObject {
 
         @ExportMessage
         Object execute(Object[] arguments,
-                        @Bind("$node") Node inliningTarget,
+                        @Bind Node inliningTarget,
                         @Cached PythonToNativeNewRefNode toNativeNode,
                         @Cached ExecutePositionalStarargsNode posStarargsNode,
                         @Cached CreateArgumentsNode createArgsNode,
                         @Cached CallDispatchers.CallTargetCachedInvokeNode invokeNode,
                         @Cached ExpandKeywordStarargsNode expandKwargsNode,
                         @Cached NativeToPythonNode toJavaNode,
-                        @Cached TransformExceptionToNativeNode transformExceptionToNativeNode,
+                        @Cached TransformPExceptionToNativeNode transformExceptionToNativeNode,
                         @Exclusive @Cached GilNode gil) throws ArityException {
             boolean mustRelease = gil.acquire();
             CApiTiming.enter();

@@ -251,8 +251,8 @@ public abstract class BytesNodes {
         @Specialization(limit = "3")
         @SuppressWarnings("truffle-static-method")  // TODO: arg
         byte[] doBuffer(VirtualFrame frame, Object object,
-                        @Bind("this") Node inliningTarget,
-                        @Cached("createFor(this)") IndirectCallData indirectCallData,
+                        @Bind Node inliningTarget,
+                        @Cached("createFor($node)") IndirectCallData indirectCallData,
                         @CachedLibrary("object") PythonBufferAcquireLibrary bufferAcquireLib,
                         @CachedLibrary(limit = "1") PythonBufferAccessLibrary bufferLib,
                         @Cached PRaiseNode raiseNode) {
@@ -528,14 +528,14 @@ public abstract class BytesNodes {
 
         @Specialization
         static Object str(PString str,
-                        @Bind("this") Node inliningTarget,
+                        @Bind Node inliningTarget,
                         @Cached StringNodes.StringMaterializeNode toStr) {
             return toStr.execute(inliningTarget, str);
         }
 
         @Fallback
         Object doOthers(@SuppressWarnings("unused") VirtualFrame frame, Object value,
-                        @Bind("this") Node inliningTarget) {
+                        @Bind Node inliningTarget) {
             throw PRaiseNode.raiseStatic(inliningTarget, TypeError, ErrorMessages.ARG_D_MUST_BE_S_NOT_P, className, argNum, PythonBuiltinClassType.PString, value);
         }
 
@@ -561,8 +561,8 @@ public abstract class BytesNodes {
 
         @Specialization
         static byte[] doGeneric(VirtualFrame frame, Object object,
-                        @Bind("this") Node inliningTarget,
-                        @Cached("createFor(this)") IndirectCallData indirectCallData,
+                        @Bind Node inliningTarget,
+                        @Cached("createFor($node)") IndirectCallData indirectCallData,
                         @CachedLibrary(limit = "3") PythonBufferAcquireLibrary bufferAcquireLib,
                         @CachedLibrary(limit = "3") PythonBufferAccessLibrary bufferLib,
                         @Cached BytesNodes.IterableToByteNode iterableToByteNode,
@@ -674,8 +674,8 @@ public abstract class BytesNodes {
 
         @Specialization(guards = "bytesPerSepGroup == 0")
         static TruffleString zero(byte[] argbuf, int arglen, @SuppressWarnings("unused") byte sep, @SuppressWarnings("unused") int bytesPerSepGroup,
-                        @Shared @Cached(inline = false) TruffleString.FromByteArrayNode fromByteArrayNode,
-                        @Shared @Cached(inline = false) TruffleString.SwitchEncodingNode switchEncodingNode) {
+                        @Shared @Cached TruffleString.FromByteArrayNode fromByteArrayNode,
+                        @Shared @Cached TruffleString.SwitchEncodingNode switchEncodingNode) {
 
             int resultlen = arglen * 2;
             byte[] retbuf = new byte[resultlen];
@@ -692,8 +692,8 @@ public abstract class BytesNodes {
         @Specialization(guards = "bytesPerSepGroup < 0")
         static TruffleString negative(Node inliningTarget, byte[] argbuf, int arglen, byte sep, int bytesPerSepGroup,
                         @Shared @Cached InlinedConditionProfile earlyExit,
-                        @Shared @Cached(inline = false) TruffleString.FromByteArrayNode fromByteArrayNode,
-                        @Shared @Cached(inline = false) TruffleString.SwitchEncodingNode switchEncodingNode,
+                        @Shared @Cached TruffleString.FromByteArrayNode fromByteArrayNode,
+                        @Shared @Cached TruffleString.SwitchEncodingNode switchEncodingNode,
                         @Shared @Cached PRaiseNode raiseNode) {
             if (earlyExit.profile(inliningTarget, arglen == 0)) {
                 return T_EMPTY_STRING;
@@ -734,8 +734,8 @@ public abstract class BytesNodes {
         @Specialization(guards = "absBytesPerSepGroup > 0")
         static TruffleString positive(Node inliningTarget, byte[] argbuf, int arglen, byte sep, int absBytesPerSepGroup,
                         @Shared @Cached InlinedConditionProfile earlyExit,
-                        @Shared @Cached(inline = false) TruffleString.FromByteArrayNode fromByteArrayNode,
-                        @Shared @Cached(inline = false) TruffleString.SwitchEncodingNode switchEncodingNode,
+                        @Shared @Cached TruffleString.FromByteArrayNode fromByteArrayNode,
+                        @Shared @Cached TruffleString.SwitchEncodingNode switchEncodingNode,
                         @Shared @Cached PRaiseNode raiseNode) {
             if (earlyExit.profile(inliningTarget, arglen == 0)) {
                 return T_EMPTY_STRING;
@@ -774,13 +774,13 @@ public abstract class BytesNodes {
         }
     }
 
-    @SuppressWarnings("truffle-inlining")       // footprint reduction 72 -> 54
+    @GenerateInline(false)       // footprint reduction 72 -> 54
     public abstract static class IterableToByteNode extends Node {
         public abstract byte[] execute(VirtualFrame frame, Object iterable);
 
         @Specialization
         static byte[] bytearray(VirtualFrame frame, Object iterable,
-                        @Bind("this") Node inliningTarget,
+                        @Bind Node inliningTarget,
                         @Cached IteratorNodes.GetLength lenghtHintNode,
                         @Cached PyIterNextNode nextNode,
                         @Cached CastToByteNode castToByteNode,
@@ -817,8 +817,8 @@ public abstract class BytesNodes {
 
         @Specialization
         static TruffleString doit(VirtualFrame frame, Object value,
-                        @Bind("this") Node inliningTarget,
-                        @Cached("createFor(this)") IndirectCallData indirectCallData,
+                        @Bind Node inliningTarget,
+                        @Cached("createFor($node)") IndirectCallData indirectCallData,
                         @CachedLibrary(limit = "3") PythonBufferAcquireLibrary bufferAcquireLib,
                         @CachedLibrary(limit = "3") PythonBufferAccessLibrary bufferLib,
                         @Cached CastToTruffleStringNode toString,
@@ -849,6 +849,10 @@ public abstract class BytesNodes {
     @GenerateCached(false)
     public abstract static class HashBufferNode extends PNodeWithContext {
         public abstract long execute(Node inliningTarget, Object buffer);
+
+        public static long executeUncached(Object buffer) {
+            return BytesNodesFactory.HashBufferNodeGen.getUncached().execute(null, buffer);
+        }
 
         @Specialization(guards = "bufferLib.hasInternalByteArray(buffer)", limit = "2")
         static long hashDirect(Object buffer,
@@ -882,13 +886,13 @@ public abstract class BytesNodes {
     }
 
     @ImportStatic(PGuards.class)
-    @SuppressWarnings("truffle-inlining")       // footprint reduction 44 -> 25
+    @GenerateInline(false)       // footprint reduction 44 -> 25
     public abstract static class HexStringToBytesNode extends Node {
         public abstract byte[] execute(TruffleString str);
 
         @Specialization(guards = "isAscii(str, getCodeRangeNode)")
         static byte[] ascii(TruffleString str,
-                        @Bind("this") Node inliningTarget,
+                        @Bind Node inliningTarget,
                         @Shared("getCodeRange") @Cached @SuppressWarnings("unused") TruffleString.GetCodeRangeNode getCodeRangeNode,
                         @Cached TruffleString.SwitchEncodingNode switchEncodingNode,
                         @Cached TruffleString.GetInternalByteArrayNode getInternalByteArrayNode,
@@ -924,7 +928,7 @@ public abstract class BytesNodes {
 
         @Specialization(guards = "!isAscii(str, getCodeRangeNode)")
         static byte[] nonAscii(TruffleString str,
-                        @Bind("this") Node inliningTarget,
+                        @Bind Node inliningTarget,
                         @Shared("getCodeRange") @Cached @SuppressWarnings("unused") TruffleString.GetCodeRangeNode getCodeRangeNode,
                         @Cached TruffleString.CreateCodePointIteratorNode createCodePointIteratorNode,
                         @Cached TruffleStringIterator.NextNode nextNode,
@@ -932,7 +936,7 @@ public abstract class BytesNodes {
             TruffleStringIterator it = createCodePointIteratorNode.execute(str, TS_ENCODING);
             int i = 0;
             while (it.hasNext()) {
-                if (nextNode.execute(it) > 127) {
+                if (nextNode.execute(it, TS_ENCODING) > 127) {
                     throw raiseNode.raise(inliningTarget, PythonBuiltinClassType.ValueError, NON_HEX_NUMBER_IN_FROMHEX, i);
                 }
                 ++i;

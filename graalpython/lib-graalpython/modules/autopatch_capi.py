@@ -1,4 +1,4 @@
-# Copyright (c) 2022, 2024, Oracle and/or its affiliates. All rights reserved.
+# Copyright (c) 2022, 2025, Oracle and/or its affiliates. All rights reserved.
 # DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
 #
 # The Universal Permissive License (UPL), Version 1.0
@@ -65,8 +65,13 @@ def replace_field_access(contents, match, replacement, assignment):
     start, end = match.span(1)
     level = 0
 
-    def consume_whitespace_backwards(idx):
-        while idx >= 0 and contents[idx].isspace():
+    def consume_whitespace_backwards(idx, newlines=True):
+        while idx >= 0 and contents[idx].isspace() and (not newlines or contents[idx] != '\n'):
+            idx -= 1
+        return idx
+
+    def consume_line_backwards(idx):
+        while idx >= 0 and contents[idx] != '\n':
             idx -= 1
         return idx
 
@@ -124,6 +129,13 @@ def replace_field_access(contents, match, replacement, assignment):
         else:
             idx += 1
             break
+        idx = consume_whitespace_backwards(idx, newlines=False)
+        if contents[idx + 1] == '\n':
+            # Get previous line. If it's a comment or a preprocessor directive, stop
+            line_start = consume_whitespace_forward(consume_line_backwards(idx))
+            if contents[line_start: line_start + 2].startswith(('#', '//')):
+                idx += 1
+                break
         idx = consume_whitespace_backwards(idx)
 
     receiver_start = consume_whitespace_forward(idx)
@@ -173,8 +185,8 @@ auto_replacements = {
                     r'\W(m_ml\s*->\s*ml_doc)\W': (replace_field_access, 'GraalPyCFunction_GetDoc((PyObject*)(%receiver))', 'GraalPyCFunction_SetDoc((PyObject*)(%receiver), %value)'),
                     # Py_CLEAR/Py_VISIT on a function's module is skipped for us, Java GC takes care of it
                     r'(Py_(?:CLEAR|VISIT)\((?:(?:\(?\([a-zA-Z0-9_]|[a-zA-Z0-9_])(?:[a-zA-Z0-9_]|\)|\*\)|->)*)->m_module\);)': (simple_replace, ''),
-                    r'\W(m_ml)\W': (replace_field_access, '_PyCFunction_GetMethodDef((PyObject*)(%receiver))', '_PyCFunction_SetMethodDef((PyObject*)(%receiver), %value)'),
-                    r'\W(m_module)\W': (replace_field_access, '_PyCFunction_GetModule((PyObject*)(%receiver))', '_PyCFunction_SetModule((PyObject*)(%receiver), %value)'),
+                    r'\W(m_ml)\W': (replace_field_access, 'GraalPyCFunction_GetMethodDef((PyObject*)(%receiver))', 'GraalPyCFunction_SetMethodDef((PyObject*)(%receiver), %value)'),
+                    r'\W(m_module)\W': (replace_field_access, 'GraalPyCFunction_GetModule((PyObject*)(%receiver))', 'GraalPyCFunction_SetModule((PyObject*)(%receiver), %value)'),
                     r'(&PyTuple_GET_ITEM\(([\(\w](?:\w|->|\.|\(|\))*), 0\))': (simple_replace, r'PySequence_Fast_ITEMS(\2)'),
                     # already defined by GraalPy:
                     r'^\s*()#\s*define\s+Py_SET_TYPE\W': (simple_replace, '//'),

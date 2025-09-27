@@ -42,7 +42,7 @@ package com.oracle.graal.python.builtins.modules.multiprocessing;
 
 import java.util.List;
 
-import com.oracle.graal.python.builtins.Builtin;
+import com.oracle.graal.python.annotations.Builtin;
 import com.oracle.graal.python.builtins.CoreFunctions;
 import com.oracle.graal.python.builtins.PythonBuiltins;
 import com.oracle.graal.python.builtins.objects.PNone;
@@ -76,7 +76,7 @@ public class MultiprocessingModuleBuiltins extends PythonBuiltins {
         PNone doit(VirtualFrame frame, TruffleString name,
                         @Bind("getPosixSupport()") PosixSupport posixSupport,
                         @CachedLibrary("posixSupport") PosixSupportLibrary posixLib,
-                        @Bind("this") Node inliningTarget,
+                        @Bind Node inliningTarget,
                         @Cached PConstructAndRaiseNode.Lazy constructAndRaiseNode) {
             try {
                 posixLib.semUnlink(posixSupport, posixLib.createPathFromString(posixSupport, name));

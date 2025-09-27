@@ -64,10 +64,10 @@ import com.oracle.graal.python.PythonLanguage;
 import com.oracle.graal.python.annotations.Slot;
 import com.oracle.graal.python.annotations.Slot.SlotKind;
 import com.oracle.graal.python.annotations.Slot.SlotSignature;
-import com.oracle.graal.python.builtins.Builtin;
+import com.oracle.graal.python.annotations.Builtin;
 import com.oracle.graal.python.builtins.CoreFunctions;
 import com.oracle.graal.python.builtins.PythonBuiltins;
-import com.oracle.graal.python.builtins.PythonOS;
+import com.oracle.graal.python.annotations.PythonOS;
 import com.oracle.graal.python.builtins.modules.BuiltinFunctions.IsInstanceNode;
 import com.oracle.graal.python.builtins.modules.ctypes.CFieldBuiltins.SetFuncNode;
 import com.oracle.graal.python.builtins.modules.ctypes.FFIType.FieldDesc;
@@ -140,7 +140,7 @@ public final class PyCSimpleTypeBuiltins extends PythonBuiltins {
 
         @Specialization
         static Object PyCSimpleType_new(VirtualFrame frame, Object type, Object[] args, PKeyword[] kwds,
-                        @Bind("this") Node inliningTarget,
+                        @Bind Node inliningTarget,
                         @Cached TypeNode typeNew,
                         @Cached InternStringNode internStringNode,
                         @Cached GetDictIfExistsNode getDict,
@@ -309,7 +309,7 @@ public final class PyCSimpleTypeBuiltins extends PythonBuiltins {
 
         @Specialization
         static Object PyCSimpleType_from_param(VirtualFrame frame, Object type, Object value,
-                        @Bind("this") Node inliningTarget,
+                        @Bind Node inliningTarget,
                         @Cached SetFuncNode setFuncNode,
                         @Cached IsInstanceNode isInstanceNode,
                         @Cached PyTypeStgDictNode pyTypeStgDictNode,
@@ -368,7 +368,7 @@ public final class PyCSimpleTypeBuiltins extends PythonBuiltins {
         /* The standard-size code is the same as the ctypes one */
         char pep_code = code;
 
-        boolean longIs32Bit = PythonOS.getPythonOS() == PythonOS.PLATFORM_WIN32;
+        boolean longIs32Bit = PythonLanguage.getPythonOS() == PythonOS.PLATFORM_WIN32;
 
         switch (code) {
             // #if SIZEOF_INT == 2

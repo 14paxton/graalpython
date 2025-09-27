@@ -51,7 +51,7 @@ import java.util.List;
 import com.oracle.graal.python.annotations.ArgumentClinic;
 import com.oracle.graal.python.annotations.Slot;
 import com.oracle.graal.python.annotations.Slot.SlotKind;
-import com.oracle.graal.python.builtins.Builtin;
+import com.oracle.graal.python.annotations.Builtin;
 import com.oracle.graal.python.builtins.CoreFunctions;
 import com.oracle.graal.python.builtins.PythonBuiltinClassType;
 import com.oracle.graal.python.builtins.PythonBuiltins;
@@ -158,21 +158,21 @@ public final class CommonLockBuiltins extends PythonBuiltins {
         @SuppressWarnings("unused")
         @Specialization(guards = {"invalidArgs(blocking, timeout)", "timeout != UNSET_TIMEOUT", "!blocking"})
         static boolean err1(AbstractPythonLock self, boolean blocking, double timeout,
-                        @Bind("this") Node inliningTarget) {
+                        @Bind Node inliningTarget) {
             throw PRaiseNode.raiseStatic(inliningTarget, ValueError, ErrorMessages.CANT_SPECIFY_TIMEOUT_FOR_NONBLOCKING);
         }
 
         @SuppressWarnings("unused")
         @Specialization(guards = {"invalidArgs(blocking, timeout)", "timeout != UNSET_TIMEOUT", "isNeg(timeout)"})
         static boolean err2(AbstractPythonLock self, boolean blocking, double timeout,
-                        @Bind("this") Node inliningTarget) {
+                        @Bind Node inliningTarget) {
             throw PRaiseNode.raiseStatic(inliningTarget, ValueError, ErrorMessages.TIMEOUT_VALUE_MUST_BE_POSITIVE);
         }
 
         @SuppressWarnings("unused")
         @Specialization(guards = {"invalidArgs(blocking, timeout)", "timeout != UNSET_TIMEOUT", "timeout > TIMEOUT_MAX"})
         static boolean err3(AbstractPythonLock self, boolean blocking, double timeout,
-                        @Bind("this") Node inliningTarget) {
+                        @Bind Node inliningTarget) {
             throw PRaiseNode.raiseStatic(inliningTarget, OverflowError, ErrorMessages.TIMEOUT_VALUE_TOO_LARGE);
         }
 
@@ -216,7 +216,7 @@ public final class CommonLockBuiltins extends PythonBuiltins {
 
         @Specialization
         static Object doRelease(PRLock self,
-                        @Bind("this") Node inliningTarget,
+                        @Bind Node inliningTarget,
                         @Cached PRaiseNode raiseNode) {
             if (!self.isOwned()) {
                 throw raiseNode.raise(inliningTarget, PythonBuiltinClassType.RuntimeError, ErrorMessages.LOCK_NOT_HELD);

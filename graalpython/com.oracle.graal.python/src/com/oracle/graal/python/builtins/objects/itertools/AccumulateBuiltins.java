@@ -50,7 +50,7 @@ import com.oracle.graal.python.PythonLanguage;
 import com.oracle.graal.python.annotations.Slot;
 import com.oracle.graal.python.annotations.Slot.SlotKind;
 import com.oracle.graal.python.annotations.Slot.SlotSignature;
-import com.oracle.graal.python.builtins.Builtin;
+import com.oracle.graal.python.annotations.Builtin;
 import com.oracle.graal.python.builtins.CoreFunctions;
 import com.oracle.graal.python.builtins.PythonBuiltinClassType;
 import com.oracle.graal.python.builtins.PythonBuiltins;
@@ -98,7 +98,7 @@ public final class AccumulateBuiltins extends PythonBuiltins {
 
         @Specialization
         protected static PAccumulate construct(VirtualFrame frame, Object cls, Object iterable, Object func, Object initial,
-                        @Bind("this") Node inliningTarget,
+                        @Bind Node inliningTarget,
                         @Bind PythonLanguage language,
                         @Cached TypeNodes.GetInstanceShape getInstanceShape,
                         @Cached PyObjectGetIter getIter) {
@@ -125,7 +125,7 @@ public final class AccumulateBuiltins extends PythonBuiltins {
     public abstract static class NextNode extends TpIterNextBuiltin {
         @Specialization
         static Object next(VirtualFrame frame, PAccumulate self,
-                        @Bind("this") Node inliningTarget,
+                        @Bind Node inliningTarget,
                         @Cached GetObjectSlotsNode getSlots,
                         @Cached CallSlotTpIterNextNode callIterNext,
                         @Cached PyNumberAddNode addNode,
@@ -161,7 +161,7 @@ public final class AccumulateBuiltins extends PythonBuiltins {
 
         @Specialization
         static Object reduceNoFunc(VirtualFrame frame, PAccumulate self,
-                        @Bind("this") Node inliningTarget,
+                        @Bind Node inliningTarget,
                         @Cached GetClassNode getClassNode,
                         @Cached InlinedBranchProfile hasInitialProfile,
                         @Cached InlinedBranchProfile totalNoneProfile,

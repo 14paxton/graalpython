@@ -83,7 +83,7 @@ import com.oracle.truffle.api.profiles.InlinedBranchProfile;
 
 @ImportStatic({PGuards.class, SpecialMethodNames.class})
 @GenerateUncached
-@SuppressWarnings("truffle-inlining")       // footprint reduction 60 -> 44
+@GenerateInline(false)       // footprint reduction 60 -> 44
 public abstract class CallNode extends PNodeWithContext {
     @NeverDefault
     public static CallNode create() {
@@ -153,7 +153,7 @@ public abstract class CallNode extends PNodeWithContext {
     @Specialization
     @InliningCutoff
     protected static Object doForeignMethod(ForeignMethod callable, Object[] arguments, PKeyword[] keywords,
-                    @Bind("this") Node inliningTarget,
+                    @Bind Node inliningTarget,
                     @Cached PForeignToPTypeNode fromForeign,
                     @Cached InlinedBranchProfile keywordsError,
                     @Cached InlinedBranchProfile typeError,
@@ -186,7 +186,7 @@ public abstract class CallNode extends PNodeWithContext {
 
     @Fallback
     static Object doGeneric(VirtualFrame frame, Object callableObject, Object[] arguments, PKeyword[] keywords,
-                    @Bind("this") Node inliningTarget,
+                    @Bind Node inliningTarget,
                     @Cached PRaiseNode raise,
                     @Cached GetClassNode getClassNode,
                     @Cached GetCachedTpSlotsNode getSlots,

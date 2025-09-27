@@ -54,7 +54,7 @@ import com.oracle.graal.python.annotations.ArgumentClinic;
 import com.oracle.graal.python.annotations.Slot;
 import com.oracle.graal.python.annotations.Slot.SlotKind;
 import com.oracle.graal.python.annotations.Slot.SlotSignature;
-import com.oracle.graal.python.builtins.Builtin;
+import com.oracle.graal.python.annotations.Builtin;
 import com.oracle.graal.python.builtins.CoreFunctions;
 import com.oracle.graal.python.builtins.Python3Core;
 import com.oracle.graal.python.builtins.PythonBuiltinClassType;
@@ -118,7 +118,7 @@ public class SemLockBuiltins extends PythonBuiltins {
     abstract static class SemLockNode extends PythonClinicBuiltinNode {
         @Specialization
         static PSemLock construct(VirtualFrame frame, Object cls, int kind, int value, int maxValue, TruffleString name, boolean unlink,
-                        @Bind("this") Node inliningTarget,
+                        @Bind Node inliningTarget,
                         @Bind("getPosixSupport()") PosixSupport posixSupport,
                         @CachedLibrary("posixSupport") PosixSupportLibrary posixLib,
                         @Bind PythonLanguage language,
@@ -198,7 +198,7 @@ public class SemLockBuiltins extends PythonBuiltins {
     abstract static class AcquireNode extends PythonTernaryClinicBuiltinNode {
         @Specialization
         static boolean acquire(VirtualFrame frame, PSemLock self, boolean blocking, Object timeoutObj,
-                        @Bind("this") Node inliningTarget,
+                        @Bind Node inliningTarget,
                         @Bind("getPosixSupport()") PosixSupport posixSupport,
                         @CachedLibrary("posixSupport") PosixSupportLibrary posixLib,
                         @Cached PyFloatAsDoubleNode asDoubleNode,
@@ -263,7 +263,7 @@ public class SemLockBuiltins extends PythonBuiltins {
     abstract static class ReleaseNode extends PythonUnaryBuiltinNode {
         @Specialization
         static PNone release(VirtualFrame frame, PSemLock self,
-                        @Bind("this") Node inliningTarget,
+                        @Bind Node inliningTarget,
                         @Bind("getPosixSupport()") PosixSupport posixSupport,
                         @CachedLibrary("posixSupport") PosixSupportLibrary posixLib,
                         @Cached PRaiseNode raiseNode,
@@ -351,7 +351,7 @@ public class SemLockBuiltins extends PythonBuiltins {
     abstract static class GetValueNode extends PythonUnaryBuiltinNode {
         @Specialization
         int get(VirtualFrame frame, PSemLock self,
-                        @Bind("this") Node inliningTarget,
+                        @Bind Node inliningTarget,
                         @Bind("getPosixSupport()") PosixSupport posixSupport,
                         @CachedLibrary("posixSupport") PosixSupportLibrary posixLib,
                         @Cached PConstructAndRaiseNode.Lazy constructAndRaiseNode,
@@ -380,7 +380,7 @@ public class SemLockBuiltins extends PythonBuiltins {
     abstract static class IsZeroNode extends PythonUnaryBuiltinNode {
         @Specialization
         static boolean get(VirtualFrame frame, PSemLock self,
-                        @Bind("this") Node inliningTarget,
+                        @Bind Node inliningTarget,
                         @Bind("getPosixSupport()") PosixSupport posixSupport,
                         @CachedLibrary("posixSupport") PosixSupportLibrary posixLib,
                         @Cached PConstructAndRaiseNode.Lazy constructAndRaiseNode) {
@@ -420,7 +420,7 @@ public class SemLockBuiltins extends PythonBuiltins {
     abstract static class RebuildNode extends PythonClinicBuiltinNode {
         @Specialization
         static Object rebuild(VirtualFrame frame, Object cls, @SuppressWarnings("unused") long origHandle, int kind, int maxValue, TruffleString name,
-                        @Bind("this") Node inliningTarget,
+                        @Bind Node inliningTarget,
                         @Bind("getPosixSupport()") PosixSupport posixSupport,
                         @CachedLibrary("posixSupport") PosixSupportLibrary posixLib,
                         @Bind PythonLanguage language,

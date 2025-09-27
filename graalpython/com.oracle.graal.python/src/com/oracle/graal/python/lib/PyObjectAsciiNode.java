@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2021, 2024, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2021, 2025, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * The Universal Permissive License (UPL), Version 1.0
@@ -77,12 +77,12 @@ public abstract class PyObjectAsciiNode extends PNodeWithContext {
     @Specialization
     public static TruffleString ascii(VirtualFrame frame, Node inliningTarget, Object obj,
                     @Cached PyObjectReprAsTruffleStringNode reprNode,
-                    @Cached(inline = false) TruffleString.GetCodeRangeNode getCodeRangeNode,
-                    @Cached(inline = false) TruffleString.CreateCodePointIteratorNode createCodePointIteratorNode,
-                    @Cached(inline = false) TruffleStringIterator.NextNode nextNode,
-                    @Cached(inline = false) TruffleString.CodePointLengthNode codePointLengthNode,
-                    @Cached(inline = false) TruffleString.FromByteArrayNode fromByteArrayNode,
-                    @Cached(inline = false) TruffleString.SwitchEncodingNode switchEncodingNode) {
+                    @Cached TruffleString.GetCodeRangeNode getCodeRangeNode,
+                    @Cached TruffleString.CreateCodePointIteratorNode createCodePointIteratorNode,
+                    @Cached TruffleStringIterator.NextNode nextNode,
+                    @Cached TruffleString.CodePointLengthNode codePointLengthNode,
+                    @Cached TruffleString.FromByteArrayNode fromByteArrayNode,
+                    @Cached TruffleString.SwitchEncodingNode switchEncodingNode) {
         // TODO GR-37220: rewrite using TruffleStringBuilder?
         TruffleString repr = reprNode.execute(frame, inliningTarget, obj);
         if (getCodeRangeNode.execute(repr, TS_ENCODING) == TruffleString.CodeRange.ASCII) {
@@ -92,7 +92,7 @@ public abstract class PyObjectAsciiNode extends PNodeWithContext {
         TruffleStringIterator it = createCodePointIteratorNode.execute(repr, TS_ENCODING);
         int j = 0;
         while (it.hasNext()) {
-            int ch = nextNode.execute(it);
+            int ch = nextNode.execute(it, TS_ENCODING);
             j = unicodeNonAsciiEscape(ch, j, bytes);
         }
         return switchEncodingNode.execute(fromByteArrayNode.execute(bytes, 0, j, Encoding.US_ASCII, true), TS_ENCODING);

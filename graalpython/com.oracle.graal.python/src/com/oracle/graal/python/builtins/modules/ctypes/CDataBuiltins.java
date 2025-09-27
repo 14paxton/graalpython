@@ -61,7 +61,7 @@ import java.util.List;
 import com.oracle.graal.python.PythonLanguage;
 import com.oracle.graal.python.annotations.Slot;
 import com.oracle.graal.python.annotations.Slot.SlotKind;
-import com.oracle.graal.python.builtins.Builtin;
+import com.oracle.graal.python.annotations.Builtin;
 import com.oracle.graal.python.builtins.CoreFunctions;
 import com.oracle.graal.python.builtins.Python3Core;
 import com.oracle.graal.python.builtins.PythonBuiltins;
@@ -81,7 +81,7 @@ import com.oracle.graal.python.lib.PyNumberAsSizeNode;
 import com.oracle.graal.python.nodes.PGuards;
 import com.oracle.graal.python.nodes.PRaiseNode;
 import com.oracle.graal.python.nodes.SpecialAttributeNames;
-import com.oracle.graal.python.nodes.attributes.GetAttributeNode;
+import com.oracle.graal.python.nodes.attributes.GetFixedAttributeNode;
 import com.oracle.graal.python.nodes.attributes.ReadAttributeFromPythonObjectNode;
 import com.oracle.graal.python.nodes.function.PythonBuiltinBaseNode;
 import com.oracle.graal.python.nodes.function.builtins.PythonBinaryBuiltinNode;
@@ -161,7 +161,7 @@ public final class CDataBuiltins extends PythonBuiltins {
     protected abstract static class HashNode extends HashBuiltinNode {
         @Specialization
         static long hash(@SuppressWarnings("unused") CDataObject self,
-                        @Bind("this") Node inliningTarget) {
+                        @Bind Node inliningTarget) {
             throw PRaiseNode.raiseStatic(inliningTarget, TypeError, UNHASHABLE_TYPE);
         }
     }
@@ -172,10 +172,10 @@ public final class CDataBuiltins extends PythonBuiltins {
 
         @Specialization
         static Object reduce(VirtualFrame frame, CDataObject self,
-                        @Bind("this") Node inliningTarget,
+                        @Bind Node inliningTarget,
                         @Bind PythonLanguage language,
                         @Cached PyObjectStgDictNode pyObjectStgDictNode,
-                        @Cached("create(T___DICT__)") GetAttributeNode getAttributeNode,
+                        @Cached("create(T___DICT__)") GetFixedAttributeNode getAttributeNode,
                         @Cached ReadAttributeFromPythonObjectNode readAttrNode,
                         @Cached PointerNodes.ReadBytesNode readBytesNode,
                         @Cached GetClassNode getClassNode,
@@ -184,7 +184,7 @@ public final class CDataBuiltins extends PythonBuiltins {
             if ((stgDict.flags & (TYPEFLAG_ISPOINTER | TYPEFLAG_HASPOINTER)) != 0) {
                 throw raiseNode.raise(inliningTarget, ValueError, CTYPES_OBJECTS_CONTAINING_POINTERS_CANNOT_BE_PICKLED);
             }
-            Object dict = getAttributeNode.executeObject(frame, self);
+            Object dict = getAttributeNode.execute(frame, self);
             Object[] t1 = new Object[]{dict, null};
             t1[1] = PFactory.createBytes(language, readBytesNode.execute(inliningTarget, self.b_ptr, self.b_size));
             Object clazz = getClassNode.execute(inliningTarget, self);
@@ -207,9 +207,9 @@ public final class CDataBuiltins extends PythonBuiltins {
 
         @Specialization
         static Object PyCData_setstate(VirtualFrame frame, CDataObject self, PTuple args,
-                        @Bind("this") Node inliningTarget,
+                        @Bind Node inliningTarget,
                         @Cached SequenceStorageNodes.GetInternalObjectArrayNode getArray,
-                        @Cached("create(T___DICT__)") GetAttributeNode getAttributeNode,
+                        @Cached("create(T___DICT__)") GetFixedAttributeNode getAttributeNode,
                         @Cached PyNumberAsSizeNode asSizeNode,
                         @Cached HashingStorageAddAllToOther addAllToOtherNode,
                         @Cached PRaiseNode raiseNode) {
@@ -227,7 +227,7 @@ public final class CDataBuiltins extends PythonBuiltins {
                 len = self.b_size;
             }
             memmove(inliningTarget, self.b_ptr, data, len);
-            Object mydict = getAttributeNode.executeObject(frame, self);
+            Object mydict = getAttributeNode.execute(frame, self);
             if (!PGuards.isDict(mydict)) {
                 throw raiseNode.raise(inliningTarget, TypeError, P_DICT_MUST_BE_A_DICTIONARY_NOT_P, self, mydict);
             }

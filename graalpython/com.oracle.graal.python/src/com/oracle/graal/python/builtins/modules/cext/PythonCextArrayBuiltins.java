@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2023, 2024, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2023, 2025, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * The Universal Permissive License (UPL), Version 1.0
@@ -75,10 +75,10 @@ public final class PythonCextArrayBuiltins {
      * Graalpy-specific function implemented for Cython
      */
     @CApiBuiltin(ret = Int, args = {PyObject, Py_ssize_t}, call = Direct)
-    abstract static class _PyArray_Resize extends CApiBinaryBuiltinNode {
+    abstract static class GraalPyArray_Resize extends CApiBinaryBuiltinNode {
         @Specialization
         static int resize(PArray array, long newSize,
-                        @Bind("this") Node inliningTarget,
+                        @Bind Node inliningTarget,
                         @Cached ArrayNodes.EnsureCapacityNode ensureCapacityNode,
                         @Cached ArrayNodes.SetLengthNode setLengthNode) {
             ensureCapacityNode.execute(inliningTarget, array, (int) newSize);
@@ -88,20 +88,20 @@ public final class PythonCextArrayBuiltins {
     }
 
     @CApiBuiltin(ret = CHAR_PTR, args = {PyObject}, call = Direct)
-    abstract static class _PyArray_Data extends CApiUnaryBuiltinNode {
+    abstract static class GraalPyArray_Data extends CApiUnaryBuiltinNode {
         @Specialization
         static Object get(PArray array,
-                        @Bind("this") Node inliningTarget,
+                        @Bind Node inliningTarget,
                         @Cached ArrayNodes.EnsureNativeStorageNode ensureNativeStorageNode) {
             return ensureNativeStorageNode.execute(inliningTarget, array).getPtr();
         }
     }
 
     @CApiBuiltin(ret = Int, args = {PyObject, PY_BUFFER_PTR, Int}, call = Ignored)
-    abstract static class PyTruffle_Array_getbuffer extends CApiTernaryBuiltinNode {
+    abstract static class GraalPyPrivate_Array_getbuffer extends CApiTernaryBuiltinNode {
         @Specialization
         static int getbuffer(PArray array, Object pyBufferPtr, int flags,
-                        @Bind("this") Node inliningTarget,
+                        @Bind Node inliningTarget,
                         @Cached ArrayNodes.EnsureNativeStorageNode ensureNativeStorageNode,
                         @Cached TruffleString.SwitchEncodingNode switchEncodingNode,
                         @Cached TruffleString.CopyToByteArrayNode copyToByteArrayNode,
@@ -109,7 +109,7 @@ public final class PythonCextArrayBuiltins {
                         @Cached CStructAccess.WritePointerNode writePointerNode,
                         @Cached CStructAccess.WriteLongNode writeLongNode,
                         @Cached CStructAccess.WriteIntNode writeIntNode,
-                        @Cached CStructAccess.WriteByteNode writeByteNode,
+                        @Cached CStructAccess.WriteTruffleStringNode writeTruffleStringNode,
                         @Cached CStructAccess.AllocateNode allocateNode) {
             Object bufPtr = ensureNativeStorageNode.execute(inliningTarget, array).getPtr();
             Object nativeNull = PythonContext.get(inliningTarget).getNativeNull();
@@ -139,10 +139,8 @@ public final class PythonCextArrayBuiltins {
                 TruffleString.Encoding formatEncoding = TruffleString.Encoding.US_ASCII;
                 format = switchEncodingNode.execute(format, formatEncoding);
                 int formatLen = format.byteLength(formatEncoding);
-                byte[] bytes = new byte[formatLen + 1];
-                copyToByteArrayNode.execute(format, 0, bytes, 0, formatLen, formatEncoding);
-                formatPtr = allocateNode.alloc(bytes.length);
-                writeByteNode.writeByteArray(formatPtr, bytes);
+                formatPtr = allocateNode.alloc(formatLen + 1);
+                writeTruffleStringNode.write(formatPtr, format, formatEncoding);
             }
             writePointerNode.write(pyBufferPtr, CFields.Py_buffer__format, formatPtr);
             writePointerNode.write(pyBufferPtr, CFields.Py_buffer__internal, nativeNull);
@@ -153,7 +151,7 @@ public final class PythonCextArrayBuiltins {
     }
 
     @CApiBuiltin(ret = Void, args = {PyObject, PY_BUFFER_PTR}, call = Ignored)
-    abstract static class PyTruffle_Array_releasebuffer extends CApiBinaryBuiltinNode {
+    abstract static class GraalPyPrivate_Array_releasebuffer extends CApiBinaryBuiltinNode {
         @Specialization
         static Object releasebuffer(PArray array, Object pyBufferPtr,
                         @CachedLibrary(limit = "1") InteropLibrary lib,

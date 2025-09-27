@@ -23,8 +23,8 @@
 # OF THE POSSIBILITY OF SUCH DAMAGE.
 from __future__ import print_function
 
-import itertools
 import functools
+import shutil
 import statistics
 import sys
 import os
@@ -39,6 +39,7 @@ from pathlib import Path
 
 import mx
 import mx_benchmark
+import mx_polybench
 from mx_benchmark import StdOutRule, java_vm_registry, OutputCapturingVm, GuestVm, VmBenchmarkSuite, AveragingBenchmarkMixin
 from mx_graalpython_bench_param import HARNESS_PATH
 
@@ -62,6 +63,7 @@ SUBGROUP_GRAAL_PYTHON = "graalpython"
 
 PYTHON_VM_REGISTRY_NAME = "Python"
 CONFIGURATION_DEFAULT = "default"
+CONFIGURATION_CUSTOM = "custom"
 CONFIGURATION_INTERPRETER = "interpreter"
 CONFIGURATION_NATIVE_INTERPRETER = "native-interpreter"
 CONFIGURATION_DEFAULT_MULTI = "default-multi"
@@ -198,23 +200,19 @@ class CPythonVm(AbstractPythonIterationsControlVm):
 
     @property
     def interpreter(self):
-        candidates_pre = [
-            self._virtualenv,
-            mx.get_env("VIRTUAL_ENV"),
-            mx.get_env("PYTHON3_HOME"),
-        ]
-        candidates_suf = [
-            join("bin", "python3"),
-            join("bin", "python"),
-            "python3",
-            "python",
-            sys.executable,
-        ]
-        for p, s in itertools.product(candidates_pre, candidates_suf):
-            if os.path.exists(exe := os.path.join(p or "", s)):
-                mx.log(f"CPython VM {exe=}")
-                return exe
-        assert False, "sys.executable should really exist"
+        if venv := self._virtualenv:
+            path = os.path.join(venv, 'bin', 'python')
+            mx.log(f"Using CPython from virtualenv: {path}")
+        elif python3_home := mx.get_env('PYTHON3_HOME'):
+            path = os.path.join(python3_home, 'python')
+            mx.log(f"Using CPython from PYTHON3_HOME: {path}")
+        elif path := shutil.which('python'):
+            mx.log(f"Using CPython from PATH: {path}")
+        else:
+            assert sys.implementation.name == 'cpython', "Cannot find CPython"
+            path = sys.executable
+            mx.log(f"Using CPython from sys.executable: {path}")
+        return path
 
     def run_vm(self, args, *splat, **kwargs):
         for idx, arg in enumerate(args):
@@ -279,6 +277,13 @@ class GraalPythonVm(AbstractPythonIterationsControlVm):
     @property
     @functools.lru_cache
     def interpreter(self):
+        if self.config_name() == CONFIGURATION_CUSTOM:
+            home = mx.get_env("GRAALPY_HOME")
+            if not home:
+                mx.abort("The custom benchmark config for graalpy is to run with a custom GRAALPY_HOME locally")
+            launcher = join(home, "bin", "graalpy")
+            mx.log(f"Using {launcher} based on GRAALPY_HOME environment for custom config.")
+            return launcher
         from mx_graalpython import graalpy_standalone
         launcher = graalpy_standalone(self.launcher_type, build=False)
         mx.log(f"Using {launcher} based on enabled/excluded GraalPy standalone build targets.")
@@ -287,7 +292,7 @@ class GraalPythonVm(AbstractPythonIterationsControlVm):
     def post_process_command_line_args(self, args):
         if os.environ.get('BYTECODE_DSL_INTERPRETER', '').lower() == 'true' and not self.is_bytecode_dsl_config():
             print("Found environment variable BYTECODE_DSL_INTERPRETER, but the guest vm config is not Bytecode DSL config.")
-            print("Did you want to use, e.g., `mx benchmark ... -- --host-vm-config=default-bc-dsl`?")
+            print("Did you want to use, e.g., `mx benchmark ... -- --python-vm-config=default-bc-dsl`?")
             sys.exit(1)
         return self.get_extra_polyglot_args() + args
 
@@ -944,9 +949,15 @@ class LiveHeapTracker(mx_benchmark.Tracker):
         if self.bmSuite:
             bench_name = f"{self.bmSuite.name()}-{bench_name}"
         ts = datetime.now().strftime("%Y%m%d-%H%M%S")
-        jmap_command = mx.get_jdk().exe_path('jmap')
+        vm = self.bmSuite.execution_context.virtual_machine
+        if isinstance(vm, GraalPythonVm) and vm.launcher_type == "jvm":
+            jmap_command = mx.get_jdk().exe_path('jmap')
+        else:
+            jmap_command = ""
         self.out_file = os.path.join(os.getcwd(), f"heap_tracker_{bench_name}_{ts}.txt")
         iterations = 3
+        if "-i" in cmd:
+            cmd[cmd.index("-i") + 1] = "1"
         return [sys.executable, str(DIR / 'live_heap_tracker.py'), self.out_file, str(iterations), jmap_command, *cmd]
 
     def get_rules(self, bmSuiteArgs):
@@ -959,18 +970,41 @@ class LiveHeapTracker(mx_benchmark.Tracker):
 
         def parse(self, text):
             with open(self.tracker.out_file) as f:
-                heap_mb = [int(line.strip()) / (1024 ** 2) for line in f if line]
+                heap_mb, uss_mb = zip(*(map(lambda i: int(i) / (1024 ** 2), line.split()) for line in f if line))
             os.unlink(self.tracker.out_file)
-            self.tracker.out_file = None
-            deciles = statistics.quantiles(heap_mb, n=10)
-            print(f"Heap size deciles (MiB): {deciles}")
+            heap_deciles = statistics.quantiles(heap_mb, n=10)
+            uss_deciles = statistics.quantiles(uss_mb, n=10)
+            print(f"Heap size deciles (MiB): {heap_deciles}")
+            print(f"USS size deciles (MiB): {uss_deciles}")
+            # The heap benchmarks are a separate suite, because they are run
+            # very differently, but we want to be able to conveniently query
+            # all data about the same suites that we have. So, if this suite
+            # name ends with "-heap", we drop that so it gets attributed to the
+            # base suite.
+            suite = self.tracker.bmSuite.benchSuiteName(self.bmSuiteArgs)
+            if suite.endswith("-heap"):
+                suite = suite[:-len("-heap")]
+            benchmark = f"{suite}.{self.tracker.bmSuite.currently_running_benchmark()}"
+            vm_flags = ' '.join(self.tracker.bmSuite.vmArgs(self.bmSuiteArgs))
             return [
                 PythonBaseBenchmarkSuite.with_branch_and_commit_dict({
-                    "benchmark": self.tracker.bmSuite.currently_running_benchmark(),
-                    "bench-suite": self.tracker.bmSuite.benchSuiteName(self.bmSuiteArgs),
-                    "config.vm-flags": ' '.join(self.tracker.bmSuite.vmArgs(self.bmSuiteArgs)),
+                    "benchmark": benchmark,
+                    "bench-suite": suite,
+                    "config.vm-flags": vm_flags,
                     "metric.name": "allocated-memory",
-                    "metric.value": deciles[-1],
+                    "metric.value": heap_deciles[-1],
+                    "metric.unit": "MB",
+                    "metric.type": "numeric",
+                    "metric.score-function": "id",
+                    "metric.better": "lower",
+                    "metric.iteration": 0
+                }),
+                PythonBaseBenchmarkSuite.with_branch_and_commit_dict({
+                    "benchmark": benchmark,
+                    "bench-suite": suite,
+                    "config.vm-flags": vm_flags,
+                    "metric.name": "memory",
+                    "metric.value": uss_deciles[-1],
                     "metric.unit": "MB",
                     "metric.type": "numeric",
                     "metric.score-function": "id",
@@ -999,7 +1033,17 @@ class PythonHeapBenchmarkSuite(PythonBaseBenchmarkSuite):
     def createCommandLineArgs(self, benchmarks, bmSuiteArgs):
         benchmark = benchmarks[0]
         bench_path = os.path.join(self._bench_path, f'{benchmark}.py')
-        return [*self.vmArgs(bmSuiteArgs), bench_path, *self.runArgs(bmSuiteArgs)]
+        bench_args = self._benchmarks[benchmark]
+        run_args = self.runArgs(bmSuiteArgs)
+        cmd_args = []
+        if "-i" in bench_args:
+            # Need to use the harness to parse
+            cmd_args.append(HARNESS_PATH)
+        if "-i" not in run_args:
+            # Explicit iteration count overrides default
+            run_args += bench_args
+        cmd_args.append(bench_path)
+        return [*self.vmArgs(bmSuiteArgs), *cmd_args, *run_args]
 
     def successPatterns(self):
         return []
@@ -1029,6 +1073,7 @@ def register_vms(suite, sandboxed_options):
         python_vm_registry.add_vm(GraalPythonVm(config_name=name, extra_polyglot_args=extra_polyglot_args), suite, 10)
 
     # GraalPy VMs:
+    add_graalpy_vm(CONFIGURATION_CUSTOM)
     add_graalpy_vm(CONFIGURATION_DEFAULT)
     add_graalpy_vm(CONFIGURATION_INTERPRETER, '--experimental-options', '--engine.Compilation=false')
     add_graalpy_vm(CONFIGURATION_DEFAULT_MULTI, '--experimental-options', '-multi-context')
@@ -1078,3 +1123,38 @@ def register_suites():
     mx_benchmark.add_bm_suite(PythonJMHDistMxBenchmarkSuite())
     for py_bench_suite in PythonHeapBenchmarkSuite.get_benchmark_suites(HEAP_BENCHMARKS):
         mx_benchmark.add_bm_suite(py_bench_suite)
+
+
+mx_polybench.register_polybench_language(mx_suite=SUITE, language="python", distributions=["GRAALPYTHON", "GRAALPYTHON_RESOURCES"])
+
+
+def graalpython_polybench_runner(polybench_run: mx_polybench.PolybenchRunFunction, tags) -> None:
+    fork_count_file = os.path.join(os.path.dirname(os.path.abspath(__file__)), "polybench-fork-counts.json")
+    if "gate" in tags:
+        polybench_run(["--jvm", "interpreter/*.py", "--experimental-options", "--engine.Compilation=false", "-w", "1", "-i", "1"])
+        polybench_run(["--native", "interpreter/*.py", "--experimental-options", "--engine.Compilation=false", "-w", "1", "-i", "1"])
+        polybench_run(["--native", "warmup/*.py", "-w", "1", "-i", "1", "--metric=one-shot", "--mx-benchmark-args", "--fork-count-file", fork_count_file])
+    if "benchmark" in tags:
+        polybench_run(["--jvm", "interpreter/*.py", "--experimental-options", "--engine.Compilation=false"])
+        polybench_run(["--native", "interpreter/*.py", "--experimental-options", "--engine.Compilation=false"])
+        polybench_run(["--jvm", "interpreter/*.py"])
+        polybench_run(["--native", "interpreter/*.py"])
+        polybench_run(["--native", "warmup/*.py", "--metric=one-shot", "--mx-benchmark-args", "--fork-count-file", fork_count_file])
+        polybench_run(
+            ["--jvm", "interpreter/pyinit.py", "-w", "0", "-i", "0", "--metric=none", "--mx-benchmark-args", "--fork-count-file", fork_count_file])
+        polybench_run(
+            ["--native", "interpreter/pyinit.py", "-w", "0", "-i", "0", "--metric=none", "--mx-benchmark-args", "--fork-count-file", fork_count_file])
+        polybench_run(["--jvm", "interpreter/*.py", "--metric=metaspace-memory"])
+        polybench_run(["--jvm", "interpreter/*.py", "--metric=application-memory"])
+        polybench_run(["--jvm", "interpreter/*.py", "--metric=allocated-bytes", "-w", "40", "-i", "10", "--experimental-options", "--engine.Compilation=false"])
+        polybench_run(["--native", "interpreter/*.py", "--metric=allocated-bytes", "-w", "40", "-i", "10", "--experimental-options", "--engine.Compilation=false"])
+        polybench_run(["--jvm", "interpreter/*.py", "--metric=allocated-bytes", "-w", "40", "-i", "10"])
+        polybench_run(["--native", "interpreter/*.py", "--metric=allocated-bytes", "-w", "40", "-i", "10"])
+    if "instructions" in tags:
+        assert mx_polybench.is_enterprise()
+        polybench_run(["--native", "interpreter/*.py", "--metric=instructions", "--experimental-options", "--engine.Compilation=false",
+                       "--mx-benchmark-args", "--fork-count-file", fork_count_file])
+
+
+mx_polybench.register_polybench_benchmark_suite(mx_suite=SUITE, name="python", languages=["python"], benchmark_distribution="GRAALPYTHON_POLYBENCH_BENCHMARKS",
+                                                benchmark_file_filter=".*py$", runner=graalpython_polybench_runner, tags={"gate", "benchmark", "instructions"})

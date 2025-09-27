@@ -109,8 +109,8 @@ import com.oracle.graal.python.builtins.Python3Core;
 import com.oracle.graal.python.builtins.PythonBuiltinClassType;
 import com.oracle.graal.python.builtins.modules.GraalPythonModuleBuiltins.DebugNode;
 import com.oracle.graal.python.builtins.modules.SysModuleBuiltins.GetFileSystemEncodingNode;
-import com.oracle.graal.python.builtins.modules.cext.PythonCextTypeBuiltins.PyTruffleType_AddGetSet;
-import com.oracle.graal.python.builtins.modules.cext.PythonCextTypeBuiltins.PyTruffleType_AddMember;
+import com.oracle.graal.python.builtins.modules.cext.PythonCextTypeBuiltins.GraalPyPrivate_Type_AddGetSet;
+import com.oracle.graal.python.builtins.modules.cext.PythonCextTypeBuiltins.GraalPyPrivate_Type_AddMember;
 import com.oracle.graal.python.builtins.objects.PNone;
 import com.oracle.graal.python.builtins.objects.PythonAbstractObject;
 import com.oracle.graal.python.builtins.objects.cext.PythonAbstractNativeObject;
@@ -118,7 +118,6 @@ import com.oracle.graal.python.builtins.objects.cext.PythonNativeClass;
 import com.oracle.graal.python.builtins.objects.cext.capi.CApiContext;
 import com.oracle.graal.python.builtins.objects.cext.capi.CApiFunction;
 import com.oracle.graal.python.builtins.objects.cext.capi.CApiGCSupport.PyObjectGCDelNode;
-import com.oracle.graal.python.builtins.objects.cext.capi.CApiGuards;
 import com.oracle.graal.python.builtins.objects.cext.capi.CExtNodes.FromCharPointerNode;
 import com.oracle.graal.python.builtins.objects.cext.capi.CExtNodesFactory.FromCharPointerNodeGen;
 import com.oracle.graal.python.builtins.objects.cext.capi.PythonClassNativeWrapper;
@@ -133,8 +132,7 @@ import com.oracle.graal.python.builtins.objects.cext.capi.transitions.CApiTransi
 import com.oracle.graal.python.builtins.objects.cext.capi.transitions.CApiTransitions.NativePtrToPythonWrapperNode;
 import com.oracle.graal.python.builtins.objects.cext.capi.transitions.CApiTransitions.UpdateStrongRefNode;
 import com.oracle.graal.python.builtins.objects.cext.common.CExtCommonNodes.CoerceNativePointerToLongNode;
-import com.oracle.graal.python.builtins.objects.cext.common.CExtCommonNodes.TransformExceptionToNativeNode;
-import com.oracle.graal.python.builtins.objects.cext.common.CExtCommonNodesFactory.TransformExceptionToNativeNodeGen;
+import com.oracle.graal.python.builtins.objects.cext.common.CExtCommonNodes.TransformPExceptionToNativeCachedNode;
 import com.oracle.graal.python.builtins.objects.cext.common.CExtToJavaNode;
 import com.oracle.graal.python.builtins.objects.cext.common.CExtToNativeNode;
 import com.oracle.graal.python.builtins.objects.cext.common.NativePointer;
@@ -210,7 +208,6 @@ import com.oracle.truffle.api.dsl.GenerateCached;
 import com.oracle.truffle.api.dsl.GenerateInline;
 import com.oracle.truffle.api.dsl.GenerateUncached;
 import com.oracle.truffle.api.dsl.Idempotent;
-import com.oracle.truffle.api.dsl.ImportStatic;
 import com.oracle.truffle.api.dsl.NonIdempotent;
 import com.oracle.truffle.api.dsl.ReportPolymorphism;
 import com.oracle.truffle.api.dsl.Specialization;
@@ -794,7 +791,7 @@ public final class PythonCextBuiltins {
         @Child private CExtToNativeNode retNode;
         @Children private final CExtToJavaNode[] argNodes;
         @Child private CApiBuiltinNode builtinNode;
-        @Child private TransformExceptionToNativeNode transformExceptionToNativeNode;
+        @Child private TransformPExceptionToNativeCachedNode transformExceptionToNativeNode;
 
         CachedExecuteCApiBuiltinNode(CApiBuiltinExecutable cachedSelf) {
             assert cachedSelf.ret.createCheckResultNode() == null : "primitive result check types are only intended for ExternalFunctionInvokeNode";
@@ -830,9 +827,9 @@ public final class PythonCextBuiltins {
             } catch (PException e) {
                 if (transformExceptionToNativeNode == null) {
                     CompilerDirectives.transferToInterpreterAndInvalidate();
-                    transformExceptionToNativeNode = insert(TransformExceptionToNativeNodeGen.create());
+                    transformExceptionToNativeNode = insert(TransformPExceptionToNativeCachedNode.create());
                 }
-                transformExceptionToNativeNode.executeCached(e);
+                transformExceptionToNativeNode.execute(e);
                 if (cachedSelf.getRetDescriptor().isIntType()) {
                     return -1;
                 } else if (cachedSelf.getRetDescriptor().isPyObjectOrPointer()) {
@@ -906,11 +903,11 @@ public final class PythonCextBuiltins {
          * This call path should be used if the builtin is basically implemented in Java but some
          * cases can already be covered in a C implementation. The convention is that if there is a
          * C API function {@code Py<namespace>_<function>} (e.g. {@code PyBytes_FromStringAndSize}),
-         * then the Java builtin should be named {@code PyTruffle<namespace>_<function>} (e.g.
-         * {@code PyTruffleBytes_FromStringAndSize}). The corresponding C function must be
+         * then the Java builtin should be named {@code GraalPyPrivate_<namespace>_<function>} (e.g.
+         * {@code GraalPyPrivate_Bytes_FromStringAndSize}). The corresponding C function must be
          * implemented manually and can then call the Java builtin using generated native symbol
          * {@code GraalPy<namespace>_<function>} (e.g.
-         * {@code GraalPyTruffleBytes_FromStringAndSize}).
+         * {@code GraalPyPrivate_Bytes_FromStringAndSize}).
          * </p>
          */
         Ignored,
@@ -973,7 +970,7 @@ public final class PythonCextBuiltins {
     }
 
     @CApiBuiltin(ret = PyObjectTransfer, call = Ignored)
-    abstract static class PyTruffle_FileSystemDefaultEncoding extends CApiNullaryBuiltinNode {
+    abstract static class GraalPyPrivate_FileSystemDefaultEncoding extends CApiNullaryBuiltinNode {
         @Specialization
         static TruffleString encoding() {
             return GetFileSystemEncodingNode.getFileSystemEncoding();
@@ -981,7 +978,7 @@ public final class PythonCextBuiltins {
     }
 
     @CApiBuiltin(ret = PyTypeObjectTransfer, args = {ConstCharPtrAsTruffleString}, call = Ignored)
-    abstract static class PyTruffle_Type extends CApiUnaryBuiltinNode {
+    abstract static class GraalPyPrivate_Type extends CApiUnaryBuiltinNode {
 
         private static final TruffleString[] LOOKUP_MODULES = new TruffleString[]{
                         T__WEAKREF,
@@ -990,7 +987,7 @@ public final class PythonCextBuiltins {
 
         @Specialization
         static Object doI(TruffleString typeName,
-                        @Bind("this") Node inliningTarget,
+                        @Bind Node inliningTarget,
                         @Cached TruffleString.EqualNode eqNode,
                         @Cached PRaiseNode raiseNode) {
             Python3Core core = PythonContext.get(inliningTarget);
@@ -1017,29 +1014,29 @@ public final class PythonCextBuiltins {
 
         @Specialization
         static void doBuiltinClass(PythonBuiltinClass object, TruffleString key, Object value,
-                        @Exclusive @Cached(value = "createForceType()", inline = false) WriteAttributeToObjectNode writeAttrNode) {
+                        @Exclusive @Cached WriteAttributeToObjectNode writeAttrNode) {
             writeAttrNode.execute(object, key, value);
         }
 
         @Specialization
         static void doNativeClass(PythonNativeClass object, TruffleString key, Object value,
-                        @Exclusive @Cached(value = "createForceType()", inline = false) WriteAttributeToObjectNode writeAttrNode) {
+                        @Exclusive @Cached WriteAttributeToObjectNode writeAttrNode) {
             writeAttrNode.execute(object, key, value);
         }
 
         @Specialization(guards = {"!isPythonBuiltinClass(object)"})
         static void doObject(PythonObject object, TruffleString key, Object value,
-                        @Exclusive @Cached(inline = false) WriteAttributeToPythonObjectNode writeAttrToPythonObjectNode) {
+                        @Exclusive @Cached WriteAttributeToPythonObjectNode writeAttrToPythonObjectNode) {
             writeAttrToPythonObjectNode.execute(object, key, value);
         }
     }
 
     @CApiBuiltin(ret = Int, args = {PyTypeObject, Pointer, Pointer}, call = Ignored)
-    abstract static class PyTruffle_Set_Native_Slots extends CApiTernaryBuiltinNode {
+    abstract static class GraalPyPrivate_Set_Native_Slots extends CApiTernaryBuiltinNode {
 
         @Specialization
         static int doPythonClass(PythonClass pythonClass, Object nativeGetSets, Object nativeMembers,
-                        @Bind("this") Node inliningTarget,
+                        @Bind Node inliningTarget,
                         @Cached HiddenAttr.WriteNode writeAttrNode) {
             writeAttrNode.execute(inliningTarget, pythonClass, NATIVE_SLOTS, new Object[]{nativeGetSets, nativeMembers});
             return 0;
@@ -1047,7 +1044,7 @@ public final class PythonCextBuiltins {
     }
 
     @CApiBuiltin(ret = Void, args = {PyTypeObject}, call = Ignored)
-    abstract static class PyTruffle_AddInheritedSlots extends CApiUnaryBuiltinNode {
+    abstract static class GraalPyPrivate_AddInheritedSlots extends CApiUnaryBuiltinNode {
         /**
          * A native class may inherit from a managed class. However, the managed class may define
          * custom slots at a time where the C API is not yet loaded. So we need to check if any of
@@ -1061,15 +1058,15 @@ public final class PythonCextBuiltins {
         @TruffleBoundary
         @Specialization
         static Object addInheritedSlots(PythonAbstractNativeObject pythonClass,
-                        @Bind("this") Node inliningTarget,
+                        @Bind Node inliningTarget,
                         @CachedLibrary(limit = "3") InteropLibrary lib,
                         @Cached CStructAccess.ReadObjectNode readNativeDict,
                         @Cached CStructAccess.ReadPointerNode readPointer,
                         @Cached CStructAccess.ReadI32Node readI32,
                         @Cached CStructAccess.ReadI64Node readI64,
                         @Cached FromCharPointerNode fromCharPointer,
-                        @Cached PyTruffleType_AddGetSet addGetSet,
-                        @Cached PyTruffleType_AddMember addMember,
+                        @Cached GraalPyPrivate_Type_AddGetSet addGetSet,
+                        @Cached GraalPyPrivate_Type_AddMember addMember,
                         @Cached GetMroStorageNode getMroStorageNode) {
             pythonClass.setTpSlots(TpSlots.fromNative(pythonClass, getCApiContext(inliningTarget).getContext()));
 
@@ -1154,13 +1151,13 @@ public final class PythonCextBuiltins {
     }
 
     @CApiBuiltin(ret = PyObjectTransfer, args = {Pointer, PyObject, Py_ssize_t, Int, Py_ssize_t, ConstCharPtrAsTruffleString, Int, Pointer, Pointer, Pointer, Pointer}, call = Ignored)
-    abstract static class PyTruffle_MemoryViewFromBuffer extends CApi11BuiltinNode {
+    abstract static class GraalPyPrivate_MemoryViewFromBuffer extends CApi11BuiltinNode {
 
         @Specialization
         static Object wrap(Object bufferStructPointer, Object ownerObj, long lenObj,
                         Object readonlyObj, Object itemsizeObj, TruffleString format,
                         Object ndimObj, Object bufPointer, Object shapePointer, Object stridesPointer, Object suboffsetsPointer,
-                        @Bind("this") Node inliningTarget,
+                        @Bind Node inliningTarget,
                         @Cached InlinedConditionProfile zeroDimProfile,
                         @Cached CStructAccess.ReadI64Node readShapeNode,
                         @Cached CStructAccess.ReadI64Node readStridesNode,
@@ -1247,7 +1244,7 @@ public final class PythonCextBuiltins {
     }
 
     @CApiBuiltin(ret = SIZE_T, args = {}, call = Ignored)
-    abstract static class PyTruffle_GetMaxNativeMemory extends CApiNullaryBuiltinNode {
+    abstract static class GraalPyPrivate_GetMaxNativeMemory extends CApiNullaryBuiltinNode {
         @Specialization
         @TruffleBoundary
         long get() {
@@ -1256,7 +1253,7 @@ public final class PythonCextBuiltins {
     }
 
     @CApiBuiltin(ret = SIZE_T, args = {}, call = Ignored)
-    abstract static class PyTruffle_GetInitialNativeMemory extends CApiNullaryBuiltinNode {
+    abstract static class GraalPyPrivate_GetInitialNativeMemory extends CApiNullaryBuiltinNode {
         @Specialization
         @TruffleBoundary
         long get() {
@@ -1265,7 +1262,7 @@ public final class PythonCextBuiltins {
     }
 
     @CApiBuiltin(ret = Void, args = {SIZE_T}, call = Ignored)
-    abstract static class PyTruffle_TriggerGC extends CApiUnaryBuiltinNode {
+    abstract static class GraalPyPrivate_TriggerGC extends CApiUnaryBuiltinNode {
 
         @Specialization
         @TruffleBoundary
@@ -1285,12 +1282,11 @@ public final class PythonCextBuiltins {
     }
 
     @CApiBuiltin(ret = Void, args = {Pointer}, call = Ignored)
-    @ImportStatic(CApiGuards.class)
-    abstract static class PyTruffleObject_GC_Del extends CApiUnaryBuiltinNode {
+    abstract static class GraalPyPrivate_ManagedObject_GC_Del extends CApiUnaryBuiltinNode {
 
         @Specialization(limit = "3")
         static PNone doObject(Object ptr,
-                        @Bind("this") Node inliningTarget,
+                        @Bind Node inliningTarget,
                         @Cached PyObjectGCDelNode pyObjectGCDelNode,
                         @CachedLibrary("ptr") InteropLibrary lib) {
             // we expect a pointer object here because this is called from native
@@ -1307,8 +1303,8 @@ public final class PythonCextBuiltins {
     }
 
     @CApiBuiltin(ret = Void, args = {UNSIGNED_INT, UINTPTR_T, SIZE_T}, call = Ignored)
-    abstract static class PyTruffleTraceMalloc_Track extends CApiTernaryBuiltinNode {
-        private static final TruffleLogger LOGGER = CApiContext.getLogger(PyTruffleTraceMalloc_Track.class);
+    abstract static class GraalPyPrivate_TraceMalloc_Track extends CApiTernaryBuiltinNode {
+        private static final TruffleLogger LOGGER = CApiContext.getLogger(GraalPyPrivate_TraceMalloc_Track.class);
 
         @Specialization
         @TruffleBoundary
@@ -1322,8 +1318,8 @@ public final class PythonCextBuiltins {
     }
 
     @CApiBuiltin(ret = Void, args = {UNSIGNED_INT, UINTPTR_T}, call = Ignored)
-    abstract static class PyTruffleTraceMalloc_Untrack extends CApiBinaryBuiltinNode {
-        private static final TruffleLogger LOGGER = CApiContext.getLogger(PyTruffleTraceMalloc_Untrack.class);
+    abstract static class GraalPyPrivate_TraceMalloc_Untrack extends CApiBinaryBuiltinNode {
+        private static final TruffleLogger LOGGER = CApiContext.getLogger(GraalPyPrivate_TraceMalloc_Untrack.class);
 
         @Specialization
         @TruffleBoundary
@@ -1334,7 +1330,7 @@ public final class PythonCextBuiltins {
     }
 
     @GenerateCached(false)
-    abstract static class PyTruffleGcTracingNode extends CApiUnaryBuiltinNode {
+    abstract static class GraalPyPrivate_GcTracingNode extends CApiUnaryBuiltinNode {
 
         @Specialization(guards = "!traceMem(language)")
         static Object doNothing(@SuppressWarnings("unused") Object ptr,
@@ -1345,7 +1341,7 @@ public final class PythonCextBuiltins {
 
         @Fallback
         Object doNativeWrapper(Object ptr,
-                        @Bind("this") Node inliningTarget,
+                        @Bind Node inliningTarget,
                         @Bind PythonContext context,
                         @Cached GetCurrentFrameRef getCurrentFrameRef,
                         @CachedLibrary(limit = "3") InteropLibrary lib) {
@@ -1366,7 +1362,7 @@ public final class PythonCextBuiltins {
     }
 
     @CApiBuiltin(ret = Void, args = {Pointer}, call = Ignored)
-    abstract static class PyTruffleObject_GC_UnTrack extends PyTruffleGcTracingNode {
+    abstract static class GraalPyPrivate_Object_GC_UnTrack extends GraalPyPrivate_GcTracingNode {
         @Override
         protected void trace(PythonContext context, Object ptr, Reference ref, TruffleString className) {
             GC_LOGGER.finer(() -> PythonUtils.formatJString("Untracking container object at %s", CApiContext.asHex(ptr)));
@@ -1375,7 +1371,7 @@ public final class PythonCextBuiltins {
     }
 
     @CApiBuiltin(ret = Void, args = {Pointer}, call = Ignored)
-    abstract static class PyTruffleObject_GC_Track extends PyTruffleGcTracingNode {
+    abstract static class GraalPyPrivate_Object_GC_Track extends GraalPyPrivate_GcTracingNode {
         @Override
         protected void trace(PythonContext context, Object ptr, Reference ref, TruffleString className) {
             GC_LOGGER.finer(() -> PythonUtils.formatJString("Tracking container object at %s", CApiContext.asHex(ptr)));
@@ -1409,12 +1405,12 @@ public final class PythonCextBuiltins {
      * </p>
      */
     @CApiBuiltin(ret = Void, args = {Pointer, Pointer, Int}, call = Ignored)
-    abstract static class PyTruffleObject_ReplicateNativeReferences extends CApiTernaryBuiltinNode {
+    abstract static class GraalPyPrivate_Object_ReplicateNativeReferences extends CApiTernaryBuiltinNode {
         private static final Level LEVEL = Level.FINER;
 
         @Specialization(guards = "isNativeAccessAllowed()")
         static Object doGeneric(Object pointer, Object listHead, int n,
-                        @Bind("this") Node inliningTarget,
+                        @Bind Node inliningTarget,
                         @Cached CStructAccess.ReadObjectNode readObjectNode,
                         @Cached CStructAccess.ReadPointerNode readPointerNode,
                         @Cached CoerceNativePointerToLongNode coerceNativePointerToLongNode,
@@ -1521,10 +1517,10 @@ public final class PythonCextBuiltins {
      * that involve managed objects.
      */
     @CApiBuiltin(ret = Void, args = {Pointer}, call = Ignored)
-    abstract static class PyTruffleObject_GC_EnsureWeak extends CApiUnaryBuiltinNode {
+    abstract static class GraalPyPrivate_Object_GC_EnsureWeak extends CApiUnaryBuiltinNode {
         @Specialization(guards = "isNativeAccessAllowed()")
         static Object doNative(Object weakCandidates,
-                        @Bind("this") Node inliningTarget,
+                        @Bind Node inliningTarget,
                         @Cached CoerceNativePointerToLongNode coerceToLongNode,
                         @Cached CStructAccess.ReadI64Node readI64Node,
                         @Cached CStructAccess.WriteLongNode writeLongNode,
@@ -1595,10 +1591,10 @@ public final class PythonCextBuiltins {
     }
 
     @CApiBuiltin(ret = Int, args = {Pointer}, call = Ignored)
-    abstract static class PyTruffle_IsReferencedFromManaged extends CApiUnaryBuiltinNode {
+    abstract static class GraalPyPrivate_IsReferencedFromManaged extends CApiUnaryBuiltinNode {
         @Specialization(guards = "isNativeAccessAllowed()")
         static int doNative(Object pointer,
-                        @Bind("this") Node inliningTarget,
+                        @Bind Node inliningTarget,
                         @Cached CoerceNativePointerToLongNode coerceToLongNode,
                         @Cached GcNativePtrToPythonNode gcNativePtrToPythonNode) {
             // guaranteed by the guard
@@ -1620,9 +1616,9 @@ public final class PythonCextBuiltins {
     }
 
     @CApiBuiltin(ret = Void, call = Ignored)
-    abstract static class PyTruffle_EnableReferneceQueuePolling extends CApiNullaryBuiltinNode {
+    abstract static class GraalPyPrivate_EnableReferneceQueuePolling extends CApiNullaryBuiltinNode {
         @Specialization
-        static Object doGeneric(@Bind("this") Node inliningTarget) {
+        static Object doGeneric(@Bind Node inliningTarget) {
             assert PythonLanguage.get(inliningTarget).getEngineOption(PythonOptions.PythonGC);
             HandleContext handleContext = PythonContext.get(inliningTarget).nativeContext;
             CApiTransitions.enableReferenceQueuePolling(handleContext);
@@ -1631,9 +1627,9 @@ public final class PythonCextBuiltins {
     }
 
     @CApiBuiltin(ret = Int, call = Ignored)
-    abstract static class PyTruffle_DisableReferneceQueuePolling extends CApiNullaryBuiltinNode {
+    abstract static class GraalPyPrivate_DisableReferneceQueuePolling extends CApiNullaryBuiltinNode {
         @Specialization
-        static int doGeneric(@Bind("this") Node inliningTarget) {
+        static int doGeneric(@Bind Node inliningTarget) {
             assert PythonLanguage.get(inliningTarget).getEngineOption(PythonOptions.PythonGC);
             HandleContext handleContext = PythonContext.get(inliningTarget).nativeContext;
             return PInt.intValue(CApiTransitions.disableReferenceQueuePolling(handleContext));
@@ -1656,7 +1652,7 @@ public final class PythonCextBuiltins {
      * with @EngineOption so they are sure to be the same, or that options differing is benign.
      */
     @CApiBuiltin(ret = Int, call = Ignored)
-    abstract static class PyTruffle_Native_Options extends CApiNullaryBuiltinNode {
+    abstract static class GraalPyPrivate_Native_Options extends CApiNullaryBuiltinNode {
 
         @Specialization
         @TruffleBoundary
@@ -1692,7 +1688,7 @@ public final class PythonCextBuiltins {
     }
 
     @CApiBuiltin(ret = Void, args = {Int, ConstCharPtrAsTruffleString}, call = Ignored)
-    abstract static class PyTruffle_LogString extends CApiBinaryBuiltinNode {
+    abstract static class GraalPyPrivate_LogString extends CApiBinaryBuiltinNode {
 
         @Specialization
         @TruffleBoundary
@@ -1722,7 +1718,7 @@ public final class PythonCextBuiltins {
     }
 
     @CApiBuiltin(ret = Void, args = {}, call = Direct)
-    abstract static class PyTruffle_DebugTrace extends CApiNullaryBuiltinNode {
+    abstract static class GraalPyPrivate_DebugTrace extends CApiNullaryBuiltinNode {
 
         @Specialization
         @TruffleBoundary
@@ -1753,7 +1749,7 @@ public final class PythonCextBuiltins {
     }
 
     @CApiBuiltin(ret = Int, args = {Pointer}, call = Direct)
-    abstract static class PyTruffle_Debug extends CApiUnaryBuiltinNode {
+    abstract static class GraalPyPrivate_Debug extends CApiUnaryBuiltinNode {
         @Specialization
         @TruffleBoundary
         static Object doIt(Object arg,
@@ -1764,12 +1760,12 @@ public final class PythonCextBuiltins {
     }
 
     @CApiBuiltin(ret = Int, args = {Pointer}, call = Direct)
-    abstract static class PyTruffle_ToNative extends CApiUnaryBuiltinNode {
+    abstract static class GraalPyPrivate_ToNative extends CApiUnaryBuiltinNode {
         @Specialization
         @TruffleBoundary
         int doIt(Object object) {
             if (!PythonOptions.EnableDebuggingBuiltins.getValue(getContext().getEnv().getOptions())) {
-                String message = "PyTruffle_ToNative is not enabled - enable with --python.EnableDebuggingBuiltins\n";
+                String message = "GraalPyPrivate_ToNative is not enabled - enable with --python.EnableDebuggingBuiltins\n";
                 try {
                     getContext().getEnv().out().write(message.getBytes());
                 } catch (IOException e) {
@@ -1819,7 +1815,7 @@ public final class PythonCextBuiltins {
      * </pre>
      */
     @CApiBuiltin(ret = Void, args = {Pointer}, call = Ignored)
-    abstract static class PyTruffle_InitBuiltinTypesAndStructs extends CApiUnaryBuiltinNode {
+    abstract static class GraalPyPrivate_InitBuiltinTypesAndStructs extends CApiUnaryBuiltinNode {
 
         @TruffleBoundary
         @Specialization
@@ -1891,10 +1887,18 @@ public final class PythonCextBuiltins {
             } else {
                 String module = name.substring(0, index);
                 name = name.substring(index + 1);
-                Object moduleObject = core.lookupBuiltinModule(toTruffleStringUncached(module));
+                TruffleString tsModule = toTruffleStringUncached(module);
+                Object moduleObject = core.lookupBuiltinModule(tsModule);
                 if (moduleObject == null) {
-                    moduleObject = AbstractImportNode.importModule(toTruffleStringUncached(module));
+                    moduleObject = AbstractImportNode.lookupImportedModule(context, tsModule);
+                    if (moduleObject == null) {
+                        throw CompilerDirectives.shouldNotReachHere(String.format(
+                                        "Module '%s' is needed during C API initialization, but was not imported prior to the initialization in ensureCapiWasLoaded. This is an internal error in GraalPy.",
+                                        module));
+                    }
                 }
+                // Assumption: builtin modules' tp_getattro is well-behaved and just reads the
+                // attribute, there is no locking or blocking inside
                 Object attribute = PyObjectGetAttr.getUncached().execute(null, moduleObject, toTruffleStringUncached(name));
                 if (attribute != PNone.NO_VALUE) {
                     if (attribute instanceof PythonBuiltinClassType builtinType) {
@@ -1914,11 +1918,11 @@ public final class PythonCextBuiltins {
     }
 
     @CApiBuiltin(ret = CHAR_PTR, args = {PyObject}, call = Ignored)
-    abstract static class PyTruffle_GetMMapData extends CApiUnaryBuiltinNode {
+    abstract static class GraalPyPrivate_GetMMapData extends CApiUnaryBuiltinNode {
 
         @Specialization
         Object get(PMMap object,
-                        @Bind("this") Node inliningTarget,
+                        @Bind Node inliningTarget,
                         @CachedLibrary("getPosixSupport()") PosixSupportLibrary posixLib,
                         @Cached PConstructAndRaiseNode.Lazy raiseNode) {
             try {

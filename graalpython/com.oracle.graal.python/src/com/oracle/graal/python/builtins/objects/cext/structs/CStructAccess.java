@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2019, 2024, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2019, 2025, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * The Universal Permissive License (UPL), Version 1.0
@@ -72,6 +72,7 @@ import com.oracle.truffle.api.CompilerDirectives;
 import com.oracle.truffle.api.dsl.Bind;
 import com.oracle.truffle.api.dsl.Cached;
 import com.oracle.truffle.api.dsl.Cached.Shared;
+import com.oracle.truffle.api.dsl.GenerateInline;
 import com.oracle.truffle.api.dsl.GenerateUncached;
 import com.oracle.truffle.api.dsl.ImportStatic;
 import com.oracle.truffle.api.dsl.NeverDefault;
@@ -134,7 +135,7 @@ public class CStructAccess {
 
         @Specialization(guards = {"!allocatePyMem", "nativeAccess()"})
         static Object allocLong(long count, long size, @SuppressWarnings("unused") boolean allocatePyMem,
-                        @Bind("this") Node inliningTarget,
+                        @Bind Node inliningTarget,
                         @Cached InlinedBranchProfile overflowProfile) {
             assert count >= 0;
             assert size >= 0;
@@ -223,6 +224,10 @@ public class CStructAccess {
         @NeverDefault
         public static FreeNode create() {
             return FreeNodeGen.create();
+        }
+
+        public static FreeNode getUncached() {
+            return FreeNodeGen.getUncached();
         }
     }
 
@@ -354,6 +359,10 @@ public class CStructAccess {
         protected static boolean isCharSigned() {
             return CConstants.CHAR_MIN.longValue() < 0;
         }
+
+        public static ReadByteNode getUncached() {
+            return CStructAccessFactory.ReadByteNodeGen.getUncached();
+        }
     }
 
     @ImportStatic(PGuards.class)
@@ -451,10 +460,15 @@ public class CStructAccess {
             assert validPointer(pointer);
             return (int) call.call(NativeCAPISymbol.FUN_READ_INT_MEMBER, pointer, offset);
         }
+
+        public static ReadI32Node getUncached() {
+            return ReadI32NodeGen.getUncached();
+        }
     }
 
     @ImportStatic(PGuards.class)
     @GenerateUncached
+    @GenerateInline(false)
     public abstract static class ReadI64Node extends ReadBaseNode {
 
         abstract long execute(Object pointer, long offset);
@@ -796,6 +810,7 @@ public class CStructAccess {
 
     @ImportStatic(PGuards.class)
     @GenerateUncached
+    @GenerateInline(false)
     public abstract static class ReadCharPtrNode extends ReadBaseNode {
         abstract TruffleString execute(Object pointer, long offset);
 
@@ -1167,6 +1182,45 @@ public class CStructAccess {
 
     @ImportStatic(PGuards.class)
     @GenerateUncached
+    public abstract static class WriteTruffleStringNode extends Node implements CStructAccessNode {
+
+        abstract void execute(Object dstPointer, int dstOffset, TruffleString src, int srcOffset, int length, TruffleString.Encoding encoding);
+
+        public final void write(Object dstPointer, TruffleString src, TruffleString.Encoding encoding) {
+            execute(dstPointer, 0, src, 0, src.byteLength(encoding), encoding);
+        }
+
+        public final boolean accepts(ArgDescriptor desc) {
+            return desc.isI8();
+        }
+
+        @Specialization
+        static void writeLong(long dstPointer, int dstOffset, TruffleString src, int srcOffset, int length, TruffleString.Encoding encoding,
+                        @Cached @Shared TruffleString.CopyToNativeMemoryNode copyToNativeMemoryNode) {
+            copyToNativeMemoryNode.execute(src, srcOffset, new NativePointer(dstPointer), dstOffset, length, encoding);
+        }
+
+        @Specialization(guards = {"!isLong(dstPointer)", "lib.isPointer(dstPointer)"}, limit = "3")
+        static void writePointer(Object dstPointer, int dstOffset, TruffleString src, int srcOffset, int length, TruffleString.Encoding encoding,
+                        @SuppressWarnings("unused") @CachedLibrary("dstPointer") InteropLibrary lib,
+                        @Cached @Shared TruffleString.CopyToNativeMemoryNode copyToNativeMemoryNode) {
+            copyToNativeMemoryNode.execute(src, srcOffset, dstPointer, dstOffset, length, encoding);
+        }
+
+        @Specialization(guards = {"!isLong(dstPointer)", "!lib.isPointer(dstPointer)"})
+        static void writeManaged(Object dstPointer, int dstOffset, TruffleString src, int srcOffset, int length, TruffleString.Encoding encoding,
+                        @SuppressWarnings("unused") @CachedLibrary(limit = "3") InteropLibrary lib,
+                        @Cached PCallCapiFunction call,
+                        @Cached TruffleString.ReadByteNode readByteNode) {
+            assert validPointer(dstPointer);
+            for (int i = 0; i < length; i++) {
+                call.call(NativeCAPISymbol.FUN_WRITE_CHAR_MEMBER, dstPointer, dstOffset + i, readByteNode.execute(src, srcOffset + i, encoding));
+            }
+        }
+    }
+
+    @ImportStatic(PGuards.class)
+    @GenerateUncached
     public abstract static class WritePointerNode extends Node implements CStructAccessNode {
 
         public static void writeUncached(Object pointer, CFields field, Object value) {
@@ -1212,7 +1266,7 @@ public class CStructAccess {
 
         @Specialization
         static void writeLong(long pointer, long offset, Object value,
-                        @Bind("this") Node inliningTarget,
+                        @Bind Node inliningTarget,
                         @Shared @Cached CoerceNativePointerToLongNode coerceToLongNode) {
             assert offset >= 0;
             UNSAFE.putLong(pointer + offset, coerceToLongNode.execute(inliningTarget, value));
@@ -1220,7 +1274,7 @@ public class CStructAccess {
 
         @Specialization(guards = {"!isLong(pointer)", "lib.isPointer(pointer)"}, limit = "3")
         static void writePointer(Object pointer, long offset, Object value,
-                        @Bind("this") Node inliningTarget,
+                        @Bind Node inliningTarget,
                         @CachedLibrary("pointer") InteropLibrary lib,
                         @Shared @Cached CoerceNativePointerToLongNode coerceToLongNode) {
             writeLong(asPointer(pointer, lib), offset, value, inliningTarget, coerceToLongNode);
@@ -1277,7 +1331,7 @@ public class CStructAccess {
 
         @Specialization
         static void writeLong(long pointer, long offset, Object value,
-                        @Bind("this") Node inliningTarget,
+                        @Bind Node inliningTarget,
                         @Shared @Cached NativePtrToPythonNode toPython,
                         @Shared @Cached PythonToNativeNewRefNode toNative,
                         @Shared @Cached CoerceNativePointerToLongNode coerceToLongNode) {
@@ -1292,7 +1346,7 @@ public class CStructAccess {
 
         @Specialization(guards = {"!isLong(pointer)", "lib.isPointer(pointer)"})
         static void writePointer(Object pointer, long offset, Object value,
-                        @Bind("this") Node inliningTarget,
+                        @Bind Node inliningTarget,
                         @Shared @Cached NativePtrToPythonNode toPython,
                         @Shared @Cached PythonToNativeNewRefNode toNative,
                         @Shared @CachedLibrary(limit = "3") InteropLibrary lib,

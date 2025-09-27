@@ -73,6 +73,7 @@ import com.oracle.graal.python.runtime.sequence.storage.SequenceStorage;
 import com.oracle.truffle.api.CompilerDirectives;
 import com.oracle.truffle.api.HostCompilerDirectives.InliningCutoff;
 import com.oracle.truffle.api.bytecode.OperationProxy;
+import com.oracle.truffle.api.bytecode.StoreBytecodeIndex;
 import com.oracle.truffle.api.dsl.Bind;
 import com.oracle.truffle.api.dsl.Cached;
 import com.oracle.truffle.api.dsl.Cached.Exclusive;
@@ -211,7 +212,7 @@ public abstract class ListNodes {
         @Specialization(guards = "isBuiltinList(list)")
         // Don't use PSequence, that might copy storages that we don't allow for lists
         static PList fromList(PList list,
-                        @Bind("this") Node inliningTarget,
+                        @Bind Node inliningTarget,
                         @Bind PythonLanguage language,
                         @Cached SequenceStorageNodes.CopyNode copyNode) {
             return PFactory.createList(language, copyNode.execute(inliningTarget, list.getSequenceStorage()));
@@ -219,7 +220,7 @@ public abstract class ListNodes {
 
         @Specialization(guards = "!isNoValue(iterable)")
         static PList listIterable(VirtualFrame frame, Object iterable,
-                        @Bind("this") Node inliningTarget,
+                        @Bind Node inliningTarget,
                         @Cached PyObjectGetIter getIter,
                         @Cached SequenceStorageNodes.CreateStorageFromIteratorNode createStorageFromIteratorNode,
                         @Bind PythonLanguage language) {
@@ -268,7 +269,7 @@ public abstract class ListNodes {
      */
     @GenerateUncached
     @GenerateInline(false) // footprint reduction 36 -> 17
-    @OperationProxy.Proxyable
+    @OperationProxy.Proxyable(storeBytecodeIndex = false)
     public abstract static class AppendNode extends PNodeWithContext {
         private static final BranchProfile[] DISABLED = new BranchProfile[]{BranchProfile.getUncached()};
 
@@ -285,7 +286,7 @@ public abstract class ListNodes {
 
         @Specialization
         public static void appendObjectGeneric(PList list, Object value,
-                        @Bind("this") Node inliningTarget,
+                        @Bind Node inliningTarget,
                         // @Exclusive for truffle-interpreted-performance
                         @Exclusive @Cached SequenceStorageNodes.AppendNode appendNode,
                         @Cached(value = "getUpdateStoreProfile()", uncached = "getUpdateStoreProfileUncached()", dimensions = 1) BranchProfile[] updateStoreProfile) {
@@ -313,8 +314,9 @@ public abstract class ListNodes {
         }
 
         @Fallback
+        @StoreBytecodeIndex
         public static void appendObjectForeign(Object list, Object value,
-                        @Bind("this") Node inliningTarget,
+                        @Bind Node inliningTarget,
                         @Cached GetListStorageNode getStorageNode,
                         @Exclusive @Cached SequenceStorageNodes.AppendNode appendNode) {
             var storage = getStorageNode.execute(inliningTarget, list);

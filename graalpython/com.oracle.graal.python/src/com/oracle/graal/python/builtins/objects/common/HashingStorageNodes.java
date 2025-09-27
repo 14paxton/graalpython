@@ -54,6 +54,7 @@ import com.oracle.graal.python.builtins.objects.common.HashingStorageNodesFactor
 import com.oracle.graal.python.builtins.objects.common.HashingStorageNodesFactory.HashingStorageGetItemWithHashNodeGen;
 import com.oracle.graal.python.builtins.objects.common.HashingStorageNodesFactory.HashingStorageGetIteratorNodeGen;
 import com.oracle.graal.python.builtins.objects.common.HashingStorageNodesFactory.HashingStorageGetReverseIteratorNodeGen;
+import com.oracle.graal.python.builtins.objects.common.HashingStorageNodesFactory.HashingStorageIteratorKeyHashNodeGen;
 import com.oracle.graal.python.builtins.objects.common.HashingStorageNodesFactory.HashingStorageIteratorKeyNodeGen;
 import com.oracle.graal.python.builtins.objects.common.HashingStorageNodesFactory.HashingStorageIteratorNextNodeGen;
 import com.oracle.graal.python.builtins.objects.common.HashingStorageNodesFactory.HashingStorageIteratorValueNodeGen;
@@ -873,7 +874,7 @@ public class HashingStorageNodes {
 
         @Specialization
         static HashingStorageIterator foreign(@SuppressWarnings("unused") ForeignHashingStorage self,
-                        @Bind("this") Node inliningTarget) {
+                        @Bind Node inliningTarget) {
             // InteropLibrary does not provide a reverse HashEntriesIterator
             throw PRaiseNode.raiseStatic(inliningTarget, TypeError, FOREIGN_OBJ_ISNT_REVERSE_ITERABLE);
         }
@@ -1004,7 +1005,7 @@ public class HashingStorageNodes {
 
         @Specialization(guards = "it.isReverse")
         static boolean foreignReverse(@SuppressWarnings("unused") ForeignHashingStorage self, HashingStorageIterator it,
-                        @Bind("this") Node inliningTarget) {
+                        @Bind Node inliningTarget) {
             // InteropLibrary does not provide a reverse HashEntriesIterator
             throw PRaiseNode.raiseStatic(inliningTarget, TypeError, FOREIGN_OBJ_ISNT_REVERSE_ITERABLE);
         }
@@ -1120,6 +1121,9 @@ public class HashingStorageNodes {
     @GenerateInline
     @GenerateCached(false)
     public abstract static class HashingStorageIteratorKeyHash extends PNodeWithContext {
+        public static long executeUncached(HashingStorage storage, HashingStorageIterator it) {
+            return HashingStorageIteratorKeyHashNodeGen.getUncached().execute(null, null, storage, it);
+        }
 
         public abstract long execute(Frame frame, Node inliningTarget, HashingStorage storage, HashingStorageIterator it);
 
@@ -1130,7 +1134,7 @@ public class HashingStorageNodes {
 
         @Specialization
         static long dom(@SuppressWarnings("unused") DynamicObjectStorage self, HashingStorageIterator it,
-                        @Shared("hash") @Cached(inline = false) TruffleString.HashCodeNode hashNode) {
+                        @Shared("hash") @Cached TruffleString.HashCodeNode hashNode) {
             return PyObjectHashNode.hash((TruffleString) it.domKeys[it.index], hashNode);
         }
 
@@ -1142,7 +1146,7 @@ public class HashingStorageNodes {
 
         @Specialization
         static long keywords(KeywordsStorage self, HashingStorageIterator it,
-                        @Shared("hash") @Cached(inline = false) TruffleString.HashCodeNode hashNode) {
+                        @Shared("hash") @Cached TruffleString.HashCodeNode hashNode) {
             return PyObjectHashNode.hash(self.keywords[it.index].getName(), hashNode);
         }
 
@@ -1285,7 +1289,7 @@ public class HashingStorageNodes {
 
         @Specialization
         static Object doIt(Frame frame, Node callbackInliningTarget, HashingStorage storage, HashingStorageForEachCallback<Object> callback, Object accumulatorIn,
-                        @Bind("this") Node inliningTarget,
+                        @Bind Node inliningTarget,
                         @Cached HashingStorageGetIterator getIter,
                         @Cached HashingStorageIteratorNext iterNext,
                         @Cached InlinedLoopConditionProfile loopProfile) {

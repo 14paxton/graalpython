@@ -1,4 +1,4 @@
-# Copyright (c) 2018, 2024, Oracle and/or its affiliates. All rights reserved.
+# Copyright (c) 2018, 2025, Oracle and/or its affiliates. All rights reserved.
 # DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
 #
 # The Universal Permissive License (UPL), Version 1.0
@@ -38,7 +38,18 @@
 # SOFTWARE.
 
 class CustomIterator:
+    # Even though this is worse for our generated code, it is increasingly
+    # common, because the typing PEP explicitly has an example like this:
+    # https://peps.python.org/pep-0526/#class-and-instance-variable-annotations
+    #
+    # While that is a historical document, it is a) still widely referenced and
+    # b) at the time of writing this comment latest spec still has a similar
+    # example where a variable is initialized with a default on the class level
+    # and the __init__ method only conditionally overrides the default *and
+    # otherwise keeps it on the class* making self.FOO accesses polymorphic:
+    # https://typing.python.org/en/latest/spec/class-compat.html#classvar
     pos = 0
+
     def __init__(self, obj):
         self.__obj = obj
 
@@ -70,7 +81,7 @@ def count(num):
         val0 = next(it)
         val1 = next(it)
         val2 = next(it)
-        
+
     return (val0, val1, val2)
 
 

@@ -54,7 +54,7 @@ import com.oracle.graal.python.lib.PyDictSetItem;
 import com.oracle.graal.python.lib.PyObjectGetItem;
 import com.oracle.graal.python.lib.PyObjectSetItem;
 import com.oracle.graal.python.nodes.PNodeWithContext;
-import com.oracle.graal.python.nodes.attributes.ReadAttributeFromObjectNode;
+import com.oracle.graal.python.nodes.attributes.ReadAttributeFromModuleNode;
 import com.oracle.graal.python.nodes.attributes.WriteAttributeToObjectNode;
 import com.oracle.graal.python.nodes.object.BuiltinClassProfiles.IsBuiltinObjectProfile;
 import com.oracle.graal.python.runtime.exception.PException;
@@ -62,6 +62,7 @@ import com.oracle.graal.python.runtime.object.PFactory;
 import com.oracle.truffle.api.bytecode.OperationProxy;
 import com.oracle.truffle.api.dsl.Bind;
 import com.oracle.truffle.api.dsl.Cached;
+import com.oracle.truffle.api.dsl.Cached.Exclusive;
 import com.oracle.truffle.api.dsl.Fallback;
 import com.oracle.truffle.api.dsl.GenerateCached;
 import com.oracle.truffle.api.dsl.GenerateInline;
@@ -77,13 +78,13 @@ import com.oracle.truffle.api.profiles.InlinedConditionProfile;
 @GenerateUncached
 @ImportStatic(PArguments.class)
 @GenerateInline(false) // used in BCI root node
-@OperationProxy.Proxyable
+@OperationProxy.Proxyable(storeBytecodeIndex = true)
 public abstract class SetupAnnotationsNode extends PNodeWithContext {
     public abstract void execute(Frame frame);
 
     @Specialization
     public static void doLocals(VirtualFrame frame,
-                    @Bind("this") Node inliningTarget,
+                    @Bind Node inliningTarget,
                     @Cached InlinedConditionProfile hasLocals,
                     @Cached SetupAnnotationsFromDictOrModuleNode setup) {
         Object locals = getSpecialArgument(frame);
@@ -102,9 +103,9 @@ public abstract class SetupAnnotationsNode extends PNodeWithContext {
 
         @Specialization
         static void doModule(Node inliningTarget, PythonModule locals,
-                        @Cached(inline = false) ReadAttributeFromObjectNode read,
+                        @Cached ReadAttributeFromModuleNode read,
                         @Cached(inline = false) WriteAttributeToObjectNode write,
-                        @Cached InlinedBranchProfile create) {
+                        @Cached @Exclusive InlinedBranchProfile create) {
             Object annotations = read.execute(locals, T___ANNOTATIONS__);
             if (annotations == PNone.NO_VALUE) {
                 create.enter(inliningTarget);
@@ -116,7 +117,7 @@ public abstract class SetupAnnotationsNode extends PNodeWithContext {
         static void doBuiltinDict(VirtualFrame frame, Node inliningTarget, PDict locals,
                         @Cached PyDictGetItem getItem,
                         @Cached PyDictSetItem setItem,
-                        @Cached InlinedBranchProfile create) {
+                        @Cached @Exclusive InlinedBranchProfile create) {
             Object annotations = getItem.execute(frame, inliningTarget, locals, T___ANNOTATIONS__);
             if (annotations == null) {
                 create.enter(inliningTarget);

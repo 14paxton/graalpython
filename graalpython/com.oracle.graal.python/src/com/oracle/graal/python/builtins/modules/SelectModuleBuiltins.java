@@ -47,7 +47,7 @@ import static com.oracle.graal.python.util.TimeUtils.SEC_TO_NS;
 import java.util.List;
 
 import com.oracle.graal.python.PythonLanguage;
-import com.oracle.graal.python.builtins.Builtin;
+import com.oracle.graal.python.annotations.Builtin;
 import com.oracle.graal.python.builtins.CoreFunctions;
 import com.oracle.graal.python.builtins.Python3Core;
 import com.oracle.graal.python.builtins.PythonBuiltinClassType;
@@ -76,7 +76,6 @@ import com.oracle.graal.python.runtime.PosixSupportLibrary.SelectResult;
 import com.oracle.graal.python.runtime.PosixSupportLibrary.Timeval;
 import com.oracle.graal.python.runtime.exception.PythonErrorType;
 import com.oracle.graal.python.runtime.object.PFactory;
-import com.oracle.graal.python.runtime.sequence.PSequence;
 import com.oracle.graal.python.util.ArrayBuilder;
 import com.oracle.graal.python.util.IntArrayBuilder;
 import com.oracle.graal.python.util.PythonUtils;
@@ -122,7 +121,7 @@ public final class SelectModuleBuiltins extends PythonBuiltins {
     abstract static class SelectNode extends PythonBuiltinNode {
         @Specialization
         static PTuple doGeneric(VirtualFrame frame, Object rlist, Object wlist, Object xlist, Object timeout,
-                        @Bind("this") Node inliningTarget,
+                        @Bind Node inliningTarget,
                         @Cached InlinedBranchProfile isNotNoneTimeout,
                         @CachedLibrary(limit = "1") PosixSupportLibrary posixLib,
                         @Cached PyObjectSizeNode sizeNode,
@@ -192,9 +191,9 @@ public final class SelectModuleBuiltins extends PythonBuiltins {
             // repeatedly in the loop condition
             ArrayBuilder<Object> objects = new ArrayBuilder<>();
             IntArrayBuilder fds = new IntArrayBuilder();
-            PSequence pSequence = constructListNode.execute(frame, inliningTarget, sequence);
+            PList list = constructListNode.execute(frame, inliningTarget, sequence);
             for (int i = 0; i < sizeNode.execute(frame, inliningTarget, sequence); i++) {
-                Object pythonObject = callGetItemNode.execute(frame, inliningTarget, pSequence, i);
+                Object pythonObject = callGetItemNode.execute(frame, inliningTarget, list, i);
                 objects.add(pythonObject);
                 int fd = asFileDescriptor.execute(frame, inliningTarget, pythonObject);
                 if (fd >= FD_SETSIZE.value) {

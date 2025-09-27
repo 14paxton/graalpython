@@ -80,7 +80,7 @@ import com.oracle.truffle.api.strings.TruffleString;
 public final class PythonCextComplexBuiltins {
 
     @CApiBuiltin(ret = Int, args = {PyObject, Pointer}, call = Ignored)
-    abstract static class PyTruffleComplex_AsCComplex extends CApiBinaryBuiltinNode {
+    abstract static class GraalPyPrivate_Complex_AsCComplex extends CApiBinaryBuiltinNode {
         @Specialization
         static int asComplex(PComplex c, Object out,
                         @Shared @Cached CStructAccess.WriteDoubleNode writeDoubleNode) {
@@ -106,7 +106,7 @@ public final class PythonCextComplexBuiltins {
 
     @CApiBuiltin(ret = ArgDescriptor.Double, args = {PyObject}, call = Ignored)
     @ImportStatic(PythonCextComplexBuiltins.class)
-    abstract static class PyTruffleComplex_RealAsDouble extends CApiUnaryBuiltinNode {
+    abstract static class GraalPyPrivate_Complex_RealAsDouble extends CApiUnaryBuiltinNode {
 
         public static final TruffleString T_REAL = tsLiteral("real");
 
@@ -117,7 +117,7 @@ public final class PythonCextComplexBuiltins {
 
         @Specialization(guards = "!isPComplex(obj)")
         static Object asDouble(Object obj,
-                        @Bind("this") Node inliningTarget,
+                        @Bind Node inliningTarget,
                         @Cached InlinedConditionProfile isComplexSubtypeProfile,
                         @Cached PyObjectGetAttr getAttr,
                         @Cached CallNode callNode,
@@ -140,7 +140,7 @@ public final class PythonCextComplexBuiltins {
 
     @CApiBuiltin(ret = ArgDescriptor.Double, args = {PyObject}, call = Ignored)
     @ImportStatic(PythonCextComplexBuiltins.class)
-    abstract static class PyTruffleComplex_ImagAsDouble extends CApiUnaryBuiltinNode {
+    abstract static class GraalPyPrivate_Complex_ImagAsDouble extends CApiUnaryBuiltinNode {
 
         public static final TruffleString T_IMAG = tsLiteral("imag");
 
@@ -151,7 +151,7 @@ public final class PythonCextComplexBuiltins {
 
         @Specialization(guards = {"!isPComplex(obj)", "isComplexSubtype(inliningTarget, obj, getClassNode, isSubtypeNode)"})
         static Object asDouble(Object obj,
-                        @Bind("this") Node inliningTarget,
+                        @Bind Node inliningTarget,
                         @Cached PyObjectGetAttr getAttr,
                         @Cached CallNode callNode,
                         @SuppressWarnings("unused") @Shared @Cached GetClassNode getClassNode,
@@ -162,7 +162,7 @@ public final class PythonCextComplexBuiltins {
         @SuppressWarnings("unused")
         @Specialization(guards = {"!isPComplex(obj)", "!isComplexSubtype(inliningTarget, obj, getClassNode, isSubtypeNode)"})
         static Object asDouble(Object obj,
-                        @SuppressWarnings("unused") @Bind("this") Node inliningTarget,
+                        @SuppressWarnings("unused") @Bind Node inliningTarget,
                         @Shared @Cached GetClassNode getClassNode,
                         @Shared @Cached IsSubtypeNode isSubtypeNode) {
             return 0.0;

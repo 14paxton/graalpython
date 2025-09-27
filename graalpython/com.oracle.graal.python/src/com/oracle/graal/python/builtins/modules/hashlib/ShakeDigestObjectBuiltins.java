@@ -44,7 +44,7 @@ import java.util.List;
 
 import com.oracle.graal.python.PythonLanguage;
 import com.oracle.graal.python.annotations.ArgumentClinic;
-import com.oracle.graal.python.builtins.Builtin;
+import com.oracle.graal.python.annotations.Builtin;
 import com.oracle.graal.python.builtins.CoreFunctions;
 import com.oracle.graal.python.builtins.PythonBuiltinClassType;
 import com.oracle.graal.python.builtins.PythonBuiltins;
@@ -94,7 +94,7 @@ public final class ShakeDigestObjectBuiltins extends PythonBuiltins {
 
         @Specialization
         static PBytes digest(DigestObject self, int length,
-                        @Bind("this") Node inliningTarget,
+                        @Bind Node inliningTarget,
                         @Bind PythonLanguage language,
                         @Cached PRaiseNode raiseNode) {
             if (self.getDigestLength() != length) {
@@ -115,7 +115,7 @@ public final class ShakeDigestObjectBuiltins extends PythonBuiltins {
 
         @Specialization
         static TruffleString hexdigest(DigestObject self, int length,
-                        @Bind("this") Node inliningTarget,
+                        @Bind Node inliningTarget,
                         @Cached BytesNodes.ByteToHexNode toHexNode,
                         @Cached PRaiseNode raiseNode) {
             if (self.getDigestLength() != length) {

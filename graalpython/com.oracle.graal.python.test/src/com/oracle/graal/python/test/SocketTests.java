@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2021, 2024, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2021, 2025, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * The Universal Permissive License (UPL), Version 1.0
@@ -97,6 +97,7 @@ import java.util.Map;
 import java.util.stream.Collectors;
 import java.util.stream.Stream;
 
+import com.oracle.graal.python.PythonLanguage;
 import org.junit.Assert;
 import org.junit.Before;
 import org.junit.Rule;
@@ -108,7 +109,7 @@ import org.junit.runners.Parameterized;
 import org.junit.runners.Parameterized.Parameter;
 import org.junit.runners.Parameterized.Parameters;
 
-import com.oracle.graal.python.builtins.PythonOS;
+import com.oracle.graal.python.annotations.PythonOS;
 import com.oracle.graal.python.builtins.objects.exception.OSErrorEnum;
 import com.oracle.graal.python.runtime.PosixConstants.MandatoryIntConstant;
 import com.oracle.graal.python.runtime.PosixSupportLibrary;
@@ -503,9 +504,9 @@ public class SocketTests {
 
     @Test
     public void dgramListen() {
-        expectErrno(() -> {
-            lib.listen(posixSupport, new UdpServer(AF_INET.value).fd, 5);
-        }, OSErrorEnum.EOPNOTSUPP);
+        expectErrno(() -> lib.listen(posixSupport, new UdpServer(AF_INET.value).fd, 5),
+                        OSErrorEnum.EOPNOTSUPP,
+                        OSErrorEnum.EACCES /* Some CI machines seem to block this with EACCESS */);
     }
 
     @Test
@@ -661,7 +662,7 @@ public class SocketTests {
 
     @Test
     public void streamSelect() throws PosixException {
-        if (PythonOS.getPythonOS() == PythonOS.PLATFORM_DARWIN) {
+        if (PythonLanguage.getPythonOS() == PythonOS.PLATFORM_DARWIN) {
             // transiently fails on darwin, skip
             return;
         }

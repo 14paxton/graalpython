@@ -41,6 +41,7 @@ import static com.oracle.graal.python.nodes.BuiltinNames.J_DICT_VALUEITERATOR;
 import static com.oracle.graal.python.nodes.BuiltinNames.J_DICT_VALUES;
 import static com.oracle.graal.python.nodes.BuiltinNames.J_GENERIC;
 import static com.oracle.graal.python.nodes.BuiltinNames.J_LRU_CACHE_WRAPPER;
+import static com.oracle.graal.python.nodes.BuiltinNames.J_MD5;
 import static com.oracle.graal.python.nodes.BuiltinNames.J_MEMBER_DESCRIPTOR;
 import static com.oracle.graal.python.nodes.BuiltinNames.J_ORDERED_DICT;
 import static com.oracle.graal.python.nodes.BuiltinNames.J_PARAM_SPEC;
@@ -50,6 +51,9 @@ import static com.oracle.graal.python.nodes.BuiltinNames.J_PARTIAL;
 import static com.oracle.graal.python.nodes.BuiltinNames.J_POLYGLOT;
 import static com.oracle.graal.python.nodes.BuiltinNames.J_POSIX;
 import static com.oracle.graal.python.nodes.BuiltinNames.J_PROPERTY;
+import static com.oracle.graal.python.nodes.BuiltinNames.J_SHA1;
+import static com.oracle.graal.python.nodes.BuiltinNames.J_SHA2;
+import static com.oracle.graal.python.nodes.BuiltinNames.J_SHA3;
 import static com.oracle.graal.python.nodes.BuiltinNames.J_SIMPLE_QUEUE;
 import static com.oracle.graal.python.nodes.BuiltinNames.J_TUPLE_GETTER;
 import static com.oracle.graal.python.nodes.BuiltinNames.J_TYPES;
@@ -178,6 +182,7 @@ import com.oracle.graal.python.builtins.objects.exception.SystemExitBuiltins;
 import com.oracle.graal.python.builtins.objects.exception.UnicodeDecodeErrorBuiltins;
 import com.oracle.graal.python.builtins.objects.exception.UnicodeEncodeErrorBuiltins;
 import com.oracle.graal.python.builtins.objects.exception.UnicodeTranslateErrorBuiltins;
+import com.oracle.graal.python.builtins.objects.filter.FilterBuiltins;
 import com.oracle.graal.python.builtins.objects.floats.FloatBuiltins;
 import com.oracle.graal.python.builtins.objects.foreign.ForeignBooleanBuiltins;
 import com.oracle.graal.python.builtins.objects.foreign.ForeignExecutableBuiltins;
@@ -269,6 +274,7 @@ import com.oracle.graal.python.builtins.objects.thread.RLockBuiltins;
 import com.oracle.graal.python.builtins.objects.thread.ThreadLocalBuiltins;
 import com.oracle.graal.python.builtins.objects.tokenize.TokenizerIterBuiltins;
 import com.oracle.graal.python.builtins.objects.traceback.TracebackBuiltins;
+import com.oracle.graal.python.builtins.objects.tuple.CapsuleBuiltins;
 import com.oracle.graal.python.builtins.objects.tuple.InstantiableStructSequenceBuiltins;
 import com.oracle.graal.python.builtins.objects.tuple.StructSequenceBuiltins;
 import com.oracle.graal.python.builtins.objects.tuple.TupleBuiltins;
@@ -310,7 +316,7 @@ public enum PythonBuiltinClassType implements TruffleObject {
                     When called, it accepts no arguments and returns a new featureless
                     instance that has no instance attributes and cannot be given any.
                     """)),
-    PythonClass("type", PythonObject, newBuilder().publishInModule(J_BUILTINS).basetype().addDict().slots(TypeBuiltins.SLOTS).doc("""
+    PythonClass("type", PythonObject, newBuilder().publishInModule(J_BUILTINS).basetype().addDict(264).slots(TypeBuiltins.SLOTS).doc("""
                     type(object) -> the object's type
                     type(name, bases, dict, **kwds) -> a new type""")),
     PArray("array", PythonObject, newBuilder().publishInModule("array").basetype().slots(ArrayBuiltins.SLOTS)),
@@ -361,7 +367,7 @@ public enum PythonBuiltinClassType implements TruffleObject {
                       - any object implementing the buffer API.
                       - an integer""")),
     PCell("cell", PythonObject, newBuilder().slots(CellBuiltins.SLOTS)),
-    PSimpleNamespace("SimpleNamespace", PythonObject, newBuilder().publishInModule("types").basetype().addDict().slots(SimpleNamespaceBuiltins.SLOTS).doc("""
+    PSimpleNamespace("SimpleNamespace", PythonObject, newBuilder().publishInModule("types").basetype().addDict(16).slots(SimpleNamespaceBuiltins.SLOTS).doc("""
                     A simple attribute-based namespace.
 
                     SimpleNamespace(**kwargs)""")),
@@ -405,7 +411,7 @@ public enum PythonBuiltinClassType implements TruffleObject {
                     dict(**kwargs) -> new dictionary initialized with the name=value pairs
                         in the keyword argument list.  For example:  dict(one=1, two=2)""")),
     PDefaultDict(J_DEFAULTDICT, PDict, newBuilder().moduleName("collections").publishInModule("_collections").basetype().slots(DefaultDictBuiltins.SLOTS)),
-    POrderedDict(J_ORDERED_DICT, PDict, newBuilder().publishInModule("_collections").basetype().addDict().slots(OrderedDictBuiltins.SLOTS)),
+    POrderedDict(J_ORDERED_DICT, PDict, newBuilder().publishInModule("_collections").basetype().addDict(96).slots(OrderedDictBuiltins.SLOTS)),
     PDictItemIterator(J_DICT_ITEMITERATOR, PythonObject, newBuilder().disallowInstantiation().slots(IteratorBuiltins.SLOTS)),
     PDictReverseItemIterator(J_DICT_REVERSE_ITEMITERATOR, PythonObject, newBuilder().slots(IteratorBuiltins.SLOTS)),
     PDictItemsView(J_DICT_ITEMS, PythonObject, newBuilder().disallowInstantiation().slots(DictViewBuiltins.SLOTS, DictReprBuiltin.SLOTS)),
@@ -436,6 +442,12 @@ public enum PythonBuiltinClassType implements TruffleObject {
 
                     Make an iterator that computes the function using arguments from
                     each of the iterables.  Stops when the shortest iterable is exhausted.""")),
+    PFilter("filter", PythonObject, newBuilder().publishInModule(J_BUILTINS).basetype().slots(FilterBuiltins.SLOTS).doc("""
+                    filter(function or None, iterable) --> filter object
+
+                    Return an iterator yielding those items of iterable for which function(item)
+                    is true. If function is None, return the items that are true.
+                    """)),
     PFloat(
                     "float",
                     PythonObject,
@@ -579,7 +591,7 @@ public enum PythonBuiltinClassType implements TruffleObject {
                     If iterable is specified the tuple is initialized from iterable's items.
 
                     If the argument is a tuple, the return value is the same object.""")),
-    PythonModule("module", PythonObject, newBuilder().basetype().addDict().slots(ModuleBuiltins.SLOTS).doc("""
+    PythonModule("module", PythonObject, newBuilder().basetype().addDict(16).slots(ModuleBuiltins.SLOTS).doc("""
                     Create a module object.
 
                     The name must be a string; the optional doc argument can have any type.""")),
@@ -624,7 +636,7 @@ public enum PythonBuiltinClassType implements TruffleObject {
     PSemLock("SemLock", PythonObject, newBuilder().publishInModule("_multiprocessing").basetype().slots(SemLockBuiltins.SLOTS)),
     PGraalPySemLock("SemLock", PythonObject, newBuilder().publishInModule("_multiprocessing_graalpy").basetype().slots(GraalPySemLockBuiltins.SLOTS)),
     PSocket("socket", PythonObject, newBuilder().publishInModule(J__SOCKET).basetype().slots(SocketBuiltins.SLOTS)),
-    PStaticmethod("staticmethod", PythonObject, newBuilder().publishInModule(J_BUILTINS).basetype().addDict().slots(StaticmethodBuiltins.SLOTS).doc("""
+    PStaticmethod("staticmethod", PythonObject, newBuilder().publishInModule(J_BUILTINS).basetype().addDict(24).slots(StaticmethodBuiltins.SLOTS).doc("""
                     staticmethod(function) -> method
 
                     Convert a function to be a static method.
@@ -643,7 +655,7 @@ public enum PythonBuiltinClassType implements TruffleObject {
 
                     Static methods in Python are similar to those found in Java or C++.
                     For a more advanced concept, see the classmethod builtin.""")),
-    PClassmethod("classmethod", PythonObject, newBuilder().publishInModule(J_BUILTINS).basetype().addDict().slots(ClassmethodCommonBuiltins.SLOTS, ClassmethodBuiltins.SLOTS).doc("""
+    PClassmethod("classmethod", PythonObject, newBuilder().publishInModule(J_BUILTINS).basetype().addDict(24).slots(ClassmethodCommonBuiltins.SLOTS, ClassmethodBuiltins.SLOTS).doc("""
                     classmethod(function) -> method
 
                     Convert a function to be a class method.
@@ -715,7 +727,7 @@ public enum PythonBuiltinClassType implements TruffleObject {
     // Errors and exceptions:
 
     // everything after BaseException is considered to be an exception
-    PBaseException("BaseException", PythonObject, newBuilder().publishInModule(J_BUILTINS).basetype().addDict().slots(BaseExceptionBuiltins.SLOTS).doc("""
+    PBaseException("BaseException", PythonObject, newBuilder().publishInModule(J_BUILTINS).basetype().addDict(16).slots(BaseExceptionBuiltins.SLOTS).doc("""
                     Common base class for all exceptions""")),
     PBaseExceptionGroup("BaseExceptionGroup", PBaseException, newBuilder().publishInModule(J_BUILTINS).basetype().addDict().slots(BaseExceptionGroupBuiltins.SLOTS).doc("""
                     A combination of multiple unrelated exceptions.""")),
@@ -1172,18 +1184,18 @@ public enum PythonBuiltinClassType implements TruffleObject {
     PEncodingMap("EncodingMap", PythonObject, newBuilder().disallowInstantiation()),
 
     // hashlib
-    MD5Type("md5", PythonObject, newBuilder().publishInModule("_md5").basetype().disallowInstantiation()),
-    SHA1Type("sha1", PythonObject, newBuilder().publishInModule("_sha1").basetype().disallowInstantiation()),
-    SHA224Type("sha224", PythonObject, newBuilder().publishInModule("_sha256").basetype().disallowInstantiation()),
-    SHA256Type("sha256", PythonObject, newBuilder().publishInModule("_sha256").basetype().disallowInstantiation()),
-    SHA384Type("sha384", PythonObject, newBuilder().publishInModule("_sha512").basetype().disallowInstantiation()),
-    SHA512Type("sha512", PythonObject, newBuilder().publishInModule("_sha512").basetype().disallowInstantiation()),
-    Sha3SHA224Type("sha3_224", PythonObject, newBuilder().publishInModule("_sha3").basetype().slots(Sha3Builtins.SLOTS)),
-    Sha3SHA256Type("sha3_256", PythonObject, newBuilder().publishInModule("_sha3").basetype().slots(Sha3Builtins.SLOTS)),
-    Sha3SHA384Type("sha3_384", PythonObject, newBuilder().publishInModule("_sha3").basetype().slots(Sha3Builtins.SLOTS)),
-    Sha3SHA512Type("sha3_512", PythonObject, newBuilder().publishInModule("_sha3").basetype().slots(Sha3Builtins.SLOTS)),
-    Sha3Shake128Type("shake_128", PythonObject, newBuilder().publishInModule("_sha3").basetype().slots(Sha3Builtins.SLOTS)),
-    Sha3Shake256Type("shake_256", PythonObject, newBuilder().publishInModule("_sha3").basetype().slots(Sha3Builtins.SLOTS)),
+    MD5Type("md5", PythonObject, newBuilder().publishInModule(J_MD5).basetype().disallowInstantiation()),
+    SHA1Type("sha1", PythonObject, newBuilder().publishInModule(J_SHA1).basetype().disallowInstantiation()),
+    SHA224Type("SHA224Type", PythonObject, newBuilder().publishInModule(J_SHA2).basetype().disallowInstantiation()),
+    SHA256Type("SHA256Type", PythonObject, newBuilder().publishInModule(J_SHA2).basetype().disallowInstantiation()),
+    SHA384Type("SHA384Type", PythonObject, newBuilder().publishInModule(J_SHA2).basetype().disallowInstantiation()),
+    SHA512Type("SHA512Type", PythonObject, newBuilder().publishInModule(J_SHA2).basetype().disallowInstantiation()),
+    Sha3SHA224Type("sha3_224", PythonObject, newBuilder().publishInModule(J_SHA3).basetype().slots(Sha3Builtins.SLOTS)),
+    Sha3SHA256Type("sha3_256", PythonObject, newBuilder().publishInModule(J_SHA3).basetype().slots(Sha3Builtins.SLOTS)),
+    Sha3SHA384Type("sha3_384", PythonObject, newBuilder().publishInModule(J_SHA3).basetype().slots(Sha3Builtins.SLOTS)),
+    Sha3SHA512Type("sha3_512", PythonObject, newBuilder().publishInModule(J_SHA3).basetype().slots(Sha3Builtins.SLOTS)),
+    Sha3Shake128Type("shake_128", PythonObject, newBuilder().publishInModule(J_SHA3).basetype().slots(Sha3Builtins.SLOTS)),
+    Sha3Shake256Type("shake_256", PythonObject, newBuilder().publishInModule(J_SHA3).basetype().slots(Sha3Builtins.SLOTS)),
     Blake2bType("blake2b", PythonObject, newBuilder().publishInModule("_blake2").basetype().slots(Blake2bObjectBuiltins.SLOTS)),
     /* Note we reuse the blake2b slots */
     Blake2sType("blake2s", PythonObject, newBuilder().publishInModule("_blake2").basetype().slots(Blake2bObjectBuiltins.SLOTS)),
@@ -1251,7 +1263,7 @@ public enum PythonBuiltinClassType implements TruffleObject {
     // CPython uses separate keys, values, items python types for the iterators.
     ContextIterator("context_iterator", PythonObject, newBuilder().publishInModule(J__CONTEXTVARS).slots(ContextIteratorBuiltins.SLOTS)),
 
-    Capsule("PyCapsule", PythonObject, newBuilder().basetype()),
+    Capsule("PyCapsule", PythonObject, newBuilder().basetype().slots(CapsuleBuiltins.SLOTS)),
 
     PTokenizerIter("TokenizerIter", PythonObject, newBuilder().publishInModule("_tokenize").basetype().slots(TokenizerIterBuiltins.SLOTS)),
 
@@ -1440,6 +1452,7 @@ public enum PythonBuiltinClassType implements TruffleObject {
         private boolean basetype;
         private boolean heaptype;
         private boolean addDict;
+        private int dictoffset;
         private boolean disallowInstantiation;
         private TpSlots slots;
         private String doc;
@@ -1469,6 +1482,12 @@ public enum PythonBuiltinClassType implements TruffleObject {
 
         public TypeBuilder addDict() {
             this.addDict = true;
+            return this;
+        }
+
+        public TypeBuilder addDict(int dictoffset) {
+            this.addDict = true;
+            this.dictoffset = dictoffset;
             return this;
         }
 
@@ -1507,6 +1526,7 @@ public enum PythonBuiltinClassType implements TruffleObject {
     private final TruffleString printName;
     private final boolean basetype;
     private final boolean isBuiltinWithDict;
+    private final int dictoffset;
     private final boolean disallowInstantiation;
     private final TruffleString doc;
 
@@ -1536,6 +1556,13 @@ public enum PythonBuiltinClassType implements TruffleObject {
         }
         this.basetype = builder.basetype;
         this.isBuiltinWithDict = builder.addDict;
+        int dictoffset = 0;
+        if (builder.dictoffset != 0) {
+            dictoffset = builder.dictoffset;
+        } else if (base != null) {
+            dictoffset = base.dictoffset;
+        }
+        this.dictoffset = dictoffset;
         this.weaklistoffset = -1;
         this.declaredSlots = builder.slots != null ? builder.slots : TpSlots.createEmpty();
         boolean disallowInstantiation = builder.disallowInstantiation;
@@ -1580,6 +1607,10 @@ public enum PythonBuiltinClassType implements TruffleObject {
 
     public boolean isBuiltinWithDict() {
         return isBuiltinWithDict;
+    }
+
+    public int getDictoffset() {
+        return dictoffset;
     }
 
     public boolean disallowInstantiation() {

@@ -63,7 +63,7 @@ import java.util.List;
 import com.oracle.graal.python.PythonLanguage;
 import com.oracle.graal.python.annotations.ArgumentClinic;
 import com.oracle.graal.python.annotations.ArgumentClinic.ClinicConversion;
-import com.oracle.graal.python.builtins.Builtin;
+import com.oracle.graal.python.annotations.Builtin;
 import com.oracle.graal.python.builtins.CoreFunctions;
 import com.oracle.graal.python.builtins.PythonBuiltinClassType;
 import com.oracle.graal.python.builtins.PythonBuiltins;
@@ -93,7 +93,7 @@ import com.oracle.graal.python.lib.PyObjectLookupAttr;
 import com.oracle.graal.python.nodes.ErrorMessages;
 import com.oracle.graal.python.nodes.PGuards;
 import com.oracle.graal.python.nodes.PRaiseNode;
-import com.oracle.graal.python.nodes.attributes.GetAttributeNode;
+import com.oracle.graal.python.nodes.attributes.GetFixedAttributeNode;
 import com.oracle.graal.python.nodes.call.CallNode;
 import com.oracle.graal.python.nodes.function.PythonBuiltinBaseNode;
 import com.oracle.graal.python.nodes.function.builtins.PythonBinaryBuiltinNode;
@@ -146,14 +146,14 @@ public final class CDataTypeBuiltins extends PythonBuiltins {
     protected static final TruffleString T__HANDLE = tsLiteral(J__HANDLE);
 
     @ImportStatic(CDataTypeBuiltins.class)
-    @SuppressWarnings("truffle-inlining")       // footprint reduction 72 -> 53
+    @GenerateInline(false)       // footprint reduction 72 -> 53
     protected abstract static class CDataTypeFromParamNode extends Node {
 
         abstract Object execute(VirtualFrame frame, Object type, Object value);
 
         @Specialization
         static Object CDataType_from_param(VirtualFrame frame, Object type, Object value,
-                        @Bind("this") Node inliningTarget,
+                        @Bind Node inliningTarget,
                         @Cached PyTypeStgDictNode pyTypeStgDictNode,
                         @Cached PyObjectLookupAttr lookupAttr,
                         @Cached IsInstanceNode isInstanceNode,
@@ -206,7 +206,7 @@ public final class CDataTypeBuiltins extends PythonBuiltins {
 
         @Specialization
         static Object CDataType_from_address(Object type, Object value,
-                        @Bind("this") Node inliningTarget,
+                        @Bind Node inliningTarget,
                         @Cached PointerNodes.PointerFromLongNode pointerFromLongNode,
                         @Cached PyCDataAtAddress atAddress) {
             return atAddress.execute(type, pointerFromLongNode.execute(inliningTarget, value));
@@ -226,7 +226,7 @@ public final class CDataTypeBuiltins extends PythonBuiltins {
 
         @Specialization
         static Object CDataType_from_buffer(VirtualFrame frame, Object type, Object obj, int offset,
-                        @Bind("this") Node inliningTarget,
+                        @Bind Node inliningTarget,
                         @Cached MemoryViewBuiltins.MemoryViewNode memoryViewNode,
                         @Cached PyTypeStgDictNode pyTypeStgDictNode,
                         @Cached PyCDataAtAddress atAddress,
@@ -277,7 +277,7 @@ public final class CDataTypeBuiltins extends PythonBuiltins {
 
         @Specialization(limit = "3")
         static Object CDataType_from_buffer_copy(Object type, Object buffer, int offset,
-                        @Bind("this") Node inliningTarget,
+                        @Bind Node inliningTarget,
                         @CachedLibrary("buffer") PythonBufferAccessLibrary bufferLib,
                         @Cached PointerNodes.WriteBytesNode writeBytesNode,
                         @Cached AuditNode auditNode,
@@ -325,16 +325,16 @@ public final class CDataTypeBuiltins extends PythonBuiltins {
 
         @Specialization
         static Object CDataType_in_dll(VirtualFrame frame, Object type, Object dll, TruffleString name,
-                        @Bind("this") Node inliningTarget,
+                        @Bind Node inliningTarget,
                         @Cached PyLongCheckNode longCheckNode,
-                        @Cached("create(T__HANDLE)") GetAttributeNode getAttributeNode,
+                        @Cached("create(T__HANDLE)") GetFixedAttributeNode getAttributeNode,
                         @Cached PyCDataAtAddress atAddress,
                         @Cached AuditNode auditNode,
                         @Cached PointerNodes.PointerFromLongNode pointerFromLongNode,
                         @Cached CtypesDlSymNode dlSymNode,
                         @Cached PRaiseNode raiseNode) {
             auditNode.audit(inliningTarget, "ctypes.dlsym", dll, name);
-            Object obj = getAttributeNode.executeObject(frame, dll);
+            Object obj = getAttributeNode.execute(frame, dll);
             if (!longCheckNode.execute(inliningTarget, obj)) {
                 throw raiseNode.raise(inliningTarget, TypeError, THE_HANDLE_ATTRIBUTE_OF_THE_SECOND_ARGUMENT_MUST_BE_AN_INTEGER);
             }
@@ -352,7 +352,7 @@ public final class CDataTypeBuiltins extends PythonBuiltins {
         }
     }
 
-    @SuppressWarnings("truffle-inlining")       // footprint reduction 40 -> 21
+    @GenerateInline(false)       // footprint reduction 40 -> 21
     protected abstract static class PyCDataAtAddress extends Node {
 
         abstract CDataObject execute(Object type, Pointer pointer);
@@ -362,7 +362,7 @@ public final class CDataTypeBuiltins extends PythonBuiltins {
          */
         @Specialization
         static CDataObject PyCData_AtAddress(Object type, Pointer pointer,
-                        @Bind("this") Node inliningTarget,
+                        @Bind Node inliningTarget,
                         @Cached PyTypeCheck pyTypeCheck,
                         @Cached PyTypeStgDictNode pyTypeStgDictNode,
                         @Cached CtypesNodes.CreateCDataObjectNode createCDataObjectNode,
@@ -413,14 +413,14 @@ public final class CDataTypeBuiltins extends PythonBuiltins {
     /*
      * Set a slice in object 'dst', which has the type 'type', to the value 'value'.
      */
-    @SuppressWarnings("truffle-inlining")       // footprint reduction 64 -> 46
+    @GenerateInline(false)       // footprint reduction 64 -> 46
     protected abstract static class PyCDataSetNode extends Node {
 
         abstract void execute(VirtualFrame frame, CDataObject dst, Object type, FieldSet setfunc, Object value, int index, int size, Pointer ptr);
 
         @Specialization
         static void PyCData_set(VirtualFrame frame, CDataObject dst, Object type, FieldSet setfunc, Object value, int index, int size, Pointer ptr,
-                        @Bind("this") Node inliningTarget,
+                        @Bind Node inliningTarget,
                         @Bind PythonLanguage language,
                         @Cached SetFuncNode setFuncNode,
                         @Cached CallNode callNode,
@@ -587,9 +587,9 @@ public final class CDataTypeBuiltins extends PythonBuiltins {
         @Specialization(guards = "!isNone(keep)")
         static void KeepRef(VirtualFrame frame, Node inliningTarget, CDataObject target, int index, Object keep,
                         @Bind PythonLanguage language,
-                        @Cached(inline = false) TruffleStringBuilder.AppendStringNode appendStringNode,
-                        @Cached(inline = false) TruffleStringBuilder.ToStringNode toStringNode,
-                        @Cached(inline = false) TruffleString.FromJavaStringNode fromJavaStringNode,
+                        @Cached TruffleStringBuilder.AppendStringNode appendStringNode,
+                        @Cached TruffleStringBuilder.ToStringNode toStringNode,
+                        @Cached TruffleString.FromJavaStringNode fromJavaStringNode,
                         @Cached HashingStorageSetItem setItem,
                         @Cached PRaiseNode raiseNode) {
             CDataObject ob = PyCData_GetContainer(target, language);

@@ -80,7 +80,7 @@ public abstract class PyFloatFromString extends PNodeWithContext {
 
     @Specialization
     static double doString(VirtualFrame frame, Node inliningTarget, TruffleString object,
-                    @Cached(inline = false) TruffleString.ToJavaStringNode toJavaStringNode,
+                    @Cached TruffleString.ToJavaStringNode toJavaStringNode,
                     @Shared @Cached PyObjectReprAsTruffleStringNode reprNode,
                     @Shared @Cached PRaiseNode raiseNode) {
         return convertStringToDouble(frame, inliningTarget, toJavaStringNode.execute(object), object, reprNode, raiseNode);
@@ -88,7 +88,7 @@ public abstract class PyFloatFromString extends PNodeWithContext {
 
     @Specialization
     static double doGeneric(VirtualFrame frame, Node inliningTarget, Object object,
-                    @Cached(value = "createFor(this)") IndirectCallData indirectCallData,
+                    @Cached(value = "createFor($node)") IndirectCallData indirectCallData,
                     @CachedLibrary(limit = "3") PythonBufferAcquireLibrary acquireLib,
                     @CachedLibrary(limit = "3") PythonBufferAccessLibrary accessLib,
                     @Cached(inline = false) CastToJavaStringNode cast,

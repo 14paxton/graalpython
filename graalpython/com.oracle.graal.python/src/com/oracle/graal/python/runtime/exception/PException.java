@@ -447,8 +447,8 @@ public final class PException extends AbstractTruffleException {
 
     @ExportMessage(name = "getSourceLocation")
     SourceSection getExceptionSourceLocation(
-                    @Bind("$node") Node inliningTarget,
-                    @Cached InlinedBranchProfile unsupportedProfile) throws UnsupportedMessageException {
+                    @Bind Node inliningTarget,
+                    @Exclusive @Cached InlinedBranchProfile unsupportedProfile) throws UnsupportedMessageException {
         if (hasSourceLocation()) {
             return getLocation().getEncapsulatingSourceSection();
         }
@@ -494,9 +494,9 @@ public final class PException extends AbstractTruffleException {
 
     @ExportMessage
     int getExceptionExitStatus(
-                    @Bind("$node") Node inliningTarget,
+                    @Bind Node inliningTarget,
                     @Shared @CachedLibrary(limit = "1") InteropLibrary lib,
-                    @Cached InlinedBranchProfile unsupportedProfile) throws UnsupportedMessageException {
+                    @Exclusive @Cached InlinedBranchProfile unsupportedProfile) throws UnsupportedMessageException {
         if (pythonException instanceof PBaseException) {
             return lib.getExceptionExitStatus(pythonException);
         }
@@ -521,7 +521,7 @@ public final class PException extends AbstractTruffleException {
 
     @ExportMessage
     boolean hasExceptionCause(
-                    @Bind("$node") Node inliningTarget,
+                    @Bind Node inliningTarget,
                     @Shared @Cached ExceptionNodes.GetContextNode getContextNode,
                     @Shared @Cached ExceptionNodes.GetSuppressContextNode getSuppressContextNode,
                     @Shared @Cached ExceptionNodes.GetCauseNode getCauseNode,
@@ -536,11 +536,11 @@ public final class PException extends AbstractTruffleException {
 
     @ExportMessage
     Object getExceptionCause(
-                    @Bind("$node") Node inliningTarget,
+                    @Bind Node inliningTarget,
                     @Shared @Cached ExceptionNodes.GetContextNode getContextNode,
                     @Shared @Cached ExceptionNodes.GetSuppressContextNode getSuppressContextNode,
                     @Shared @Cached ExceptionNodes.GetCauseNode getCauseNode,
-                    @Cached InlinedBranchProfile unsupportedProfile,
+                    @Exclusive @Cached InlinedBranchProfile unsupportedProfile,
                     @Shared("gil") @Cached GilNode gil) throws UnsupportedMessageException {
         boolean mustRelease = gil.acquire();
         try {

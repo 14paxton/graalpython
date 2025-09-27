@@ -42,6 +42,7 @@ package com.oracle.graal.python.nodes.object;
 
 import static com.oracle.graal.python.builtins.PythonBuiltinClassType.SystemError;
 import static com.oracle.graal.python.builtins.objects.cext.capi.NativeCAPISymbol.FUN_PY_OBJECT_GET_DICT_PTR;
+import static com.oracle.graal.python.builtins.objects.cext.structs.CFields.PyTypeObject__tp_dict;
 
 import com.oracle.graal.python.PythonLanguage;
 import com.oracle.graal.python.builtins.objects.PNone;
@@ -53,6 +54,7 @@ import com.oracle.graal.python.builtins.objects.dict.PDict;
 import com.oracle.graal.python.builtins.objects.module.PythonModule;
 import com.oracle.graal.python.builtins.objects.object.PythonObject;
 import com.oracle.graal.python.builtins.objects.type.PythonManagedClass;
+import com.oracle.graal.python.builtins.objects.type.TypeNodes.IsTypeNode;
 import com.oracle.graal.python.nodes.ErrorMessages;
 import com.oracle.graal.python.nodes.HiddenAttr;
 import com.oracle.graal.python.nodes.PNodeWithContext;
@@ -63,6 +65,7 @@ import com.oracle.truffle.api.HostCompilerDirectives.InliningCutoff;
 import com.oracle.truffle.api.dsl.Bind;
 import com.oracle.truffle.api.dsl.Cached;
 import com.oracle.truffle.api.dsl.Fallback;
+import com.oracle.truffle.api.dsl.GenerateInline;
 import com.oracle.truffle.api.dsl.GenerateUncached;
 import com.oracle.truffle.api.dsl.Idempotent;
 import com.oracle.truffle.api.dsl.Specialization;
@@ -73,7 +76,7 @@ import com.oracle.truffle.api.object.Shape;
 import com.oracle.truffle.api.profiles.InlinedBranchProfile;
 
 @GenerateUncached
-@SuppressWarnings("truffle-inlining")       // footprint reduction 36 -> 17
+@GenerateInline(false)       // footprint reduction 36 -> 17
 public abstract class GetDictIfExistsNode extends PNodeWithContext {
     public abstract PDict execute(Object object);
 
@@ -115,21 +118,34 @@ public abstract class GetDictIfExistsNode extends PNodeWithContext {
     @Specialization(replaces = "getConstant")
     @InliningCutoff
     static PDict doPythonObject(PythonObject object,
-                    @Bind("this") Node inliningTarget,
+                    @Bind Node inliningTarget,
                     @Cached HiddenAttr.ReadNode readHiddenAttrNode) {
         return (PDict) readHiddenAttrNode.execute(inliningTarget, object, HiddenAttr.DICT, null);
     }
 
     @Specialization
     @InliningCutoff
-    PDict doNativeObject(PythonAbstractNativeObject object,
-                    @Bind("this") Node inliningTarget,
+    static PDict doNativeObject(PythonAbstractNativeObject object,
+                    @Bind Node inliningTarget,
+                    @Cached IsTypeNode isTypeNode,
+                    @Cached CStructAccess.ReadObjectNode getNativeDict,
                     @CachedLibrary(limit = "1") InteropLibrary lib,
                     @Cached PythonToNativeNode toNative,
                     @Cached CStructAccess.ReadObjectNode readObjectNode,
                     @Cached CStructAccess.WriteObjectNewRefNode writeObjectNode,
                     @Cached InlinedBranchProfile createDict,
                     @Cached CExtNodes.PCallCapiFunction callGetDictPtr) {
+        if (isTypeNode.execute(inliningTarget, object)) {
+            // Optimization for native types: read at the known offset instead of calling
+            // _PyObject_GetDictPtr()
+            Object dict = getNativeDict.readFromObj(object, PyTypeObject__tp_dict);
+            if (dict instanceof PDict pdict) {
+                return pdict;
+            } else {
+                return null;
+            }
+        }
+
         Object dictPtr = callGetDictPtr.call(FUN_PY_OBJECT_GET_DICT_PTR, toNative.execute(object));
         if (lib.isNull(dictPtr)) {
             return null;
@@ -144,7 +160,7 @@ public abstract class GetDictIfExistsNode extends PNodeWithContext {
                 return dict;
             } else {
                 CompilerDirectives.transferToInterpreterAndInvalidate();
-                throw PRaiseNode.raiseStatic(this, SystemError, ErrorMessages.DICT_MUST_BE_SET_TO_DICT, dictObject);
+                throw PRaiseNode.raiseStatic(inliningTarget, SystemError, ErrorMessages.DICT_MUST_BE_SET_TO_DICT, dictObject);
             }
         }
     }

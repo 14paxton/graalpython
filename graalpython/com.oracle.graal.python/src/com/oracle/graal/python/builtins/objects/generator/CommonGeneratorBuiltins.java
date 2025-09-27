@@ -51,7 +51,7 @@ import static com.oracle.graal.python.runtime.exception.PythonErrorType.ValueErr
 import java.util.List;
 
 import com.oracle.graal.python.PythonLanguage;
-import com.oracle.graal.python.builtins.Builtin;
+import com.oracle.graal.python.annotations.Builtin;
 import com.oracle.graal.python.builtins.CoreFunctions;
 import com.oracle.graal.python.builtins.PythonBuiltinClassType;
 import com.oracle.graal.python.builtins.PythonBuiltins;
@@ -61,7 +61,6 @@ import com.oracle.graal.python.builtins.objects.exception.ExceptionNodes;
 import com.oracle.graal.python.builtins.objects.exception.PBaseException;
 import com.oracle.graal.python.builtins.objects.exception.PrepareExceptionNode;
 import com.oracle.graal.python.builtins.objects.frame.PFrame;
-import com.oracle.graal.python.builtins.objects.function.PArguments;
 import com.oracle.graal.python.builtins.objects.traceback.PTraceback;
 import com.oracle.graal.python.builtins.objects.type.slots.TpSlotIterNext.TpIterNextBuiltin;
 import com.oracle.graal.python.lib.IteratorExhausted;
@@ -81,8 +80,6 @@ import com.oracle.graal.python.nodes.object.BuiltinClassProfiles.IsBuiltinObject
 import com.oracle.graal.python.runtime.PythonOptions;
 import com.oracle.graal.python.runtime.exception.PException;
 import com.oracle.graal.python.runtime.object.PFactory;
-import com.oracle.graal.python.util.PythonUtils;
-import com.oracle.truffle.api.Truffle;
 import com.oracle.truffle.api.bytecode.ContinuationResult;
 import com.oracle.truffle.api.dsl.Bind;
 import com.oracle.truffle.api.dsl.Cached;
@@ -103,36 +100,6 @@ import com.oracle.truffle.api.profiles.InlinedConditionProfile;
 
 @CoreFunctions(extendClasses = {PythonBuiltinClassType.PCoroutine, PythonBuiltinClassType.PGenerator})
 public final class CommonGeneratorBuiltins extends PythonBuiltins {
-    /**
-     * Creates a fresh copy of the generator arguments to be used for the next invocation of the
-     * generator. This is necessary to avoid persisting caller state. For example: If the generator
-     * is invoked using {@code next(g)} outside of any {@code except} handler but the generator
-     * requests the exception state, then the exception state will be written into the arguments. If
-     * we now use the same arguments array every time, the next invocation would think that there is
-     * not an exception but in fact, a subsequent call to {@code next} may have a different
-     * exception state.
-     *
-     * <pre>
-     *     g = my_generator()
-     *
-     *     # invoke without any exception context
-     *     next(g)
-     *
-     *     try:
-     *         raise ValueError
-     *     except ValueError:
-     *         # invoke with exception context
-     *         next(g)
-     * </pre>
-     *
-     * This is necessary for correct chaining of exceptions.
-     */
-    private static Object[] prepareArguments(PGenerator self) {
-        Object[] generatorArguments = self.getArguments();
-        Object[] arguments = new Object[generatorArguments.length];
-        PythonUtils.arraycopy(generatorArguments, 0, arguments, 0, arguments.length);
-        return arguments;
-    }
 
     @Override
     protected List<? extends NodeFactory<? extends PythonBuiltinBaseNode>> getNodeFactories() {
@@ -163,15 +130,12 @@ public final class CommonGeneratorBuiltins extends PythonBuiltins {
         @Specialization(guards = {"!isBytecodeDSLInterpreter()", "sameCallTarget(self.getCurrentCallTarget(), callNode)"}, limit = "getCallSiteInlineCacheMaxDepth()")
         static Object cached(VirtualFrame frame, Node inliningTarget, PGenerator self, Object sendValue,
                         @Cached(parameters = "self.getCurrentCallTarget()") DirectCallNode callNode,
-                        @Cached CallDispatchers.SimpleDirectInvokeNode invoke,
+                        @Exclusive @Cached CallDispatchers.SimpleDirectInvokeNode invoke,
                         @Exclusive @Cached InlinedBranchProfile returnProfile,
                         @Exclusive @Cached IsBuiltinObjectProfile errorProfile,
                         @Exclusive @Cached PRaiseNode raiseNode) {
             self.setRunning(true);
-            Object[] arguments = prepareArguments(self);
-            if (sendValue != null) {
-                PArguments.setSpecialArgument(arguments, sendValue);
-            }
+            Object[] arguments = self.getCallArguments(sendValue);
             GeneratorYieldResult result;
             try {
                 result = (GeneratorYieldResult) invoke.execute(frame, inliningTarget, callNode, arguments);
@@ -189,43 +153,15 @@ public final class CommonGeneratorBuiltins extends PythonBuiltins {
         @Specialization(guards = {"isBytecodeDSLInterpreter()", "sameCallTarget(self.getCurrentCallTarget(), callNode)"}, limit = "getCallSiteInlineCacheMaxDepth()")
         static Object cachedBytecodeDSL(VirtualFrame frame, Node inliningTarget, PGenerator self, Object sendValue,
                         @Cached(parameters = "self.getCurrentCallTarget()") DirectCallNode callNode,
-                        @Cached CallDispatchers.SimpleDirectInvokeNode invoke,
-                        @Cached("self.getContinuation() == null") boolean firstCall,
+                        @Exclusive @Cached CallDispatchers.SimpleDirectInvokeNode invoke,
                         @Exclusive @Cached InlinedBranchProfile returnProfile,
                         @Exclusive @Cached IsBuiltinObjectProfile errorProfile,
                         @Exclusive @Cached PRaiseNode raiseNode) {
             self.setRunning(true);
             Object generatorResult;
             try {
-                ContinuationResult continuation = self.getContinuation();
-                Object[] arguments;
-                // TODO: GR-62196, Bytecode DSL does not have the same shape of arguments array for
-                // continuation calls:
-
-                // 1) in the manual interpreter, we always pass an array of the same length (with
-                // slots defined in PArguments), this argument array is used for callee context
-                // enter/exit in PBytecodeGeneratorRootNode as opposed to the original arguments
-                // array taken from the PGenerator object. Moreover, this array is a copy of
-                // PGenerator arguments, and the comment above prepareArguments seems to indicate
-                // that we indeed need a fresh copy, because we do not want to share the state
-                // stored in the arguments between invocations
-
-                // 2) Bytecode DSL doesn't do callee context enter/exit for individual calls,
-                // but for the whole coroutine
-
-                // 3) when walking the stack, e.g., in MaterializeFrameNode, we must take care of
-                // this additional arguments shape and unwrap the materialized frame from the
-                // continuation frame to access its arguments array that will have the desired
-                // "PArguments shape", however this will be a shared arguments array, so it is a
-                // question if this unwrapping would be correct, see 1).
-
-                if (firstCall) {
-                    // First invocation: call the regular root node.
-                    arguments = prepareArguments(self);
-                } else {
-                    // Subsequent invocations: call a continuation root node.
-                    arguments = new Object[]{continuation.getFrame(), sendValue};
-                }
+                self.prepareResume();
+                Object[] arguments = new Object[]{self.getGeneratorFrame(), sendValue};
                 generatorResult = invoke.execute(frame, inliningTarget, callNode, arguments);
             } catch (PException e) {
                 throw handleException(self, inliningTarget, errorProfile, raiseNode, e);
@@ -244,15 +180,12 @@ public final class CommonGeneratorBuiltins extends PythonBuiltins {
         @Specialization(replaces = "cached", guards = "!isBytecodeDSLInterpreter()")
         @Megamorphic
         static Object generic(VirtualFrame frame, Node inliningTarget, PGenerator self, Object sendValue,
-                        @Cached CallDispatchers.SimpleIndirectInvokeNode invoke,
+                        @Exclusive @Cached CallDispatchers.SimpleIndirectInvokeNode invoke,
                         @Exclusive @Cached InlinedBranchProfile returnProfile,
                         @Exclusive @Cached IsBuiltinObjectProfile errorProfile,
                         @Exclusive @Cached PRaiseNode raiseNode) {
             self.setRunning(true);
-            Object[] arguments = prepareArguments(self);
-            if (sendValue != null) {
-                PArguments.setSpecialArgument(arguments, sendValue);
-            }
+            Object[] arguments = self.getCallArguments(sendValue);
             GeneratorYieldResult result;
             try {
                 result = (GeneratorYieldResult) invoke.execute(frame, inliningTarget, self.getCurrentCallTarget(), arguments);
@@ -270,24 +203,15 @@ public final class CommonGeneratorBuiltins extends PythonBuiltins {
         @Specialization(replaces = "cachedBytecodeDSL", guards = "isBytecodeDSLInterpreter()")
         @Megamorphic
         static Object genericBytecodeDSL(VirtualFrame frame, Node inliningTarget, PGenerator self, Object sendValue,
-                        @Cached CallDispatchers.SimpleIndirectInvokeNode invoke,
-                        @Cached InlinedConditionProfile firstInvocationProfile,
-                        @Cached InlinedBranchProfile returnProfile,
-                        @Cached IsBuiltinObjectProfile errorProfile,
-                        @Cached PRaiseNode raiseNode) {
+                        @Exclusive @Cached CallDispatchers.SimpleIndirectInvokeNode invoke,
+                        @Exclusive @Cached InlinedBranchProfile returnProfile,
+                        @Exclusive @Cached IsBuiltinObjectProfile errorProfile,
+                        @Exclusive @Cached PRaiseNode raiseNode) {
             self.setRunning(true);
             Object generatorResult;
             try {
-                ContinuationResult continuation = self.getContinuation();
-                Object[] arguments;
-                if (firstInvocationProfile.profile(inliningTarget, continuation == null)) {
-                    // First invocation: call the regular root node.
-                    arguments = prepareArguments(self);
-                } else {
-                    // Subsequent invocations: call a continuation root node.
-                    arguments = new Object[]{continuation.getFrame(), sendValue};
-                }
-
+                self.prepareResume();
+                Object[] arguments = new Object[]{self.getGeneratorFrame(), sendValue};
                 generatorResult = invoke.execute(frame, inliningTarget, self.getCurrentCallTarget(), arguments);
             } catch (PException e) {
                 throw handleException(self, inliningTarget, errorProfile, raiseNode, e);
@@ -339,7 +263,7 @@ public final class CommonGeneratorBuiltins extends PythonBuiltins {
 
         @Specialization
         static Object send(VirtualFrame frame, PGenerator self, Object value,
-                        @Bind("this") Node inliningTarget,
+                        @Bind Node inliningTarget,
                         @Cached ResumeGeneratorNode resumeGeneratorNode,
                         @Cached PRaiseNode raiseNode) {
             // even though this isn't a builtin for async generators, SendNode is used on async
@@ -363,7 +287,7 @@ public final class CommonGeneratorBuiltins extends PythonBuiltins {
 
         @Specialization
         static Object sendThrow(VirtualFrame frame, PGenerator self, Object typ, Object val, Object tb,
-                        @Bind("this") Node inliningTarget,
+                        @Bind Node inliningTarget,
                         @Cached InlinedConditionProfile hasTbProfile,
                         @Cached InlinedConditionProfile hasValProfile,
                         @Cached InlinedConditionProfile startedProfile,
@@ -414,12 +338,7 @@ public final class CommonGeneratorBuiltins extends PythonBuiltins {
                 // its frame to the traceback manually.
                 self.markAsFinished();
                 Node location = self.getCurrentCallTarget().getRootNode();
-                MaterializedFrame generatorFrame;
-                if (PythonOptions.ENABLE_BYTECODE_DSL_INTERPRETER) {
-                    generatorFrame = Truffle.getRuntime().createMaterializedFrame(PArguments.create(), self.getRootNode().getFrameDescriptor());
-                } else {
-                    generatorFrame = PArguments.getGeneratorFrame(self.getArguments());
-                }
+                MaterializedFrame generatorFrame = self.getGeneratorFrame();
                 PFrame pFrame = MaterializeFrameNode.materializeGeneratorFrame(location, generatorFrame, PFrame.Reference.EMPTY);
                 FrameInfo info = (FrameInfo) generatorFrame.getFrameDescriptor().getInfo();
                 pFrame.setLine(info.getFirstLineNumber());
@@ -437,7 +356,7 @@ public final class CommonGeneratorBuiltins extends PythonBuiltins {
     public abstract static class CloseNode extends PythonUnaryBuiltinNode {
         @Specialization
         static Object close(VirtualFrame frame, PGenerator self,
-                        @Bind("this") Node inliningTarget,
+                        @Bind Node inliningTarget,
                         @Cached IsBuiltinObjectProfile isGeneratorExit,
                         @Cached IsBuiltinObjectProfile isStopIteration,
                         @Cached ResumeGeneratorNode resumeGeneratorNode,

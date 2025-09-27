@@ -112,11 +112,11 @@ public final class PythonCextMethodBuiltins {
     }
 
     @CApiBuiltin(ret = PyObjectTransfer, args = {PyMethodDef, ConstCharPtrAsTruffleString, Pointer, Int, Int, PyObject, PyObject, PyTypeObject, ConstCharPtrAsTruffleString}, call = Ignored)
-    abstract static class PyTruffleCMethod_NewEx extends CApi9BuiltinNode {
+    abstract static class GraalPyPrivate_CMethod_NewEx extends CApi9BuiltinNode {
 
         @Specialization
         static Object doNativeCallable(Object methodDefPtr, TruffleString name, Object methObj, int flags, int wrapper, Object self, Object module, Object cls, Object doc,
-                        @Bind("this") Node inliningTarget,
+                        @Bind Node inliningTarget,
                         @Cached CFunctionNewExMethodNode cFunctionNewExMethodNode) {
             return cFunctionNewExMethodNode.execute(inliningTarget, methodDefPtr, name, methObj, flags, wrapper, self, module, cls, doc);
         }

@@ -64,6 +64,7 @@ import java.util.Map.Entry;
 import java.util.logging.Level;
 
 import com.oracle.graal.python.PythonLanguage;
+import com.oracle.graal.python.annotations.PythonOS;
 import com.oracle.graal.python.builtins.modules.AbcModuleBuiltins;
 import com.oracle.graal.python.builtins.modules.ArrayModuleBuiltins;
 import com.oracle.graal.python.builtins.modules.AsyncioModuleBuiltins;
@@ -172,9 +173,8 @@ import com.oracle.graal.python.builtins.modules.hashlib.HashObjectBuiltins;
 import com.oracle.graal.python.builtins.modules.hashlib.HashlibModuleBuiltins;
 import com.oracle.graal.python.builtins.modules.hashlib.Md5ModuleBuiltins;
 import com.oracle.graal.python.builtins.modules.hashlib.Sha1ModuleBuiltins;
-import com.oracle.graal.python.builtins.modules.hashlib.Sha256ModuleBuiltins;
+import com.oracle.graal.python.builtins.modules.hashlib.Sha2ModuleBuiltins;
 import com.oracle.graal.python.builtins.modules.hashlib.Sha3ModuleBuiltins;
-import com.oracle.graal.python.builtins.modules.hashlib.Sha512ModuleBuiltins;
 import com.oracle.graal.python.builtins.modules.hashlib.ShakeDigestObjectBuiltins;
 import com.oracle.graal.python.builtins.modules.io.BufferedIOBaseBuiltins;
 import com.oracle.graal.python.builtins.modules.io.BufferedIOMixinBuiltins;
@@ -261,6 +261,7 @@ import com.oracle.graal.python.builtins.objects.exception.UnicodeDecodeErrorBuil
 import com.oracle.graal.python.builtins.objects.exception.UnicodeEncodeErrorBuiltins;
 import com.oracle.graal.python.builtins.objects.exception.UnicodeErrorBuiltins;
 import com.oracle.graal.python.builtins.objects.exception.UnicodeTranslateErrorBuiltins;
+import com.oracle.graal.python.builtins.objects.filter.FilterBuiltins;
 import com.oracle.graal.python.builtins.objects.floats.FloatBuiltins;
 import com.oracle.graal.python.builtins.objects.floats.PFloat;
 import com.oracle.graal.python.builtins.objects.foreign.ForeignAbstractClassBuiltins;
@@ -430,9 +431,8 @@ public abstract class Python3Core {
     private static final TruffleString T__FROZEN_IMPORTLIB_EXTERNAL = tsLiteral("_frozen_importlib_external");
     private static final TruffleString T__FROZEN_IMPORTLIB = tsLiteral("_frozen_importlib");
     private static final TruffleString T_IMPORTLIB_BOOTSTRAP = tsLiteral("importlib._bootstrap");
-    private final TruffleString[] coreFiles;
 
-    private static TruffleString[] initializeCoreFiles() {
+    private static TruffleString[] getCoreFiles() {
         // Order matters!
         List<TruffleString> coreFiles = List.of(
                         T___GRAALPYTHON__,
@@ -442,7 +442,7 @@ public abstract class Python3Core {
                         T__SYSCONFIG,
                         T_JAVA,
                         toTruffleStringUncached("pip_hook"));
-        if (PythonOS.getPythonOS() == PythonOS.PLATFORM_WIN32) {
+        if (PythonLanguage.getPythonOS() == PythonOS.PLATFORM_WIN32) {
             coreFiles = new ArrayList<>(coreFiles);
             coreFiles.add(toTruffleStringUncached("_nt"));
         }
@@ -450,7 +450,7 @@ public abstract class Python3Core {
         return coreFiles.toArray(new TruffleString[0]);
     }
 
-    private final PythonBuiltins[] builtins;
+    private PythonBuiltins[] builtins;
 
     public static final boolean HAS_PROFILER_TOOL;
     static {
@@ -464,7 +464,7 @@ public abstract class Python3Core {
     }
 
     private static void filterBuiltins(List<PythonBuiltins> builtins) {
-        PythonOS currentOs = PythonOS.getPythonOS();
+        PythonOS currentOs = PythonLanguage.getPythonOS();
         List<PythonBuiltins> toRemove = new ArrayList<>();
         for (PythonBuiltins builtin : builtins) {
             if (builtin == null) {
@@ -526,6 +526,7 @@ public abstract class Python3Core {
                         new ZipBuiltins(),
                         new EnumerateBuiltins(),
                         new MapBuiltins(),
+                        new FilterBuiltins(),
                         new NotImplementedBuiltins(),
                         new NoneBuiltins(),
                         new EllipsisBuiltins(),
@@ -691,8 +692,7 @@ public abstract class Python3Core {
                         // hashlib
                         PythonImageBuildOptions.WITHOUT_DIGEST ? null : new Md5ModuleBuiltins(),
                         PythonImageBuildOptions.WITHOUT_DIGEST ? null : new Sha1ModuleBuiltins(),
-                        PythonImageBuildOptions.WITHOUT_DIGEST ? null : new Sha256ModuleBuiltins(),
-                        PythonImageBuildOptions.WITHOUT_DIGEST ? null : new Sha512ModuleBuiltins(),
+                        PythonImageBuildOptions.WITHOUT_DIGEST ? null : new Sha2ModuleBuiltins(),
                         PythonImageBuildOptions.WITHOUT_DIGEST ? null : new Sha3ModuleBuiltins(),
                         PythonImageBuildOptions.WITHOUT_DIGEST ? null : new Blake2ModuleBuiltins(),
                         PythonImageBuildOptions.WITHOUT_DIGEST ? null : new DigestObjectBuiltins(),
@@ -849,7 +849,7 @@ public abstract class Python3Core {
     @CompilationFinal private PInt pyFalse;
     @CompilationFinal private PFloat pyNaN;
 
-    @CompilationFinal(dimensions = 1) public final PythonManagedClass[] polyglotForeignClasses = new PythonManagedClass[GetForeignObjectClassNode.Trait.COMBINATIONS];
+    @CompilationFinal(dimensions = 1) private PythonManagedClass[] polyglotForeignClasses = null;
 
     private final SysModuleState sysModuleState = new SysModuleState();
 
@@ -865,8 +865,6 @@ public abstract class Python3Core {
 
     public Python3Core(PythonLanguage language, TruffleLanguage.Env env) {
         this.language = language;
-        this.builtins = initializeBuiltins(env);
-        this.coreFiles = initializeCoreFiles();
     }
 
     @CompilerDirectives.ValueType
@@ -944,6 +942,8 @@ public abstract class Python3Core {
      * Load the core library and prepare all builtin classes and modules.
      */
     public final void initialize(PythonContext context) {
+        assert this.builtins == null;
+        this.builtins = initializeBuiltins(context.getEnv());
         initializeJavaCore();
         initializeImportlib();
         context.applyModuleOptions();
@@ -1042,8 +1042,7 @@ public abstract class Python3Core {
     }
 
     private void initializePython3Core(TruffleString coreHome) {
-        loadFile(BuiltinNames.T_BUILTINS, coreHome);
-        for (TruffleString s : coreFiles) {
+        for (TruffleString s : getCoreFiles()) {
             loadFile(s, coreHome);
         }
         initialized = true;
@@ -1363,5 +1362,20 @@ public abstract class Python3Core {
 
     public static void writeInfo(Supplier<String> messageSupplier) {
         PythonLanguage.getLogger(Python3Core.class).fine(messageSupplier);
+    }
+
+    public PythonManagedClass getPolyglotForeignClasses(int traits) {
+        assert getContext().ownsGil(); // if not it would need its own synchronization
+        PythonManagedClass[] classes = polyglotForeignClasses;
+        return classes == null ? null : classes[traits];
+    }
+
+    public void setPolyglotForeignClasses(int traits, PythonManagedClass pythonClass) {
+        assert getContext().ownsGil(); // if not it would need its own synchronization
+        if (polyglotForeignClasses == null) {
+            polyglotForeignClasses = new PythonManagedClass[GetForeignObjectClassNode.Trait.COMBINATIONS];
+        }
+
+        polyglotForeignClasses[traits] = pythonClass;
     }
 }

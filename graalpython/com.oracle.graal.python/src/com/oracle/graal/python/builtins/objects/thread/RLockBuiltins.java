@@ -46,7 +46,7 @@ import com.oracle.graal.python.PythonLanguage;
 import com.oracle.graal.python.annotations.Slot;
 import com.oracle.graal.python.annotations.Slot.SlotKind;
 import com.oracle.graal.python.annotations.Slot.SlotSignature;
-import com.oracle.graal.python.builtins.Builtin;
+import com.oracle.graal.python.annotations.Builtin;
 import com.oracle.graal.python.builtins.CoreFunctions;
 import com.oracle.graal.python.builtins.PythonBuiltinClassType;
 import com.oracle.graal.python.builtins.PythonBuiltins;
@@ -108,7 +108,7 @@ public final class RLockBuiltins extends PythonBuiltins {
     abstract static class AcquireRestoreRLockNode extends PythonBinaryBuiltinNode {
         @Specialization
         Object acquireRestore(PRLock self, PTuple state,
-                        @Bind("this") Node inliningTarget,
+                        @Bind Node inliningTarget,
                         @Cached GilNode gil,
                         @Cached CastToJavaUnsignedLongNode castLong,
                         @Cached SequenceStorageNodes.GetItemDynamicNode getItemNode) {
@@ -140,7 +140,7 @@ public final class RLockBuiltins extends PythonBuiltins {
     abstract static class ReleaseSaveRLockNode extends PythonUnaryBuiltinNode {
         @Specialization
         static Object releaseSave(PRLock self,
-                        @Bind("this") Node inliningTarget,
+                        @Bind Node inliningTarget,
                         @Cached InlinedConditionProfile countProfile,
                         @Bind PythonLanguage language,
                         @Cached PRaiseNode raiseNode) {

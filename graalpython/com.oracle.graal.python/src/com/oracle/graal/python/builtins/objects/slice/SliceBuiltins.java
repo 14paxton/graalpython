@@ -35,7 +35,7 @@ import com.oracle.graal.python.PythonLanguage;
 import com.oracle.graal.python.annotations.Slot;
 import com.oracle.graal.python.annotations.Slot.SlotKind;
 import com.oracle.graal.python.annotations.Slot.SlotSignature;
-import com.oracle.graal.python.builtins.Builtin;
+import com.oracle.graal.python.annotations.Builtin;
 import com.oracle.graal.python.builtins.CoreFunctions;
 import com.oracle.graal.python.builtins.PythonBuiltinClassType;
 import com.oracle.graal.python.builtins.PythonBuiltins;
@@ -97,7 +97,7 @@ public final class SliceBuiltins extends PythonBuiltins {
         @Specialization(guards = {"isNoValue(second)"})
         @SuppressWarnings("unused")
         static Object singleArg(Object cls, Object first, Object second, Object third,
-                        @Bind("this") Node inliningTarget,
+                        @Bind Node inliningTarget,
                         @Shared @Cached PySliceNew sliceNode) {
             return sliceNode.execute(inliningTarget, PNone.NONE, first, PNone.NONE);
         }
@@ -105,14 +105,14 @@ public final class SliceBuiltins extends PythonBuiltins {
         @Specialization(guards = {"!isNoValue(stop)", "isNoValue(step)"})
         @SuppressWarnings("unused")
         static Object twoArgs(Object cls, Object start, Object stop, Object step,
-                        @Bind("this") Node inliningTarget,
+                        @Bind Node inliningTarget,
                         @Shared @Cached PySliceNew sliceNode) {
             return sliceNode.execute(inliningTarget, start, stop, PNone.NONE);
         }
 
         @Fallback
         static Object threeArgs(@SuppressWarnings("unused") Object cls, Object start, Object stop, Object step,
-                        @Bind("this") Node inliningTarget,
+                        @Bind Node inliningTarget,
                         @Shared @Cached PySliceNew sliceNode) {
             return sliceNode.execute(inliningTarget, start, stop, step);
         }
@@ -133,10 +133,10 @@ public final class SliceBuiltins extends PythonBuiltins {
     abstract static class EqNode extends RichCmpBuiltinNode {
         @Specialization
         static boolean doIntSliceEq(PIntSlice left, PIntSlice right, RichCmpOp op,
-                        @Bind("$node") Node inliningTarget,
-                        @Cached InlinedConditionProfile startCmpProfile,
-                        @Cached InlinedConditionProfile stopCmpProfile,
-                        @Cached InlinedConditionProfile stepCmpProfile,
+                        @Bind Node inliningTarget,
+                        @Cached @Exclusive InlinedConditionProfile startCmpProfile,
+                        @Cached @Exclusive InlinedConditionProfile stopCmpProfile,
+                        @Cached @Exclusive InlinedConditionProfile stepCmpProfile,
                         @Cached PRaiseNode raiseNode) {
             // Inlined tuple comparison specialized for ints
             if (startCmpProfile.profile(inliningTarget, left.start != right.start)) {
@@ -173,12 +173,13 @@ public final class SliceBuiltins extends PythonBuiltins {
             return op.isEq() || op.isLe() || op.isGe();
         }
 
+        // @Exclusive for truffle-interpreted-performance
         @Specialization(guards = {"noIntSlices(left, right)", "left != right"})
         static Object sliceCmpWithLib(VirtualFrame frame, PSlice left, PSlice right, RichCmpOp op,
-                        @Bind("this") Node inliningTarget,
-                        @Cached InlinedConditionProfile startCmpProfile,
-                        @Cached InlinedConditionProfile stopCmpProfile,
-                        @Cached InlinedConditionProfile stepCmpProfile,
+                        @Bind Node inliningTarget,
+                        @Cached @Exclusive InlinedConditionProfile startCmpProfile,
+                        @Cached @Exclusive InlinedConditionProfile stopCmpProfile,
+                        @Cached @Exclusive InlinedConditionProfile stepCmpProfile,
                         @Cached PyObjectRichCompareBool eqNode,
                         @Cached PyObjectRichCompare cmpNode) {
             // Inlined tuple comparison specialized for tuples of 3 items to avoid the tuples
@@ -269,7 +270,7 @@ public final class SliceBuiltins extends PythonBuiltins {
 
         @Specialization(guards = "!isPNone(length)", rewriteOn = PException.class)
         static PTuple doSliceObject(VirtualFrame frame, PSlice self, Object length,
-                        @Bind("this") Node inliningTarget,
+                        @Bind Node inliningTarget,
                         @Bind PythonLanguage language,
                         @Exclusive @Cached SliceExactCastToInt toInt,
                         @Shared @Cached ComputeIndices compute) {
@@ -278,7 +279,7 @@ public final class SliceBuiltins extends PythonBuiltins {
 
         @Specialization(guards = "!isPNone(length)", replaces = {"doSliceObject"})
         static PTuple doSliceObjectWithSlowPath(VirtualFrame frame, PSlice self, Object length,
-                        @Bind("this") Node inliningTarget,
+                        @Bind Node inliningTarget,
                         @Bind PythonLanguage language,
                         @Exclusive @Cached SliceExactCastToInt toInt,
                         @Shared @Cached ComputeIndices compute,
@@ -301,7 +302,7 @@ public final class SliceBuiltins extends PythonBuiltins {
 
         @Specialization(guards = {"isPNone(length)"})
         static PTuple lengthNone(@SuppressWarnings("unused") PSlice self, @SuppressWarnings("unused") Object length,
-                        @Bind("this") Node inliningTarget) {
+                        @Bind Node inliningTarget) {
             throw PRaiseNode.raiseStatic(inliningTarget, ValueError);
         }
     }
@@ -311,7 +312,7 @@ public final class SliceBuiltins extends PythonBuiltins {
     public abstract static class HashNode extends HashBuiltinNode {
         @Specialization
         static long computeHash(VirtualFrame frame, PSlice self,
-                        @Bind("this") Node inliningTarget,
+                        @Bind Node inliningTarget,
                         @Cached PyObjectHashNode hashNode) {
             int len = 3;
             long multiplier = 0xf4243;
@@ -339,7 +340,7 @@ public final class SliceBuiltins extends PythonBuiltins {
     public abstract static class ReduceNode extends PythonUnaryBuiltinNode {
         @Specialization
         static Object reduce(PSlice self,
-                        @Bind("this") Node inliningTarget,
+                        @Bind Node inliningTarget,
                         @Bind PythonLanguage language,
                         @Cached GetClassNode getClassNode) {
             PTuple args = PFactory.createTuple(language, new Object[]{self.getStart(), self.getStop(), self.getStep()});

@@ -51,7 +51,7 @@ import com.oracle.graal.python.PythonLanguage;
 import com.oracle.graal.python.annotations.Slot;
 import com.oracle.graal.python.annotations.Slot.SlotKind;
 import com.oracle.graal.python.annotations.Slot.SlotSignature;
-import com.oracle.graal.python.builtins.Builtin;
+import com.oracle.graal.python.annotations.Builtin;
 import com.oracle.graal.python.builtins.CoreFunctions;
 import com.oracle.graal.python.builtins.PythonBuiltinClassType;
 import com.oracle.graal.python.builtins.PythonBuiltins;
@@ -168,7 +168,7 @@ public final class AttributeErrorBuiltins extends PythonBuiltins {
 
         @Specialization
         static Object get(PBaseException self,
-                        @Bind("this") Node inliningTarget,
+                        @Bind Node inliningTarget,
                         @Cached BaseExceptionAttrNode attrNode,
                         @Cached GetDictIfExistsNode getDictIfExistsNode,
                         @Cached HashingStorageNodes.HashingStorageSetItem setHashingStorageItem,
@@ -198,7 +198,7 @@ public final class AttributeErrorBuiltins extends PythonBuiltins {
 
         @Specialization
         static Object reduce(VirtualFrame frame, PBaseException self,
-                        @Bind("this") Node inliningTarget,
+                        @Bind Node inliningTarget,
                         @Cached GetClassNode getClassNode,
                         @Cached ExceptionNodes.GetArgsNode getArgsNode,
                         @Cached GetStateNode getStateNode,

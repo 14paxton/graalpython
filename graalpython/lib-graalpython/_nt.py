@@ -41,13 +41,24 @@ import nt
 
 
 def _add_dll_directory(path):
-    import ctypes
-    return ctypes.windll.kernel32.AddDllDirectory(path)
+    import ctypes, os
+    AddDllDirectory = ctypes.windll.kernel32['AddDllDirectory']
+    AddDllDirectory.argtypes = [ctypes.c_wchar_p]
+    AddDllDirectory.restype = ctypes.c_void_p
+    result = AddDllDirectory(os.fspath(path))
+    if result == 0:
+        raise OSError(f"add_dll_directory: {ctypes.windll.kernel32.GetLastError()}")
+    return result
 
 
 def _remove_dll_directory(cookie):
     import ctypes
-    return ctypes.windll.kernel32.RemoveDllDirectory(cookie)
+    RemoveDllDirectory = ctypes.windll.kernel32['RemoveDllDirectory']
+    RemoveDllDirectory.argtypes = [ctypes.c_void_p]
+    RemoveDllDirectory.restype = ctypes.c_int
+    result = RemoveDllDirectory(cookie)
+    if result == 0:
+        raise OSError(f"remove_dll_directory: {ctypes.windll.kernel32.GetLastError()}")
 
 
 nt._add_dll_directory = _add_dll_directory

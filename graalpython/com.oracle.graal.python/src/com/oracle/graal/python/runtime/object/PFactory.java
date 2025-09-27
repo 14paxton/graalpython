@@ -131,6 +131,7 @@ import com.oracle.graal.python.builtins.objects.dict.PDictView.PDictValuesView;
 import com.oracle.graal.python.builtins.objects.enumerate.PEnumerate;
 import com.oracle.graal.python.builtins.objects.exception.PBaseException;
 import com.oracle.graal.python.builtins.objects.exception.PBaseExceptionGroup;
+import com.oracle.graal.python.builtins.objects.filter.PFilter;
 import com.oracle.graal.python.builtins.objects.floats.PFloat;
 import com.oracle.graal.python.builtins.objects.frame.PFrame;
 import com.oracle.graal.python.builtins.objects.function.PBuiltinFunction;
@@ -211,7 +212,6 @@ import com.oracle.graal.python.builtins.objects.ssl.PMemoryBIO;
 import com.oracle.graal.python.builtins.objects.ssl.PSSLContext;
 import com.oracle.graal.python.builtins.objects.ssl.PSSLSocket;
 import com.oracle.graal.python.builtins.objects.ssl.SSLMethod;
-import com.oracle.graal.python.builtins.objects.str.NativeCharSequence;
 import com.oracle.graal.python.builtins.objects.str.PString;
 import com.oracle.graal.python.builtins.objects.struct.PStruct;
 import com.oracle.graal.python.builtins.objects.superobject.SuperObject;
@@ -261,6 +261,7 @@ import com.oracle.truffle.api.CompilerDirectives;
 import com.oracle.truffle.api.CompilerDirectives.TruffleBoundary;
 import com.oracle.truffle.api.HostCompilerDirectives.InliningCutoff;
 import com.oracle.truffle.api.RootCallTarget;
+import com.oracle.truffle.api.bytecode.ContinuationRootNode;
 import com.oracle.truffle.api.frame.MaterializedFrame;
 import com.oracle.truffle.api.instrumentation.AllocationReporter;
 import com.oracle.truffle.api.nodes.Node;
@@ -343,14 +344,6 @@ public final class PFactory {
     }
 
     public static PString createString(PythonLanguage language, Object cls, Shape shape, TruffleString string) {
-        return trace(language, new PString(cls, shape, string));
-    }
-
-    public static PString createString(PythonLanguage language, NativeCharSequence string) {
-        return createString(language, PythonBuiltinClassType.PString, language.getBuiltinTypeInstanceShape(PythonBuiltinClassType.PString), string);
-    }
-
-    public static PString createString(PythonLanguage language, Object cls, Shape shape, NativeCharSequence string) {
         return trace(language, new PString(cls, shape, string));
     }
 
@@ -579,7 +572,7 @@ public final class PFactory {
     }
 
     public static PBuiltinFunction createBuiltinFunction(PythonLanguage language, PBuiltinFunction function, Object klass) {
-        PythonBuiltinClassType type = (PythonBuiltinClassType) function.getInitialPythonClass();
+        PythonBuiltinClassType type = (PythonBuiltinClassType) function.getPythonClass();
         return trace(language, new PBuiltinFunction(type, type.getInstanceShape(language), function.getName(), klass,
                         function.getDefaults(), function.getKwDefaults(), function.getFlags(), function.getCallTarget(),
                         function.getSlot(), function.getSlotWrapper()));
@@ -827,38 +820,40 @@ public final class PFactory {
      * Special objects: generators, proxies, references, cells
      */
 
-    public static PGenerator createGenerator(PythonLanguage language, TruffleString name, TruffleString qualname, PBytecodeRootNode rootNode, RootCallTarget[] callTargets, Object[] arguments) {
-        return trace(language, PGenerator.create(language, name, qualname, rootNode, callTargets, arguments, PythonBuiltinClassType.PGenerator));
+    public static PGenerator createGenerator(PythonLanguage language, PFunction function, PBytecodeRootNode rootNode, RootCallTarget[] callTargets, Object[] arguments) {
+        return trace(language, PGenerator.create(language, function, rootNode, callTargets, arguments, PythonBuiltinClassType.PGenerator));
     }
 
-    public static PGenerator createGenerator(PythonLanguage language, TruffleString name, TruffleString qualname, PBytecodeDSLRootNode rootNode, Object[] arguments) {
-        return trace(language, PGenerator.create(language, name, qualname, rootNode, arguments, PythonBuiltinClassType.PGenerator));
+    public static PGenerator createGenerator(PythonLanguage language, PFunction function, PBytecodeDSLRootNode rootNode, Object[] arguments, ContinuationRootNode continuationRootNode,
+                    MaterializedFrame continuationFrame) {
+        return trace(language, PGenerator.create(language, function, rootNode, arguments, PythonBuiltinClassType.PGenerator, continuationRootNode, continuationFrame));
     }
 
-    public static PGenerator createIterableCoroutine(PythonLanguage language, TruffleString name, TruffleString qualname, PBytecodeRootNode rootNode, RootCallTarget[] callTargets,
+    public static PGenerator createIterableCoroutine(PythonLanguage language, PFunction function, PBytecodeRootNode rootNode, RootCallTarget[] callTargets,
                     Object[] arguments) {
-        return trace(language, PGenerator.create(language, name, qualname, rootNode, callTargets, arguments, PythonBuiltinClassType.PGenerator, true));
+        return trace(language, PGenerator.create(language, function, rootNode, callTargets, arguments, PythonBuiltinClassType.PGenerator, true));
     }
 
-    public static PGenerator createIterableCoroutine(PythonLanguage language, TruffleString name, TruffleString qualname, PBytecodeDSLRootNode rootNode,
-                    Object[] arguments) {
-        return trace(language, PGenerator.create(language, name, qualname, rootNode, arguments, PythonBuiltinClassType.PGenerator, true));
+    public static PGenerator createIterableCoroutine(PythonLanguage language, PFunction function, PBytecodeDSLRootNode rootNode,
+                    Object[] arguments, ContinuationRootNode continuationRootNode, MaterializedFrame continuationFrame) {
+        return trace(language, PGenerator.create(language, function, rootNode, arguments, PythonBuiltinClassType.PGenerator, true, continuationRootNode, continuationFrame));
     }
 
-    public static PGenerator createCoroutine(PythonLanguage language, TruffleString name, TruffleString qualname, PBytecodeRootNode rootNode, RootCallTarget[] callTargets, Object[] arguments) {
-        return trace(language, PGenerator.create(language, name, qualname, rootNode, callTargets, arguments, PythonBuiltinClassType.PCoroutine));
+    public static PGenerator createCoroutine(PythonLanguage language, PFunction function, PBytecodeRootNode rootNode, RootCallTarget[] callTargets, Object[] arguments) {
+        return trace(language, PGenerator.create(language, function, rootNode, callTargets, arguments, PythonBuiltinClassType.PCoroutine));
     }
 
-    public static PGenerator createCoroutine(PythonLanguage language, TruffleString name, TruffleString qualname, PBytecodeDSLRootNode rootNode, Object[] arguments) {
-        return trace(language, PGenerator.create(language, name, qualname, rootNode, arguments, PythonBuiltinClassType.PCoroutine));
+    public static PGenerator createCoroutine(PythonLanguage language, PFunction function, PBytecodeDSLRootNode rootNode, Object[] arguments, ContinuationRootNode continuationRootNode,
+                    MaterializedFrame continuationFrame) {
+        return trace(language, PGenerator.create(language, function, rootNode, arguments, PythonBuiltinClassType.PCoroutine, continuationRootNode, continuationFrame));
     }
 
     public static PCoroutineWrapper createCoroutineWrapper(PythonLanguage language, PGenerator generator) {
         return trace(language, new PCoroutineWrapper(language, generator));
     }
 
-    public static PAsyncGen createAsyncGenerator(PythonLanguage language, TruffleString name, TruffleString qualname, PBytecodeRootNode rootNode, RootCallTarget[] callTargets, Object[] arguments) {
-        return trace(language, PAsyncGen.create(language, name, qualname, rootNode, callTargets, arguments));
+    public static PAsyncGen createAsyncGenerator(PythonLanguage language, PFunction function, PBytecodeRootNode rootNode, RootCallTarget[] callTargets, Object[] arguments) {
+        return trace(language, PAsyncGen.create(language, function, rootNode, callTargets, arguments));
     }
 
     public static PANextAwaitable createANextAwaitable(PythonLanguage language, Object wrapped, Object defaultValue) {
@@ -871,6 +866,14 @@ public final class PFactory {
 
     public static PMappingproxy createMappingproxy(PythonLanguage language, Object cls, Shape shape, Object object) {
         return trace(language, new PMappingproxy(cls, shape, object));
+    }
+
+    public static PReferenceType createReferenceType(PythonLanguage language, Object object) {
+        return createReferenceType(language, PythonBuiltinClassType.PReferenceType, PythonBuiltinClassType.PReferenceType.getInstanceShape(language), object);
+    }
+
+    public static PReferenceType createReferenceType(PythonLanguage language, Object cls, Shape shape, Object object) {
+        return createReferenceType(language, cls, shape, object, null, null);
     }
 
     public static PReferenceType createReferenceType(PythonLanguage language, Object cls, Shape shape, Object object, Object callback, ReferenceQueue<Object> queue) {
@@ -1100,6 +1103,10 @@ public final class PFactory {
 
     public static PMap createMap(PythonLanguage language, Object cls, Shape shape) {
         return trace(language, new PMap(cls, shape));
+    }
+
+    public static PFilter createFilter(PythonLanguage language, Object cls, Shape shape) {
+        return trace(language, new PFilter(cls, shape));
     }
 
     public static PZip createZip(PythonLanguage language, Object cls, Shape shape, Object[] iterables, boolean strict) {

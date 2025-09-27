@@ -9,7 +9,7 @@ suite = {
     "name": "graalpython",
     "versionConflictResolution": "latest",
 
-    "version": "26.0.0",
+    "version": "25.1.0",
     "graalpython:pythonVersion": "3.12.8",
     "release": False,
     "groupId": "org.graalvm.python",
@@ -53,7 +53,7 @@ suite = {
             },
             {
                 "name": "tools",
-                "version": "fdf09e0d947721b0c1be6d9052470d694eb772f2",
+                "version": "b1181d14631c6760fd72c5eb441ad1aeca1f937f",
                 "subdir": True,
                 "urls": [
                     {"url": "https://github.com/oracle/graal", "kind": "git"},
@@ -61,7 +61,7 @@ suite = {
             },
             {
                 "name": "regex",
-                "version": "fdf09e0d947721b0c1be6d9052470d694eb772f2",
+                "version": "b1181d14631c6760fd72c5eb441ad1aeca1f937f",
                 "subdir": True,
                 "urls": [
                     {"url": "https://github.com/oracle/graal", "kind": "git"},
@@ -154,11 +154,10 @@ suite = {
               "version": "RELEASE120-1",
             },
         },
-        "JBANG" : {
-            "urls" : [
-                "https://github.com/jbangdev/jbang/releases/download/v0.114.0/jbang-0.114.0.zip"
-            ],
-            "digest": "sha256:660c7eb2eda888897f20aa5c5927ccfed924f3b86d5f2a2477a7b0235cdc94bb"
+        "GRAALPYTHON_PYFLATE_BENCHMARK_RESOURCE" : {
+            # just any reasonably sized .tar.gz or .tar.bz2 for running the benchmark
+            "urls" : ["https://lafo.ssw.uni-linz.ac.at/pub/graal-external-deps/visualvm/visualvm-944-linux-amd64.tar.gz"],
+            "digest" : "sha512:72982ca01cce9dfa876687ec7b9627b81e241e6cddc8dedb976a5d06d058a067f83f5c063dc07d7ed19730ffb54af8343eae8ca0cc156353f7b18530eef73c50"
         },
     },
 
@@ -291,38 +290,6 @@ suite = {
             "checkstyle": "com.oracle.graal.python",
         },
 
-        "org.graalvm.python.embedding": {
-            "subDir": "graalpython",
-            "sourceDirs": ["src"],
-            "dependencies": [
-                "sdk:POLYGLOT",
-            ],
-            "requires": [
-                "java.logging",
-            ],
-            "jacoco": "include",
-            "javaCompliance": "17+",
-            "checkstyle": "com.oracle.graal.python",
-        },
-        "org.graalvm.python.embedding.tools": {
-            "subDir": "graalpython",
-            "sourceDirs": ["src"],
-            "jacoco": "include",
-            "javaCompliance": "17+",
-            "checkstyle": "com.oracle.graal.python",
-        },
-
-        "org.graalvm.python.jbang": {
-            "subDir": "graalpython",
-            "sourceDirs": ["src"],
-            "dependencies": [
-                "org.graalvm.python.embedding.tools"
-            ],
-            "jacoco": "include",
-            "javaCompliance": "17+",
-            "checkstyle": "com.oracle.graal.python",
-        },
-
         "com.oracle.graal.python.annotations": {
             "subDir": "graalpython",
             "sourceDirs": ["src"],
@@ -366,7 +333,6 @@ suite = {
                 "com.oracle.graal.python",
                 "GRAALPYTHON-LAUNCHER",
                 "regex:TREGEX",
-                "truffle:TRUFFLE_NFI_LIBFFI",
             ],
         },
 
@@ -381,7 +347,7 @@ suite = {
                 "--out",
                 "<output_root:hpy>",
                 "--cflags",
-                "-I<output_root:com.oracle.graal.python>/jni_gen -I<output_root:graalpy-pyconfig>/<arch> -I<path:com.oracle.graal.python.cext>/include",
+                "-I<output_root:com.oracle.graal.python>/jni_gen -I<output_root:graalpy-pyconfig>/<os>-<arch>/<multitarget_libc_selection>/ -I<path:com.oracle.graal.python.cext>/include",
             ],
             "platformDependent": True,
             "buildDependencies": [
@@ -443,8 +409,6 @@ suite = {
             "forceJavac": True, # GRAALPYTHON_PROCESSOR is not compatible with ECJ
             "workingSets": "Truffle,Python",
             "spotbugsIgnoresGenerated": True,
-            # GR-60063: this disables all javac warnings
-            "javac.lint.overrides" : "none",
         },
 
         # GRAALPYTHON_UNIT_TESTS
@@ -458,7 +422,6 @@ suite = {
                 "truffle:TRUFFLE_TCK",
                 "mx:JUNIT",
                 "NETBEANS-LIB-PROFILER",
-                "GRAALPYTHON_EMBEDDING_TOOLS",
             ],
             "requires": [
                 "java.management",
@@ -487,7 +450,6 @@ suite = {
             "subDir": "graalpython",
             "sourceDirs": ["src"],
             "dependencies": [
-                "GRAALPYTHON_EMBEDDING",
                 "mx:JUNIT",
                 "sdk:GRAAL_SDK",
             ],
@@ -557,6 +519,24 @@ suite = {
             },
         },
 
+        "python-macos-launcher": {
+            "subDir": "graalpython",
+            "native":  "executable",
+            "deliverable": "macos-venvlauncher",
+            "os_arch": {
+                "darwin": {
+                    "<others>": {
+                        "defaultBuild": True,
+                    },
+                },
+                "<others>": {
+                    "<others>": {
+                        "defaultBuild": False,
+                    },
+                },
+            },
+        },
+
         "python-libbz2": {
             "subDir": "graalpython",
             "class": "CMakeNinjaProject",
@@ -578,11 +558,18 @@ suite = {
                 "windows": {
                     "<others>": {
                         "defaultBuild": False,
+                        "multitarget": {
+                            "libc": ["default"],
+                        },
                     },
                 },
                 "<others>": {
                     "<others>": {
                         "defaultBuild": True,
+                        "multitarget": [
+                            {"libc": ["glibc", "default"]},
+                            {"libc": ["musl"], "variant": ["swcfi"]},
+                        ],
                     },
                 },
             },
@@ -615,11 +602,18 @@ suite = {
                 "windows": {
                     "<others>": {
                         "defaultBuild": False,
+                        "multitarget": {
+                            "libc": ["default"],
+                        },
                     },
                 },
                 "<others>": {
                     "<others>": {
                         "defaultBuild": True,
+                        "multitarget": [
+                            {"libc": ["glibc", "default"]},
+                            {"libc": ["musl"], "variant": ["swcfi"]},
+                        ],
                     },
                 },
             },
@@ -644,6 +638,10 @@ suite = {
         "graalpy-pyconfig": {
             "subDir": "graalpython",
             "class": "CMakeNinjaProject",
+            "multitarget": [
+                {"libc": ["glibc", "default"]},
+                {"libc": ["musl"], "variant": ["swcfi"]},
+            ],
             "max_jobs": "1",
             "ninja_targets": ["all"],
             "cmakeConfig": {
@@ -666,9 +664,12 @@ suite = {
             "os_arch": {
                 "windows": {
                     "<others>": {
+                        "multitarget": {
+                            "libc": ["default"],
+                        },
                         "cmakeConfig": {
                             "CAPI_INC_DIR": "<output_root:com.oracle.graal.python>/jni_gen",
-                            "PYCONFIG_INCLUDE_DIR": "<output_root:graalpy-pyconfig>/<arch>",
+                            "PYCONFIG_INCLUDE_DIR": "<output_root:graalpy-pyconfig>/<os>-<arch>/<multitarget_libc_selection>",
                             "TRUFFLE_NFI_H_INC": "<path:com.oracle.truffle.nfi.native>/include",
                             "GRAALPY_PARENT_DIR": "<suite_parent:graalpython>",
                             "GRAALPY_EXT": "<graalpy_ext>",
@@ -691,9 +692,13 @@ suite = {
                 },
                 "<others>": {
                     "<others>": {
+                        "multitarget": [
+                            {"libc": ["glibc", "default"]},
+                            {"libc": ["musl"], "variant": ["swcfi"]},
+                        ],
                         "cmakeConfig": {
                             "CAPI_INC_DIR": "<output_root:com.oracle.graal.python>/jni_gen",
-                            "PYCONFIG_INCLUDE_DIR": "<output_root:graalpy-pyconfig>/<arch>",
+                            "PYCONFIG_INCLUDE_DIR": "<output_root:graalpy-pyconfig>/<os>-<arch>/<multitarget_libc_selection>/",
                             "TRUFFLE_NFI_H_INC": "<path:com.oracle.truffle.nfi.native>/include",
                             "GRAALPY_PARENT_DIR": "<suite_parent:graalpython>",
                             "GRAALPY_EXT": "<graalpy_ext>",
@@ -733,13 +738,19 @@ suite = {
             "os_arch": {
                 "windows": {
                     "<others>": {
-                        # "/O2", "/WX", # cflags to replace -O3 -Werror
                         "defaultBuild": False,
+                        "multitarget": {
+                            "libc": ["default"],
+                        },
                     },
                 },
                 "<others>": {
                     "<others>": {
                         "defaultBuild": True,
+                        "multitarget": [
+                            {"libc": ["glibc", "default"]},
+                            {"libc": ["musl"], "variant": ["swcfi"]},
+                        ],
                     },
                 },
             },
@@ -756,19 +767,28 @@ suite = {
             "os_arch": {
                 "windows": {
                     "<others>": {
-                        # "/O2", "/WX", # cflags to replace -O3 -Werror
                         "defaultBuild": False,
+                        "multitarget": {
+                            "libc": ["default"],
+                        },
                     },
                 },
                 "darwin": {
                     "<others>": {
                         "defaultBuild": True,
+                        "multitarget": {
+                            "libc": ["default"],
+                        },
                     },
                 },
                 "<others>": {
                     "<others>": {
                         "ldlibs": ["-lutil"],
                         "defaultBuild": True,
+                        "multitarget": [
+                            {"libc": ["glibc", "default"]},
+                            {"libc": ["musl"], "variant": ["swcfi"]},
+                        ],
                     },
                 },
             },
@@ -823,6 +843,12 @@ suite = {
             "liblang_relpath": "../lib/<lib:pythonvm>",
             "default_vm_args": [
                 "--vm.Xss16777216", # request 16M of stack
+                '--vm.-enable-native-access=org.graalvm.shadowed.jline',
+            ],
+            "multitarget": [
+                {"os": ["linux"], "libc": ["glibc", "default"], "compiler": ["llvm-toolchain", "host", "*"]},
+                {"os": ["linux"], "libc": ["musl"], "variant": ["swcfi"]},
+                {"os": ["windows", "darwin"], "libc": ["default"]},
             ],
         },
 
@@ -836,7 +862,6 @@ suite = {
             ],
             "build_args": [
                 # From mx.graalpython/native-image.properties
-                "-Dpolyglot.image-build-time.PreinitializeContexts=python",
                 "--add-exports", "org.graalvm.nativeimage/org.graalvm.nativeimage.impl=ALL-UNNAMED",
                 "-R:StackSize=16777216",
                 "-H:+AddAllCharsets",
@@ -844,9 +869,12 @@ suite = {
                 # Configure launcher
                 "-Dorg.graalvm.launcher.class=com.oracle.graal.python.shell.GraalPythonMain",
                 # GraalPy standalone specific flags
-                "-J-Xms14g", # GR-46399: libpythonvm needs more than the default minimum of 8 GB to be built
+                # uncomment to disable JLine FFM provider at native image build time
+                #'-Dorg.graalvm.shadowed.org.jline.terminal.ffm.disable=true',
+                 '--enable-native-access=org.graalvm.shadowed.jline',
                 "-Dpolyglot.python.PosixModuleBackend=native",
                 "-Dpolyglot.python.Sha3ModuleBackend=native",
+                "-Dpolyglot.python.CompressionModulesBackend=native",
             ],
             "dynamicBuildArgs": "libpythonvm_build_args",
         },
@@ -885,78 +913,6 @@ suite = {
             },
         },
 
-        "GRAALPYTHON_EMBEDDING" : {
-            "moduleInfo": {
-                "name": "org.graalvm.python.embedding",
-                "exports": [
-                    "org.graalvm.python.embedding",
-                ]
-            },
-            "useModulePath": True,
-            "dependencies": [
-                "org.graalvm.python.embedding"
-            ],
-            "distDependencies": [
-                "sdk:POLYGLOT",
-            ],
-            "description": "GraalPy, a high-performance embeddable Python 3 runtime for Java. This artifact provides convenience APIs to embed GraalPy into Java applications. Use this dependency if you install additional Python packages with the Maven or Gradle plugins for GraalPy.",
-            "maven": {
-                "groupId": "org.graalvm.python",
-                "artifactId": "python-embedding",
-                "tag": ["default", "public"],
-            },
-
-        },
-        "GRAALPYTHON_EMBEDDING_TOOLS" : {
-            "moduleInfo": {
-                "name": "org.graalvm.python.embedding.tools",
-                "exports": [
-                    "org.graalvm.python.embedding.tools.vfs",
-                    "org.graalvm.python.embedding.tools.exec",
-                ]
-            },
-            "useModulePath": True,
-            "dependencies": [
-                "org.graalvm.python.embedding.tools",
-            ],
-            "distDependencies": [
-                "sdk:POLYGLOT",
-            ],
-            "description": "GraalPy, a high-performance embeddable Python 3 runtime for Java. This artifact contains utilities for tools that want to integrate GraalPy packages into the build process of Java applications.",
-            "maven": {
-                "groupId": "org.graalvm.python",
-                "artifactId": "python-embedding-tools",
-                "tag": ["default", "public"],
-            },
-
-        },
-
-        "GRAALPYTHON_JBANG": {
-            "moduleInfo": {
-                "name": "org.graalvm.python.jbang",
-                "exports": [
-                    "org.graalvm.python.jbang",
-                ]
-            },
-            "useModulePath": True,
-            "dependencies": [
-                "org.graalvm.python.jbang",
-            ],
-            "distDependencies": [
-                "GRAALPYTHON",
-                "GRAALPYTHON_RESOURCES",
-                "GRAALPYTHON-LAUNCHER",
-                "GRAALPYTHON_EMBEDDING",
-                "GRAALPYTHON_EMBEDDING_TOOLS",
-            ],
-            "description": "GraalPy JBang Integration",
-            "maven": {
-                "groupId": "org.graalvm.python",
-                "artifactId": "jbang",
-                "tag": ["default", "public"],
-            },
-        },
-
         "GRAALPYTHON-LAUNCHER": {
             "moduleInfo": {
                 "name": "org.graalvm.py.launcher",
@@ -992,8 +948,8 @@ suite = {
                     "<others>": {
                         "layout": {
                             "<os>/<arch>/": [
-                                "dependency:com.oracle.graal.python.cext/bin/*",
-                                "dependency:python-libbz2/bin/*",
+                                "dependency:com.oracle.graal.python.cext/<os>-<arch>/<multitarget_libc_selection>/bin/*",
+                                "dependency:python-libbz2/<os>-<arch>/<multitarget_libc_selection>/bin/*",
                             ]
                         },
                     },
@@ -1002,11 +958,11 @@ suite = {
                     "<others>": {
                         "layout": {
                             "<os>/<arch>/": [
-                                "dependency:com.oracle.graal.python.cext/bin/*",
-                                "dependency:python-libzsupport/*",
-                                "dependency:python-libposix/*",
-                                "dependency:python-libbz2/bin/*",
-                                "dependency:python-liblzma/bin/*",
+                                "dependency:com.oracle.graal.python.cext/<os>-<arch>/<multitarget_libc_selection>/bin/*",
+                                "dependency:python-libzsupport/<os>-<arch>/<multitarget_libc_selection>/*",
+                                "dependency:python-libposix/<os>-<arch>/<multitarget_libc_selection>/*",
+                                "dependency:python-libbz2/<os>-<arch>/<multitarget_libc_selection>/bin/*",
+                                "dependency:python-liblzma/<os>-<arch>/<multitarget_libc_selection>/bin/*",
                             ]
                         },
                     },
@@ -1097,9 +1053,6 @@ suite = {
                 "BOUNCYCASTLE-PKIX",
                 "BOUNCYCASTLE-UTIL",
             ],
-            "javaProperties": {
-                # "python.jni.library": "<lib:pythonjni>"
-            },
             "description": "GraalPy, a high-performance embeddable Python 3 runtime for Java. This artifact includes the core language runtime without standard libraries. It is not recommended to depend on the artifact directly. Instead, use \'org.graalvm.polyglot:python\' or \'org.graalvm.polyglot:python-community\' to ensure all dependencies are pulled in correctly.",
             "maven": {
                 "artifactId": "python-language",
@@ -1153,7 +1106,6 @@ suite = {
             "distDependencies": [
                 "GRAALPYTHON",
                 "GRAALPYTHON-LAUNCHER",
-                "GRAALPYTHON_EMBEDDING_TOOLS", # See MultiContextCExtTest
                 "truffle:TRUFFLE_TCK",
                 "GRAALPYTHON_INTEGRATION_UNIT_TESTS",
             ],
@@ -1171,7 +1123,6 @@ suite = {
             "distDependencies": [
                 "GRAALPYTHON",
                 "GRAALPYTHON_RESOURCES",
-                "GRAALPYTHON_EMBEDDING",
                 "sdk:GRAAL_SDK",
             ],
             "testDistribution": True,
@@ -1279,16 +1230,17 @@ suite = {
             "description": "GraalVM Python header resources",
             "layout": {
                 "./META-INF/resources/include/": [
-                    "dependency:graalpy-pyconfig/pyconfig.h",
                     "file:graalpython/com.oracle.graal.python.cext/include/*",
                 ],
             },
             "maven": False,
         },
 
-        # The native libraries we ship. These are platform specific, and even
-        # the names of libraries are platform specific. So we already put them
-        # in the right folder structure here
+        # The native libraries we ship and pyconfig.h. These are platform specific,
+        # and even the names of libraries are platform specific. So we already put them
+        # in the right folder structure here; pyconfig.h is put into the right
+        # "include" directory, the structure must be kept in sync with how
+        # GRAALPYTHON_INCLUDE_RESOURCES is deployed
         "GRAALPYTHON_NATIVE_RESOURCES": {
             "native": True,
             "platformDependent": True,
@@ -1311,8 +1263,20 @@ suite = {
                             ],
                             "./META-INF/resources/<os>/<arch>/Lib/venv/scripts/nt/graalpy.exe": "dependency:python-venvlauncher",
                             "./META-INF/resources/<os>/<arch>/Lib/venv/scripts/nt/python.exe": "dependency:python-venvlauncher",
+                            "./META-INF/resources/<os>/<arch>/include/": "dependency:graalpy-pyconfig/<os>-<arch>/<multitarget_libc_selection>/pyconfig.h",
                         },
                     },
+                },
+                "darwin": {
+                    "<others>": {
+                        "layout": {
+                            "./META-INF/resources/<os>/<arch>/lib/graalpy<graal_ver:major_minor>/": [
+                                "dependency:GRAALPYTHON_NATIVE_LIBS/<os>/<arch>/*",
+                            ],
+                            "./META-INF/resources/<os>/<arch>/lib/python<py_ver:major_minor>/venv/scripts/macos/graalpy": "dependency:python-macos-launcher",
+                            "./META-INF/resources/<os>/<arch>/include/python<py_ver:major_minor>/": "dependency:graalpy-pyconfig/<os>-<arch>/<multitarget_libc_selection>/pyconfig.h",
+                        }
+                    }
                 },
                 "<others>": {
                     "<others>": {
@@ -1320,6 +1284,7 @@ suite = {
                             "./META-INF/resources/<os>/<arch>/lib/graalpy<graal_ver:major_minor>/": [
                                 "dependency:GRAALPYTHON_NATIVE_LIBS/<os>/<arch>/*",
                             ],
+                            "./META-INF/resources/<os>/<arch>/include/python<py_ver:major_minor>/": "dependency:graalpy-pyconfig/<os>-<arch>/<multitarget_libc_selection>/pyconfig.h",
                         },
                     },
                 },
@@ -1462,10 +1427,11 @@ suite = {
                     "extracted-dependency:GRAALPY_VIRTUALENV_SEEDER",
                     "dependency:graalpy_licenses/*",
                 ],
-                "bin/<exe:graalpy>": "dependency:graalpy_thin_launcher",
-                "bin/<exe:python>": "dependency:graalpy_thin_launcher",
-                "bin/<exe:python3>": "dependency:graalpy_thin_launcher",
-                "libexec/<exe:graalpy-polyglot-get>": "dependency:graalpy_thin_launcher",
+                "bin/<exe:graalpy>": "dependency:graalpy_thin_launcher/<os>-<arch>/<multitarget_libc_selection>/<exe:graalpy_thin_launcher>",
+                "bin/<exe:python>": "dependency:graalpy_thin_launcher/<os>-<arch>/<multitarget_libc_selection>/<exe:graalpy_thin_launcher>",
+                "bin/<exe:python3>": "dependency:graalpy_thin_launcher/<os>-<arch>/<multitarget_libc_selection>/<exe:graalpy_thin_launcher>",
+                "bin/<exe:graalpy-config>": "dependency:graalpy_thin_launcher/<os>-<arch>/<multitarget_libc_selection>/<exe:graalpy_thin_launcher>",
+                "libexec/<exe:graalpy-polyglot-get>": "dependency:graalpy_thin_launcher/<os>-<arch>/<multitarget_libc_selection>/<exe:graalpy_thin_launcher>",
                 "release": "dependency:sdk:STANDALONE_JAVA_HOME/release",
             },
         },
@@ -1518,6 +1484,19 @@ suite = {
             },
         },
 
+        "GRAALPYTHON_POLYBENCH_BENCHMARKS": {
+            "description": "Distribution for GraalPython polybench benchmarks",
+            "layout": {
+                "./interpreter/": [
+                    "file:benchmarks/interpreter/*.py",
+                ],
+                "./warmup/": [
+                    "file:benchmarks/warmup/*.py",
+                    "dependency:GRAALPYTHON_PYFLATE_BENCHMARK_RESOURCE",
+                ],
+            },
+        },
+
         "GRAALPY_NATIVE_STANDALONE_RELEASE_ARCHIVE": {
             "class": "DeliverableStandaloneArchive",
             "platformDependent": True,
@@ -1534,48 +1513,6 @@ suite = {
             "community_archive_name": "graalpy-community-jvm",
             "enterprise_archive_name": "graalpy-jvm",
             "language_id": "python",
-        },
-
-        "graalpy-archetype-polyglot-app": {
-            "class": "MavenProject",
-            "subDir": "graalpython",
-            "noMavenJavadoc": True,
-            "maven": {
-                "tag": ["default", "public"],
-            },
-        },
-
-        "graalpy-maven-plugin": {
-            "class": "MavenProject",
-            "subDir": "graalpython",
-            "noMavenJavadoc": True,
-            "dependencies": [
-                "GRAALPYTHON-LAUNCHER",
-                "GRAALPYTHON_EMBEDDING_TOOLS",
-            ],
-            "maven": {
-                "tag": ["default", "public"],
-            },
-        },
-        "org.graalvm.python.gradle.plugin": {
-            "class": "GradlePluginProject",
-            "subDir": "graalpython",
-            "javaCompliance": "17+",
-            "checkstyle": "com.oracle.graal.python",
-            "noMavenJavadoc": True,
-            "gradleProjectName": "graalpy-gradle-plugin",
-            "gradlePluginId": "org.graalvm.python",
-            "gradlePluginImplementation": "org.graalvm.python.GraalPyGradlePlugin",
-            "description": "Gradle plugin for GraalPy, a high-performance embeddable Python 3 runtime for Java. The plugin provides support for installing and managing Python packages.",
-            "dependencies": [
-                "GRAALPYTHON-LAUNCHER",
-                "GRAALPYTHON_EMBEDDING_TOOLS",
-            ],
-            "maven": {
-                "tag": ["default", "public"],
-                "groupId": "org.graalvm.python",
-                "artifactId": "org.graalvm.python.gradle.plugin",
-            },
         },
     },
 }

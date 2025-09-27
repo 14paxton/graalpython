@@ -46,7 +46,7 @@ import java.util.List;
 
 import com.oracle.graal.python.annotations.Slot;
 import com.oracle.graal.python.annotations.Slot.SlotKind;
-import com.oracle.graal.python.builtins.Builtin;
+import com.oracle.graal.python.annotations.Builtin;
 import com.oracle.graal.python.builtins.CoreFunctions;
 import com.oracle.graal.python.builtins.PythonBuiltinClassType;
 import com.oracle.graal.python.builtins.PythonBuiltins;
@@ -104,7 +104,7 @@ public final class AsyncGenSendBuiltins extends PythonBuiltins {
     public abstract static class Send extends PythonBinaryBuiltinNode {
         @Specialization
         public Object send(VirtualFrame frame, PAsyncGenASend self, Object sent,
-                        @Bind("this") Node inliningTarget,
+                        @Bind Node inliningTarget,
                         @Cached PRaiseNode raiseReuse,
                         @Cached PRaiseNode raiseAlreadyRunning,
                         @Cached CommonGeneratorBuiltins.SendNode send,
@@ -177,7 +177,7 @@ public final class AsyncGenSendBuiltins extends PythonBuiltins {
 
         @Specialization
         public Object doThrow(VirtualFrame frame, PAsyncGenASend self, Object arg1, Object arg2, Object arg3,
-                        @Bind("this") Node inliningTarget,
+                        @Bind Node inliningTarget,
                         @Cached PRaiseNode raiseReuse,
                         @Cached CommonGeneratorBuiltins.ThrowNode throwNode,
                         @Cached IsBuiltinObjectProfile isStopIteration,

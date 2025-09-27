@@ -50,6 +50,7 @@ import com.oracle.graal.python.nodes.PNodeWithContext;
 import com.oracle.graal.python.runtime.object.PFactory;
 import com.oracle.truffle.api.dsl.Bind;
 import com.oracle.truffle.api.dsl.Cached;
+import com.oracle.truffle.api.dsl.GenerateInline;
 import com.oracle.truffle.api.dsl.Specialization;
 import com.oracle.truffle.api.frame.VirtualFrame;
 import com.oracle.truffle.api.nodes.Node;
@@ -57,13 +58,13 @@ import com.oracle.truffle.api.profiles.InlinedBranchProfile;
 
 public abstract class ThreadLocalNodes {
 
-    @SuppressWarnings("truffle-inlining")       // footprint reduction 68 -> 49
+    @GenerateInline(false)       // footprint reduction 68 -> 49
     public abstract static class GetThreadLocalDict extends PNodeWithContext {
         public abstract PDict execute(VirtualFrame frame, PThreadLocal self);
 
         @Specialization
         static PDict get(VirtualFrame frame, PThreadLocal self,
-                        @Bind("this") Node inliningTarget,
+                        @Bind Node inliningTarget,
                         @Cached InlinedBranchProfile create,
                         @Cached GetObjectSlotsNode getSlots,
                         @Cached CallSlotTpInitNode callInit) {

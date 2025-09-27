@@ -173,6 +173,31 @@ class PosixTests(unittest.TestCase):
             os.close(fd1)
             os.close(fd2)
 
+    @unittest.skipIf(sys.platform != 'linux', 'mkfifo is a linux command')
+    def test_seek_pipe(self):
+        new_file_path = './myscript.sh'
+        with io.open(new_file_path, 'w') as script:
+            script.write("""#!/bin/sh
+            mkfifo testpipe
+            echo "4" > testpipe &
+            """)
+        try:
+            st = os.stat(new_file_path)
+            os.chmod(new_file_path, st.st_mode | stat.S_IEXEC)
+            os.system(new_file_path)
+            with io.open("testpipe", "rb") as r:
+                out = r.read(1)
+            assert out == b"4", out
+        finally:
+            try:
+                os.remove(new_file_path)
+            except:
+                pass
+            try:
+                os.remove("testpipe")
+            except:
+                pass
+
     def test_mkdir_rmdir(self):
         os.mkdir(TEST_FULL_PATH1)
         try:
@@ -380,7 +405,6 @@ class WithTempFilesTests(unittest.TestCase):
         with open(TEST_FULL_PATH2, 0) as fd:           # follows symlink
             self.assertEqual(inode, os.fstat(fd).st_ino)
 
-    @unittest.skipIf(__graalpython__.posix_module_backend() == 'java', 'statvfs emulation is not supported')
     def test_statvfs(self):
         res = os.statvfs(TEST_FULL_PATH1)
         with open(TEST_FULL_PATH1, 0) as fd:
@@ -888,14 +912,18 @@ class SysconfTests(unittest.TestCase):
         else:
             assert False
 
+        def sysconf_max(name):
+            value = os.sysconf(name)
+            return sys.maxsize - value if value < 0 else value
+
         # constants taken from POSIX where defined
-        self.assertGreaterEqual(os.sysconf('SC_ARG_MAX'), 4096)
-        self.assertGreaterEqual(os.sysconf('SC_CHILD_MAX'), 25)
-        self.assertGreaterEqual(os.sysconf('SC_LOGIN_NAME_MAX'), 9)
+        self.assertGreaterEqual(sysconf_max('SC_ARG_MAX'), 4096)
+        self.assertGreaterEqual(sysconf_max('SC_CHILD_MAX'), 25)
+        self.assertGreaterEqual(sysconf_max('SC_LOGIN_NAME_MAX'), 9)
         self.assertGreaterEqual(os.sysconf('SC_CLK_TCK'), 0)
-        self.assertGreaterEqual(os.sysconf('SC_OPEN_MAX'), 20)
+        self.assertGreaterEqual(sysconf_max('SC_OPEN_MAX'), 20)
         self.assertGreaterEqual(os.sysconf('SC_PAGESIZE'), 1)
-        os.sysconf('SC_SEM_NSEMS_MAX') # returns -1 on my linux box, just check it's there
+        self.assertGreaterEqual(sysconf_max('SC_SEM_NSEMS_MAX'), 32)
         self.assertGreaterEqual(os.sysconf('SC_PHYS_PAGES'), 1)
         self.assertGreaterEqual(os.sysconf('SC_NPROCESSORS_CONF'), 1)
 

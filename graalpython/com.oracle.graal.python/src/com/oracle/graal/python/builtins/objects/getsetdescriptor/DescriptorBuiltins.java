@@ -47,7 +47,7 @@ import static com.oracle.graal.python.runtime.exception.PythonErrorType.TypeErro
 
 import java.util.List;
 
-import com.oracle.graal.python.builtins.Builtin;
+import com.oracle.graal.python.annotations.Builtin;
 import com.oracle.graal.python.builtins.CoreFunctions;
 import com.oracle.graal.python.builtins.PythonBuiltinClassType;
 import com.oracle.graal.python.builtins.PythonBuiltins;
@@ -57,7 +57,7 @@ import com.oracle.graal.python.builtins.objects.str.StringUtils.SimpleTruffleStr
 import com.oracle.graal.python.builtins.objects.type.TypeNodes.GetIndexedSlotsCountNode;
 import com.oracle.graal.python.nodes.ErrorMessages;
 import com.oracle.graal.python.nodes.PRaiseNode;
-import com.oracle.graal.python.nodes.attributes.GetAttributeNode.GetFixedAttributeNode;
+import com.oracle.graal.python.nodes.attributes.GetFixedAttributeNode;
 import com.oracle.graal.python.nodes.call.special.CallBinaryMethodNode;
 import com.oracle.graal.python.nodes.call.special.CallUnaryMethodNode;
 import com.oracle.graal.python.nodes.classes.IsSubtypeNode;
@@ -99,14 +99,14 @@ public final class DescriptorBuiltins extends PythonBuiltins {
         static TruffleString doGetSetDescriptor(VirtualFrame frame, GetSetDescriptor self,
                         @Shared @Cached("create(T___QUALNAME__)") GetFixedAttributeNode readQualNameNode,
                         @Shared("formatter") @Cached SimpleTruffleStringFormatNode simpleTruffleStringFormatNode) {
-            return simpleTruffleStringFormatNode.format("%s.%s", toStr(readQualNameNode.executeObject(frame, self.getType())), self.getName());
+            return simpleTruffleStringFormatNode.format("%s.%s", toStr(readQualNameNode.execute(frame, self.getType())), self.getName());
         }
 
         @Specialization
         static TruffleString doIndexedSlotDescriptor(VirtualFrame frame, IndexedSlotDescriptor self,
                         @Shared @Cached("create(T___QUALNAME__)") GetFixedAttributeNode readQualNameNode,
                         @Shared("formatter") @Cached SimpleTruffleStringFormatNode simpleTruffleStringFormatNode) {
-            return simpleTruffleStringFormatNode.format("%s.%s", toStr(readQualNameNode.executeObject(frame, self.getType())), self.getName());
+            return simpleTruffleStringFormatNode.format("%s.%s", toStr(readQualNameNode.execute(frame, self.getType())), self.getName());
         }
 
         @TruffleBoundary
@@ -156,7 +156,7 @@ public final class DescriptorBuiltins extends PythonBuiltins {
 
         @Specialization
         Object doGetSetDescriptor(VirtualFrame frame, GetSetDescriptor descr, Object obj,
-                        @Bind("this") Node inliningTarget,
+                        @Bind Node inliningTarget,
                         @Exclusive @Cached PRaiseNode raiseNode,
                         @Cached CallUnaryMethodNode callNode) {
             if (descr.getGet() != null) {
@@ -168,7 +168,7 @@ public final class DescriptorBuiltins extends PythonBuiltins {
 
         @Specialization
         Object doIndexedSlotDescriptor(IndexedSlotDescriptor descr, PythonAbstractObject obj,
-                        @Bind("this") Node inliningTarget,
+                        @Bind Node inliningTarget,
                         @Exclusive @Cached PRaiseNode raiseNode,
                         @Cached GetOrCreateIndexedSlots getSlotsNode) {
             Object[] slots = getSlotsNode.execute(inliningTarget, obj);
@@ -186,7 +186,7 @@ public final class DescriptorBuiltins extends PythonBuiltins {
 
         @Specialization
         Object doGetSetDescriptor(VirtualFrame frame, GetSetDescriptor descr, Object obj, Object value,
-                        @Bind("this") Node inliningTarget,
+                        @Bind Node inliningTarget,
                         @Cached PRaiseNode raiseNode,
                         @Cached CallBinaryMethodNode callNode) {
             if (descr.getSet() != null) {
@@ -198,7 +198,7 @@ public final class DescriptorBuiltins extends PythonBuiltins {
 
         @Specialization
         static Object doIndexedSlotDescriptor(IndexedSlotDescriptor descr, PythonAbstractObject obj, Object value,
-                        @Bind("this") Node inliningTarget,
+                        @Bind Node inliningTarget,
                         @Cached GetOrCreateIndexedSlots getSlotsNode) {
             getSlotsNode.execute(inliningTarget, obj)[descr.getIndex()] = value;
             return true;
@@ -211,7 +211,7 @@ public final class DescriptorBuiltins extends PythonBuiltins {
 
         @Specialization
         Object doGetSetDescriptor(VirtualFrame frame, GetSetDescriptor descr, Object obj,
-                        @Bind("this") Node inliningTarget,
+                        @Bind Node inliningTarget,
                         @Exclusive @Cached PRaiseNode raiseNode,
                         @Cached CallBinaryMethodNode callNode,
                         @Cached InlinedBranchProfile branchProfile) {
@@ -229,7 +229,7 @@ public final class DescriptorBuiltins extends PythonBuiltins {
 
         @Specialization
         Object doIndexedSlotDescriptor(IndexedSlotDescriptor descr, PythonAbstractObject obj,
-                        @Bind("this") Node inliningTarget,
+                        @Bind Node inliningTarget,
                         @Exclusive @Cached PRaiseNode raiseNode,
                         @Cached GetOrCreateIndexedSlots getSlotsNode,
                         @Cached InlinedConditionProfile profile) {

@@ -48,6 +48,8 @@ import java.util.Iterator;
 import java.util.List;
 import java.util.Locale;
 
+import com.oracle.truffle.api.HostCompilerDirectives.InliningCutoff;
+import com.oracle.truffle.api.dsl.Fallback;
 import org.graalvm.nativeimage.ImageInfo;
 import org.graalvm.shadowed.com.ibm.icu.lang.UCharacter;
 import org.graalvm.shadowed.com.ibm.icu.lang.UCharacterCategory;
@@ -313,18 +315,18 @@ public final class StringUtils {
 
         @Specialization
         static boolean doString(TruffleString str,
-                        @Cached(inline = false) TruffleString.CreateCodePointIteratorNode createCodePointIteratorNode,
-                        @Cached(inline = false) TruffleStringIterator.NextNode nextNode) {
+                        @Cached TruffleString.CreateCodePointIteratorNode createCodePointIteratorNode,
+                        @Cached TruffleStringIterator.NextNode nextNode) {
             if (str.isEmpty()) {
                 return false;
             }
             TruffleStringIterator it = createCodePointIteratorNode.execute(str, TS_ENCODING);
-            int c = nextNode.execute(it);
+            int c = nextNode.execute(it, TS_ENCODING);
             if (c != '_' && !isIdentifierStart(c)) {
                 return false;
             }
             while (it.hasNext()) {
-                c = nextNode.execute(it);
+                c = nextNode.execute(it, TS_ENCODING);
                 if (!isIdentifierPart(c)) {
                     return false;
                 }
@@ -429,7 +431,7 @@ public final class StringUtils {
      * </ul>
      */
     @GenerateUncached
-    @SuppressWarnings("truffle-inlining")       // footprint reduction 56 -> 37
+    @GenerateInline(false)       // footprint reduction 56 -> 37
     public abstract static class SimpleTruffleStringFormatNode extends Node {
 
         public final TruffleString format(TruffleString format, Object... args) {
@@ -580,6 +582,30 @@ public final class StringUtils {
             return UnicodeCharacterAliases.CHARACTER_ALIASES.get(normalizedName);
         } else {
             return UCharacter.getCharFromName(characterName);
+        }
+    }
+
+    /**
+     * Like {@link TruffleString.EqualNode} but with the proper {@link InliningCutoff} since
+     * {@link TruffleString.EqualNode} is too big for host inlining, at least when used in node
+     * guards.
+     */
+    @GenerateInline
+    @GenerateCached(false)
+    @GenerateUncached
+    public abstract static class EqualNode extends Node {
+        public abstract boolean execute(Node inliningTarget, TruffleString left, TruffleString right);
+
+        @Specialization(guards = "left == right")
+        static boolean doIdentity(TruffleString left, TruffleString right) {
+            return true;
+        }
+
+        @InliningCutoff
+        @Fallback
+        static boolean doEquality(TruffleString left, TruffleString right,
+                        @Cached TruffleString.EqualNode equalNode) {
+            return equalNode.execute(left, right, TS_ENCODING);
         }
     }
 }

@@ -38,7 +38,7 @@ import java.util.List;
 import com.oracle.graal.python.PythonLanguage;
 import com.oracle.graal.python.annotations.Slot;
 import com.oracle.graal.python.annotations.Slot.SlotKind;
-import com.oracle.graal.python.builtins.Builtin;
+import com.oracle.graal.python.annotations.Builtin;
 import com.oracle.graal.python.builtins.CoreFunctions;
 import com.oracle.graal.python.builtins.PythonBuiltinClassType;
 import com.oracle.graal.python.builtins.PythonBuiltins;
@@ -262,7 +262,7 @@ public final class ForeignNumberBuiltins extends PythonBuiltins {
 
         @Specialization
         Object doGeneric(VirtualFrame frame, Object value,
-                        @Bind("this") Node inliningTarget,
+                        @Bind Node inliningTarget,
                         @Cached UnboxNode unboxNode) {
             Object unboxed = unboxNode.execute(inliningTarget, value);
             assert unboxed != null;
@@ -281,7 +281,7 @@ public final class ForeignNumberBuiltins extends PythonBuiltins {
 
         @Specialization
         Object doGeneric(VirtualFrame frame, Object left, Object right,
-                        @Bind("this") Node inliningTarget,
+                        @Bind Node inliningTarget,
                         @Cached UnboxNode unboxNode) {
             Object unboxed = unboxNode.execute(inliningTarget, left);
             if (unboxed != null) {
@@ -412,7 +412,7 @@ public final class ForeignNumberBuiltins extends PythonBuiltins {
     abstract static class IntNode extends PythonUnaryBuiltinNode {
         @Specialization
         Object doGeneric(VirtualFrame frame, Object self,
-                        @Bind("this") Node inliningTarget,
+                        @Bind Node inliningTarget,
                         @Cached UnboxNode unboxNode,
                         @Cached PyNumberLongNode longNode) {
             Object unboxed = unboxNode.execute(inliningTarget, self);
@@ -425,7 +425,7 @@ public final class ForeignNumberBuiltins extends PythonBuiltins {
     abstract static class FloatNode extends PythonUnaryBuiltinNode {
         @Specialization
         Object doGeneric(VirtualFrame frame, Object self,
-                        @Bind("this") Node inliningTarget,
+                        @Bind Node inliningTarget,
                         @Cached UnboxNode unboxNode,
                         @Cached PyNumberFloatNode floatNode) {
             Object unboxed = unboxNode.execute(inliningTarget, self);
@@ -438,9 +438,9 @@ public final class ForeignNumberBuiltins extends PythonBuiltins {
     abstract static class AddNode extends BinaryOpBuiltinNode {
         @Specialization
         static Object doIt(VirtualFrame frame, Object left, Object right,
-                        @Bind("this") Node inliningTarget,
+                        @Bind Node inliningTarget,
                         @Cached ForeignBinarySlotNode binarySlotNode,
-                        @Cached(inline = false) PyNumberAddNode opNode) {
+                        @Cached PyNumberAddNode opNode) {
             return binarySlotNode.execute(frame, inliningTarget, left, right, opNode);
         }
     }
@@ -450,9 +450,9 @@ public final class ForeignNumberBuiltins extends PythonBuiltins {
     abstract static class SubNode extends BinaryOpBuiltinNode {
         @Specialization
         static Object doIt(VirtualFrame frame, Object left, Object right,
-                        @Bind("this") Node inliningTarget,
+                        @Bind Node inliningTarget,
                         @Cached ForeignBinarySlotNode binarySlotNode,
-                        @Cached(inline = false) PyNumberSubtractNode opNode) {
+                        @Cached PyNumberSubtractNode opNode) {
             return binarySlotNode.execute(frame, inliningTarget, left, right, opNode);
         }
     }
@@ -462,9 +462,9 @@ public final class ForeignNumberBuiltins extends PythonBuiltins {
     abstract static class MulNode extends BinaryOpBuiltinNode {
         @Specialization
         static Object doIt(VirtualFrame frame, Object left, Object right,
-                        @Bind("this") Node inliningTarget,
+                        @Bind Node inliningTarget,
                         @Cached ForeignBinarySlotNode binarySlotNode,
-                        @Cached(inline = false) PyNumberMultiplyNode opNode) {
+                        @Cached PyNumberMultiplyNode opNode) {
             return binarySlotNode.execute(frame, inliningTarget, left, right, opNode);
         }
     }
@@ -474,9 +474,9 @@ public final class ForeignNumberBuiltins extends PythonBuiltins {
     abstract static class ModNode extends BinaryOpBuiltinNode {
         @Specialization
         static Object doIt(VirtualFrame frame, Object left, Object right,
-                        @Bind("this") Node inliningTarget,
+                        @Bind Node inliningTarget,
                         @Cached ForeignBinarySlotNode binarySlotNode,
-                        @Cached(inline = false) PyNumberRemainderNode opNode) {
+                        @Cached PyNumberRemainderNode opNode) {
             return binarySlotNode.execute(frame, inliningTarget, left, right, opNode);
         }
     }
@@ -486,9 +486,9 @@ public final class ForeignNumberBuiltins extends PythonBuiltins {
     abstract static class LShiftNode extends BinaryOpBuiltinNode {
         @Specialization
         static Object doIt(VirtualFrame frame, Object left, Object right,
-                        @Bind("this") Node inliningTarget,
+                        @Bind Node inliningTarget,
                         @Cached ForeignBinarySlotNode binarySlotNode,
-                        @Cached(inline = false) PyNumberLshiftNode opNode) {
+                        @Cached PyNumberLshiftNode opNode) {
             return binarySlotNode.execute(frame, inliningTarget, left, right, opNode);
         }
     }
@@ -498,9 +498,9 @@ public final class ForeignNumberBuiltins extends PythonBuiltins {
     abstract static class RShiftNode extends BinaryOpBuiltinNode {
         @Specialization
         static Object doIt(VirtualFrame frame, Object left, Object right,
-                        @Bind("this") Node inliningTarget,
+                        @Bind Node inliningTarget,
                         @Cached ForeignBinarySlotNode binarySlotNode,
-                        @Cached(inline = false) PyNumberRshiftNode opNode) {
+                        @Cached PyNumberRshiftNode opNode) {
             return binarySlotNode.execute(frame, inliningTarget, left, right, opNode);
         }
     }
@@ -510,9 +510,9 @@ public final class ForeignNumberBuiltins extends PythonBuiltins {
     abstract static class AndNode extends BinaryOpBuiltinNode {
         @Specialization
         static Object doIt(VirtualFrame frame, Object left, Object right,
-                        @Bind("this") Node inliningTarget,
+                        @Bind Node inliningTarget,
                         @Cached ForeignBinarySlotNode binarySlotNode,
-                        @Cached(inline = false) PyNumberAndNode opNode) {
+                        @Cached PyNumberAndNode opNode) {
             return binarySlotNode.execute(frame, inliningTarget, left, right, opNode);
         }
     }
@@ -522,9 +522,9 @@ public final class ForeignNumberBuiltins extends PythonBuiltins {
     abstract static class XorNode extends BinaryOpBuiltinNode {
         @Specialization
         static Object doIt(VirtualFrame frame, Object left, Object right,
-                        @Bind("this") Node inliningTarget,
+                        @Bind Node inliningTarget,
                         @Cached ForeignBinarySlotNode binarySlotNode,
-                        @Cached(inline = false) PyNumberXorNode opNode) {
+                        @Cached PyNumberXorNode opNode) {
             return binarySlotNode.execute(frame, inliningTarget, left, right, opNode);
         }
     }
@@ -534,9 +534,9 @@ public final class ForeignNumberBuiltins extends PythonBuiltins {
     abstract static class OrNode extends BinaryOpBuiltinNode {
         @Specialization
         static Object doIt(VirtualFrame frame, Object left, Object right,
-                        @Bind("this") Node inliningTarget,
+                        @Bind Node inliningTarget,
                         @Cached ForeignBinarySlotNode binarySlotNode,
-                        @Cached(inline = false) PyNumberOrNode opNode) {
+                        @Cached PyNumberOrNode opNode) {
             return binarySlotNode.execute(frame, inliningTarget, left, right, opNode);
         }
     }
@@ -546,9 +546,9 @@ public final class ForeignNumberBuiltins extends PythonBuiltins {
     abstract static class FloorDivNode extends BinaryOpBuiltinNode {
         @Specialization
         static Object doIt(VirtualFrame frame, Object left, Object right,
-                        @Bind("this") Node inliningTarget,
+                        @Bind Node inliningTarget,
                         @Cached ForeignBinarySlotNode binarySlotNode,
-                        @Cached(inline = false) PyNumberFloorDivideNode opNode) {
+                        @Cached PyNumberFloorDivideNode opNode) {
             return binarySlotNode.execute(frame, inliningTarget, left, right, opNode);
         }
     }
@@ -558,9 +558,9 @@ public final class ForeignNumberBuiltins extends PythonBuiltins {
     abstract static class TrueDivNode extends BinaryOpBuiltinNode {
         @Specialization
         static Object doIt(VirtualFrame frame, Object left, Object right,
-                        @Bind("this") Node inliningTarget,
+                        @Bind Node inliningTarget,
                         @Cached ForeignBinarySlotNode binarySlotNode,
-                        @Cached(inline = false) PyNumberTrueDivideNode opNode) {
+                        @Cached PyNumberTrueDivideNode opNode) {
             return binarySlotNode.execute(frame, inliningTarget, left, right, opNode);
         }
     }
@@ -570,9 +570,9 @@ public final class ForeignNumberBuiltins extends PythonBuiltins {
     abstract static class DivModNode extends BinaryOpBuiltinNode {
         @Specialization
         static Object doIt(VirtualFrame frame, Object left, Object right,
-                        @Bind("this") Node inliningTarget,
+                        @Bind Node inliningTarget,
                         @Cached ForeignBinarySlotNode binarySlotNode,
-                        @Cached(inline = false) PyNumberDivmodNode opNode) {
+                        @Cached PyNumberDivmodNode opNode) {
             return binarySlotNode.execute(frame, inliningTarget, left, right, opNode);
         }
     }
@@ -583,7 +583,7 @@ public final class ForeignNumberBuiltins extends PythonBuiltins {
 
         @Specialization
         static Object doIt(VirtualFrame frame, Object v, Object w, Object z,
-                        @Bind("this") Node inliningTarget,
+                        @Bind Node inliningTarget,
                         @Cached UnboxNode unboxV,
                         @Cached UnboxNode unboxW,
                         @Cached UnboxNode unboxZ,
@@ -606,7 +606,7 @@ public final class ForeignNumberBuiltins extends PythonBuiltins {
 
         @Specialization
         Object doGeneric(VirtualFrame frame, Object self, Object n,
-                        @Bind("this") Node inliningTarget,
+                        @Bind Node inliningTarget,
                         @Cached UnboxNode unboxNode,
                         @Cached("create(T___ROUND__)") LookupAndCallBinaryNode callRound) {
             Object unboxed = unboxNode.execute(inliningTarget, self);
@@ -623,7 +623,7 @@ public final class ForeignNumberBuiltins extends PythonBuiltins {
     public abstract static class ForeignBinaryComparisonNode extends TpSlotRichCompare.RichCmpBuiltinNode {
         @Specialization
         Object doComparison(VirtualFrame frame, Object left, Object right, RichCmpOp op,
-                        @Bind("this") Node inliningTarget,
+                        @Bind Node inliningTarget,
                         @Cached UnboxNode unboxNode,
                         @Cached IsBuiltinObjectProfile exProfile,
                         @Cached PyObjectRichCompare richCompareNode) {
@@ -644,7 +644,7 @@ public final class ForeignNumberBuiltins extends PythonBuiltins {
     abstract static class IndexNode extends PythonUnaryBuiltinNode {
         @Specialization(limit = "3")
         protected static Object doIt(Object object,
-                        @Bind("this") Node inliningTarget,
+                        @Bind Node inliningTarget,
                         @Cached PRaiseNode raiseNode,
                         @CachedLibrary("object") InteropLibrary lib,
                         @Cached GilNode gil) {
@@ -690,7 +690,7 @@ public final class ForeignNumberBuiltins extends PythonBuiltins {
 
         @Specialization
         Object str(VirtualFrame frame, Object object,
-                        @Bind("this") Node inliningTarget,
+                        @Bind Node inliningTarget,
                         @Cached UnboxNode unboxNode,
                         @CachedLibrary(limit = "3") InteropLibrary lib,
                         @Cached PyObjectStrAsTruffleStringNode strNode,
@@ -760,7 +760,7 @@ public final class ForeignNumberBuiltins extends PythonBuiltins {
     abstract static class GetAttributeNode extends GetAttrBuiltinNode {
         @Specialization
         static Object doIt(VirtualFrame frame, Object self, Object name,
-                        @Bind("this") Node inliningTarget,
+                        @Bind Node inliningTarget,
                         @Cached UnboxNode unboxNode,
                         @Cached ObjectBuiltins.GetAttributeNode objectGetattrNode,
                         @Cached IsBuiltinObjectProfile isAttrError,

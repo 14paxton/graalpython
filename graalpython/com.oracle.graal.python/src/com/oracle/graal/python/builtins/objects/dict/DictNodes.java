@@ -130,13 +130,13 @@ public abstract class DictNodes {
 
     }
 
-    @SuppressWarnings("truffle-inlining")       // footprint reduction 52 -> 36
+    @GenerateInline(false)       // footprint reduction 52 -> 36
     public abstract static class UpdateNode extends PNodeWithContext {
         public abstract void execute(Frame frame, Object self, Object other);
 
         @Specialization
         static void updateDictGeneric(VirtualFrame frame, Object self, Object other,
-                        @Bind("this") Node inliningTarget,
+                        @Bind Node inliningTarget,
                         @Cached BuiltinClassProfiles.IsBuiltinObjectProfile isDictNode,
                         @Cached DictNodes.GetDictStorageNode getStorageNode,
                         @Cached UpdateInnerNode updateInnerNode) {

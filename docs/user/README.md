@@ -1,8 +1,15 @@
 # Getting Started with GraalPy on the JVM
 
 You can use GraalPy with GraalVM JDK, Oracle JDK, or OpenJDK.
-You can easily add GraalPy to your Java application using Maven or Gradle build tools as shown below.
-Other build systems (Ant, Make, CMake, and so on) can also be used with a bit more manual work.
+To add GraalPy to your Java application, use Maven or Gradle as shown below.
+For other build systems (like Ant, Make, CMake, etc.), manual configuration may be required.
+
+### Platform support
+
+GraalPy is mostly written in Java and Python, but the Python package ecosystem is rich in native packages that need platform specific support via native libraries that expose platform-specific APIs.
+Our main operating system is Oracle Linux, the CPU architectures we focus on are AMD64 and ARM, and the main JDK we test is Oracle GraalVM.
+Windows and macOS with GraalVM JDK are less well tested, and outside of those combinations we target only basic test coverage.
+See [below](Test-Tiers.md) for a detailed breakdown.
 
 ## Maven
 
@@ -13,7 +20,7 @@ GraalPy can generate a Maven project that embeds Python packages into a Java app
    mvn archetype:generate \
      -DarchetypeGroupId=org.graalvm.python \
      -DarchetypeArtifactId=graalpy-archetype-polyglot-app \
-     -DarchetypeVersion=24.2.0
+     -DarchetypeVersion=25.0.0
    ```
 
 2. Build a native executable using the [GraalVM Native Image "tool"](https://www.graalvm.org/latest/reference-manual/native-image/) plugin that was added for you automatically:
@@ -76,11 +83,11 @@ In order to distribute the resulting application for other systems, follow these
                 └── resources
     ```
 
-2. Open your project configuration file, _app/build.gradle_, and modify it as follows. 
+2. Open your project configuration file, _app/build.gradle_, and modify it as follows.
     - Include the GraalPy support and the [GraalVM Polyglot API](https://www.graalvm.org/sdk/javadoc/org/graalvm/polyglot/package-summary.html) in the `dependencies` section:
         ```bash
-        implementation("org.graalvm.polyglot:polyglot:24.2.0")
-        implementation("org.graalvm.polyglot:python:24.2.0")
+        implementation("org.graalvm.polyglot:polyglot:25.0.0")
+        implementation("org.graalvm.polyglot:python:25.0.0")
         ```
 
 3. Finally, replace the code in the file named _App.java_ as follows for a small Python embedding:
@@ -111,21 +118,21 @@ In order to distribute the resulting application for other systems, follow these
    5.1. In _app/build.gradle_:
    - add the graalpy-gradle-plugin to the `plugins` section:
    ```bash
-   id "org.graalvm.python" version "24.2.0"
+   id "org.graalvm.python" version "25.0.0"
    ```
 
-   - configure the GraalPy Gradle plugin:  
+   - configure the GraalPy Gradle plugin:
    ```bash
-   graalPy { 
+   graalPy {
       packages = ["termcolor==2.2"]
    }
    ```
-   
+
    5.2. In _settings.gradle_, add the following `pluginManagement` configuration.
    ```bash
    pluginManagement {
       repositories {
-         gradlePluginPortal()        
+         gradlePluginPortal()
       }
    }
    ```
@@ -133,10 +140,10 @@ In order to distribute the resulting application for other systems, follow these
    5.3. Update the file named _App.java_ as follows:
       ```java
       package interop;
-   
+
       import org.graalvm.polyglot.*;
       import org.graalvm.python.embedding.GraalPyResources;
-   
+
       class App {
       ...
       public static void main(String[] args) {
@@ -150,7 +157,7 @@ In order to distribute the resulting application for other systems, follow these
           }
       }
       ```
-   
+
 See also [Embedding Build Tools](Embedding-Build-Tools.md) for more information about the GraalPy Gradle Plugin.
 
 ## Ant, CMake, Makefile or Other Build Systems Without Direct Support for Maven Dependencies
@@ -175,13 +182,13 @@ GraalPy comes with a tool to obtain the required JAR files from Maven.
     In a POSIX shell:
     ```bash
     export GRAALPY_HOME=$(graalpy -c 'print(__graalpython__.home)')
-    "${GRAALPY_HOME}/libexec/graalpy-polyglot-get" -a python -o lib -v "24.2.0"
+    "${GRAALPY_HOME}/libexec/graalpy-polyglot-get" -a python -o lib -v "25.0.0"
     ```
 
     In PowerShell:
     ```bash
     $GRAALPY_HOME = graalpy -c "print(__graalpython__.home)"
-    & "$GRAALPY_HOME/libexec/graalpy-polyglot-get" -a python -o lib -v "24.2.0"
+    & "$GRAALPY_HOME/libexec/graalpy-polyglot-get" -a python -o lib -v "25.0.0"
     ```
 
     These commands download all GraalPy dependencies into the _lib_ directory.

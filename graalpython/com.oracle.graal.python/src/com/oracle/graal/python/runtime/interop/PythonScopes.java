@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2021, 2023, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2021, 2025, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * The Universal Permissive License (UPL), Version 1.0
@@ -43,6 +43,7 @@ package com.oracle.graal.python.runtime.interop;
 import com.oracle.graal.python.PythonLanguage;
 import com.oracle.graal.python.builtins.objects.dict.PDict;
 import com.oracle.graal.python.builtins.objects.function.PArguments;
+import com.oracle.graal.python.builtins.objects.generator.PGenerator;
 import com.oracle.graal.python.builtins.objects.object.PythonObject;
 import com.oracle.truffle.api.TruffleLanguage;
 import com.oracle.truffle.api.dsl.Bind;
@@ -91,7 +92,10 @@ public final class PythonScopes implements TruffleObject {
         Object[] scopes;
         if (frame != null) {
             PythonObject globals = PArguments.getGlobalsSafe(frame);
-            MaterializedFrame generatorFrame = PArguments.getGeneratorFrameSafe(frame);
+            MaterializedFrame generatorFrame = null;
+            if (PGenerator.isGeneratorFrame(frame)) {
+                generatorFrame = PGenerator.getGeneratorFrame(frame);
+            }
             Object globalsScope = null;
             if (globals != null) {
                 globalsScope = new PythonMapScope(new Object[]{scopeFromObject(globals)}, new String[]{"globals()"});
@@ -156,7 +160,7 @@ public final class PythonScopes implements TruffleObject {
     }
 
     @ExportMessage
-    boolean hasMembers(@Bind("$node") Node inliningTarget,
+    boolean hasMembers(@Bind Node inliningTarget,
                     @Shared("interop") @CachedLibrary(limit = "LIMIT") InteropLibrary interop,
                     @Shared("lenghtProfile") @Cached InlinedIntValueProfile lengthProfile) {
         int length = lengthProfile.profile(inliningTarget, scopes.length);
@@ -171,7 +175,7 @@ public final class PythonScopes implements TruffleObject {
 
     @ExportMessage
     Object getMembers(@SuppressWarnings("unused") boolean includeInternal,
-                    @Bind("$node") Node inliningTarget,
+                    @Bind Node inliningTarget,
                     @Shared("interop") @CachedLibrary(limit = "LIMIT") InteropLibrary interop,
                     @Shared("lenghtProfile") @Cached InlinedIntValueProfile lengthProfile) throws UnsupportedMessageException {
         int length = lengthProfile.profile(inliningTarget, scopes.length);
@@ -184,7 +188,7 @@ public final class PythonScopes implements TruffleObject {
 
     @ExportMessage
     boolean isMemberReadable(String member,
-                    @Bind("$node") Node inliningTarget,
+                    @Bind Node inliningTarget,
                     @Shared("interop") @CachedLibrary(limit = "LIMIT") InteropLibrary interop,
                     @Shared("lenghtProfile") @Cached InlinedIntValueProfile lengthProfile) {
         int length = lengthProfile.profile(inliningTarget, scopes.length);
@@ -201,7 +205,7 @@ public final class PythonScopes implements TruffleObject {
 
     @ExportMessage
     Object readMember(String member,
-                    @Bind("$node") Node inliningTarget,
+                    @Bind Node inliningTarget,
                     @Shared("interop") @CachedLibrary(limit = "LIMIT") InteropLibrary interop,
                     @Shared("lenghtProfile") @Cached InlinedIntValueProfile lengthProfile) throws UnknownIdentifierException, UnsupportedMessageException {
         int length = lengthProfile.profile(inliningTarget, scopes.length);
@@ -216,7 +220,7 @@ public final class PythonScopes implements TruffleObject {
 
     @ExportMessage
     void writeMember(String member, Object value,
-                    @Bind("$node") Node inliningTarget,
+                    @Bind Node inliningTarget,
                     @Shared("interop") @CachedLibrary(limit = "LIMIT") InteropLibrary interop,
                     @Shared("lenghtProfile") @Cached InlinedIntValueProfile lengthProfile)
                     throws UnknownIdentifierException, UnsupportedMessageException, UnsupportedTypeException {
@@ -233,7 +237,7 @@ public final class PythonScopes implements TruffleObject {
 
     @ExportMessage
     boolean isMemberModifiable(String member,
-                    @Bind("$node") Node inliningTarget,
+                    @Bind Node inliningTarget,
                     @Shared("interop") @CachedLibrary(limit = "LIMIT") InteropLibrary interop,
                     @Shared("lenghtProfile") @Cached InlinedIntValueProfile lengthProfile) {
         int length = lengthProfile.profile(inliningTarget, scopes.length);
@@ -250,7 +254,7 @@ public final class PythonScopes implements TruffleObject {
 
     @ExportMessage
     boolean isMemberInsertable(String member,
-                    @Bind("$node") Node inliningTarget,
+                    @Bind Node inliningTarget,
                     @Shared("interop") @CachedLibrary(limit = "LIMIT") InteropLibrary interop,
                     @Shared("lenghtProfile") @Cached InlinedIntValueProfile lengthProfile) {
         int length = lengthProfile.profile(inliningTarget, scopes.length);

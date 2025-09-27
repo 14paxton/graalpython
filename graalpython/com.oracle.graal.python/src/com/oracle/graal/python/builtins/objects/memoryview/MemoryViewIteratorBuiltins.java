@@ -85,7 +85,7 @@ public final class MemoryViewIteratorBuiltins extends PythonBuiltins {
 
         @Specialization(guards = "!self.isExhausted()")
         static Object memoryiterNext(VirtualFrame frame, MemoryViewIterator self,
-                        @Bind("this") Node inliningTarget,
+                        @Bind Node inliningTarget,
                         @Cached CExtNodes.PCallCapiFunction capiFunction,
                         @Cached MemoryViewNodes.ReadItemAtNode readItemAtNode,
                         @Cached PRaiseNode raiseNode) {
@@ -95,7 +95,7 @@ public final class MemoryViewIteratorBuiltins extends PythonBuiltins {
                 Object ptr = seq.getBufferPointer();
                 int offset = seq.getOffset() + seq.getBufferStrides()[0] * self.index++;
                 if (seq.getBufferSuboffsets() != null && seq.getBufferSuboffsets()[0] >= 0) {
-                    ptr = capiFunction.call(NativeCAPISymbol.FUN_TRUFFLE_ADD_SUBOFFSET, ptr, offset, seq.getBufferSuboffsets()[0]);
+                    ptr = capiFunction.call(NativeCAPISymbol.FUN_ADD_SUBOFFSET, ptr, offset, seq.getBufferSuboffsets()[0]);
                     offset = 0;
                 }
                 return readItemAtNode.execute(frame, seq, ptr, offset);

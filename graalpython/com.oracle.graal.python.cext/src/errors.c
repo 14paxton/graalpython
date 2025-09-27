@@ -112,7 +112,7 @@ _PyErr_Restore(PyThreadState *tstate, PyObject *type, PyObject *value,
         }
     }
     // GraalPy change: upcall for setting the traceback
-    GraalPyTruffleErr_SetTraceback(value, traceback);
+    GraalPyPrivate_Err_SetTraceback(value, traceback);
     // GraalPy change: the traceback is now owned by the managed side
     Py_XDECREF(traceback);
     _PyErr_SetRaisedException(tstate, value);
@@ -263,7 +263,7 @@ _PyErr_SetObject(PyThreadState *tstate, PyObject *exception, PyObject *value)
         tb = PyException_GetTraceback(value);
     _PyErr_Restore(tstate, Py_NewRef(Py_TYPE(value)), value, tb);
 #else // GraalPy change: different implementation
-	Graal_PyTruffleErr_CreateAndSetException(exception, value);
+	GraalPyPrivate_Err_CreateAndSetException(exception, value);
 #endif // GraalPy change
 }
 
@@ -595,20 +595,32 @@ _PyErr_GetExcInfo(PyThreadState *tstate,
                   PyObject **p_type, PyObject **p_value, PyObject **p_traceback)
 {
     // GraalPy change: different implementation
-    PyObject* result = GraalPyTruffleErr_GetExcInfo();
+    PyObject* result = GraalPyPrivate_Err_GetExcInfo();
     if(result == NULL) {
-    	*p_type = NULL;
-    	*p_value = NULL;
-    	*p_traceback = NULL;
+        *p_type = Py_NewRef(Py_None);
+        *p_value = Py_NewRef(Py_None);
+        *p_traceback = Py_NewRef(Py_None);
     } else {
-    	*p_type = Py_XNewRef(PyTuple_GetItem(result, 0));
-    	*p_value = Py_XNewRef(PyTuple_GetItem(result, 1));
-    	*p_traceback = Py_XNewRef(PyTuple_GetItem(result, 2));
+        *p_type = Py_XNewRef(PyTuple_GetItem(result, 0));
+        *p_value = Py_XNewRef(PyTuple_GetItem(result, 1));
+        *p_traceback = Py_XNewRef(PyTuple_GetItem(result, 2));
         Py_DecRef(result);
     }
 }
 
 #if 0 // GraalPy change
+PyObject*
+_PyErr_GetHandledException(PyThreadState *tstate)
+{
+    _PyErr_StackItem *exc_info = _PyErr_GetTopmostException(tstate);
+    PyObject *exc = exc_info->exc_value;
+    if (exc == NULL || exc == Py_None) {
+        return NULL;
+    }
+    return Py_NewRef(exc);
+}
+#endif // GraalPy change
+
 PyObject*
 PyErr_GetHandledException(void)
 {
@@ -616,11 +628,13 @@ PyErr_GetHandledException(void)
     return _PyErr_GetHandledException(tstate);
 }
 
+#if 0 // GraalPy change
 void
 _PyErr_SetHandledException(PyThreadState *tstate, PyObject *exc)
 {
     Py_XSETREF(tstate->exc_info->exc_value, Py_XNewRef(exc));
 }
+#endif // GraalPy change
 
 void
 PyErr_SetHandledException(PyObject *exc)
@@ -628,7 +642,6 @@ PyErr_SetHandledException(PyObject *exc)
     PyThreadState *tstate = _PyThreadState_GET();
     _PyErr_SetHandledException(tstate, exc);
 }
-#endif // GraalPy change
 
 void
 PyErr_GetExcInfo(PyObject **p_type, PyObject **p_value, PyObject **p_traceback)
@@ -637,7 +650,6 @@ PyErr_GetExcInfo(PyObject **p_type, PyObject **p_value, PyObject **p_traceback)
     _PyErr_GetExcInfo(tstate, p_type, p_value, p_traceback);
 }
 
-#if 0 // GraalPy change
 void
 PyErr_SetExcInfo(PyObject *type, PyObject *value, PyObject *traceback)
 {
@@ -649,6 +661,7 @@ PyErr_SetExcInfo(PyObject *type, PyObject *value, PyObject *traceback)
 }
 
 
+#if 0 // GraalPy change
 PyObject*
 _PyErr_StackItemToExcInfoTuple(_PyErr_StackItem *err_info)
 {

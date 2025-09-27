@@ -55,6 +55,7 @@ import com.oracle.truffle.api.bytecode.OperationProxy;
 import com.oracle.truffle.api.dsl.Bind;
 import com.oracle.truffle.api.dsl.Cached;
 import com.oracle.truffle.api.dsl.Cached.Shared;
+import com.oracle.truffle.api.dsl.GenerateInline;
 import com.oracle.truffle.api.dsl.GenerateUncached;
 import com.oracle.truffle.api.dsl.ImportStatic;
 import com.oracle.truffle.api.dsl.NeverDefault;
@@ -69,8 +70,8 @@ import com.oracle.truffle.api.nodes.Node;
 
 @ImportStatic(PGuards.class)
 @GenerateUncached
-@OperationProxy.Proxyable
-@SuppressWarnings("truffle-inlining")       // footprint reduction 44 -> 25
+@OperationProxy.Proxyable(storeBytecodeIndex = true)
+@GenerateInline(false)       // footprint reduction 44 -> 25
 public abstract class ExceptMatchNode extends Node {
     public abstract boolean executeMatch(Frame frame, Object exception, Object clause);
 
@@ -82,7 +83,7 @@ public abstract class ExceptMatchNode extends Node {
 
     @Specialization(guards = "!isPTuple(clause)")
     public static boolean matchPythonSingle(VirtualFrame frame, PException e, Object clause,
-                    @Bind("this") Node inliningTarget,
+                    @Bind Node inliningTarget,
                     @Shared @Cached ValidExceptionNode isValidException,
                     @Cached GetClassNode getClassNode,
                     @Cached IsSubtypeNode isSubtype) {
@@ -92,7 +93,7 @@ public abstract class ExceptMatchNode extends Node {
 
     @Specialization(guards = {"!isPTuple(clause)", "!isPException(e)"}, limit = "1")
     public static boolean matchJava(VirtualFrame frame, AbstractTruffleException e, Object clause,
-                    @Bind("this") Node inliningTarget,
+                    @Bind Node inliningTarget,
                     @Shared @Cached ValidExceptionNode isValidException,
                     @CachedLibrary("clause") InteropLibrary clauseLib) {
         // n.b.: we can only allow Java exceptions in clauses, because we cannot tell for other
@@ -112,7 +113,7 @@ public abstract class ExceptMatchNode extends Node {
 
     @Specialization
     public static boolean matchTuple(VirtualFrame frame, Object e, PTuple clause,
-                    @Bind("this") Node inliningTarget,
+                    @Bind Node inliningTarget,
                     @Cached ExceptMatchNode recursiveNode,
                     @Cached SequenceStorageNodes.GetItemScalarNode getItemNode) {
         // check for every type in the tuple

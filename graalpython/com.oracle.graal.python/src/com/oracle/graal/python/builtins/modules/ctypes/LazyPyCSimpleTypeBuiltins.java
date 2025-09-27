@@ -52,7 +52,7 @@ import static com.oracle.graal.python.util.PythonUtils.toTruffleStringUncached;
 import java.util.List;
 
 import com.oracle.graal.python.PythonLanguage;
-import com.oracle.graal.python.builtins.Builtin;
+import com.oracle.graal.python.annotations.Builtin;
 import com.oracle.graal.python.builtins.PythonBuiltins;
 import com.oracle.graal.python.builtins.modules.BuiltinFunctions.IsInstanceNode;
 import com.oracle.graal.python.builtins.modules.ctypes.CFieldBuiltins.SetFuncNode;
@@ -132,7 +132,7 @@ public final class LazyPyCSimpleTypeBuiltins extends PythonBuiltins {
         PBuiltinFunction function = PFactory.createBuiltinFunction(language, name, type, 1, flags, callTarget);
         PDecoratedMethod classMethod = PFactory.createClassmethodFromCallableObj(language, function);
         function.setAttribute(T___DOC__, builtinDoc);
-        WriteAttributeToObjectNode.getUncached(true).execute(type, name, classMethod);
+        WriteAttributeToObjectNode.getUncached().execute(type, name, classMethod);
     }
 
     @ImportStatic(CDataTypeBuiltins.class)
@@ -149,7 +149,7 @@ public final class LazyPyCSimpleTypeBuiltins extends PythonBuiltins {
 
         @Specialization(guards = "!isNone(value)")
         static Object c_wchar_p_from_param(VirtualFrame frame, Object type, Object value,
-                        @Bind("this") Node inliningTarget,
+                        @Bind Node inliningTarget,
                         @Cached SetFuncNode setFuncNode,
                         @Cached IsInstanceNode isInstanceNode,
                         @Cached PyTypeCheck pyTypeCheck,
@@ -214,7 +214,7 @@ public final class LazyPyCSimpleTypeBuiltins extends PythonBuiltins {
 
         @Specialization(guards = "isLong(this, value, longCheckNode)", limit = "1")
         static Object voidPtr(@SuppressWarnings("unused") Object type, Object value,
-                        @SuppressWarnings("unused") @Bind("this") Node inliningTarget,
+                        @SuppressWarnings("unused") @Bind Node inliningTarget,
                         @SuppressWarnings("unused") @Exclusive @Cached PyLongCheckNode longCheckNode,
                         @Exclusive @Cached SetFuncNode setFuncNode,
                         @Bind PythonLanguage language) {
@@ -258,7 +258,7 @@ public final class LazyPyCSimpleTypeBuiltins extends PythonBuiltins {
 
         @Specialization(guards = {"!isNone(value)", "!isPBytes(value)", "!isString(value)", "!isLong(this, value, longCheckNode)"}, limit = "1")
         static Object c_void_p_from_param(VirtualFrame frame, Object type, Object value,
-                        @Bind("this") Node inliningTarget,
+                        @Bind Node inliningTarget,
                         @SuppressWarnings("unused") @Exclusive @Cached PyLongCheckNode longCheckNode,
                         @Cached PyTypeCheck pyTypeCheck,
                         @Cached IsInstanceNode isInstanceNode,
@@ -347,7 +347,7 @@ public final class LazyPyCSimpleTypeBuiltins extends PythonBuiltins {
 
         @Specialization(guards = {"!isNone(value)", "!isBytes(value)"})
         static Object c_char_p_from_param(VirtualFrame frame, Object type, Object value,
-                        @Bind("this") Node inliningTarget,
+                        @Bind Node inliningTarget,
                         @Cached IsInstanceNode isInstanceNode,
                         @Cached PyTypeCheck pyTypeCheck,
                         @Cached PyTypeStgDictNode pyTypeStgDictNode,

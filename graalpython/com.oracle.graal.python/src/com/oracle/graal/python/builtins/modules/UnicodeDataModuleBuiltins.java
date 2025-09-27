@@ -42,24 +42,26 @@ package com.oracle.graal.python.builtins.modules;
 
 import static com.oracle.graal.python.nodes.BuiltinNames.J_UNICODEDATA;
 import static com.oracle.graal.python.nodes.BuiltinNames.T_UNICODEDATA;
+import static com.oracle.graal.python.runtime.exception.PythonErrorType.KeyError;
 import static com.oracle.graal.python.runtime.exception.PythonErrorType.ValueError;
 import static com.oracle.graal.python.util.PythonUtils.TS_ENCODING;
 import static com.oracle.graal.python.util.PythonUtils.toTruffleStringUncached;
 
 import java.util.List;
 
-import com.oracle.graal.python.builtins.objects.module.PythonModule;
 import org.graalvm.shadowed.com.ibm.icu.lang.UCharacter;
+import org.graalvm.shadowed.com.ibm.icu.lang.UCharacter.DecompositionType;
 import org.graalvm.shadowed.com.ibm.icu.lang.UProperty;
 import org.graalvm.shadowed.com.ibm.icu.text.Normalizer2;
 import org.graalvm.shadowed.com.ibm.icu.util.VersionInfo;
 
 import com.oracle.graal.python.annotations.ArgumentClinic;
-import com.oracle.graal.python.builtins.Builtin;
+import com.oracle.graal.python.annotations.Builtin;
 import com.oracle.graal.python.builtins.CoreFunctions;
 import com.oracle.graal.python.builtins.Python3Core;
 import com.oracle.graal.python.builtins.PythonBuiltins;
 import com.oracle.graal.python.builtins.objects.PNone;
+import com.oracle.graal.python.builtins.objects.module.PythonModule;
 import com.oracle.graal.python.nodes.ErrorMessages;
 import com.oracle.graal.python.nodes.PRaiseNode;
 import com.oracle.graal.python.nodes.function.PythonBuiltinBaseNode;
@@ -76,6 +78,8 @@ import com.oracle.truffle.api.dsl.NodeFactory;
 import com.oracle.truffle.api.dsl.Specialization;
 import com.oracle.truffle.api.nodes.Node;
 import com.oracle.truffle.api.strings.TruffleString;
+import com.oracle.truffle.api.strings.TruffleString.FromJavaStringNode;
+import com.oracle.truffle.api.strings.TruffleString.ToJavaStringNode;
 
 @CoreFunctions(defineModule = J_UNICODEDATA, isEager = true)
 public final class UnicodeDataModuleBuiltins extends PythonBuiltins {
@@ -134,20 +138,21 @@ public final class UnicodeDataModuleBuiltins extends PythonBuiltins {
     @ArgumentClinic(name = "unistr", conversion = ArgumentClinic.ClinicConversion.TString)
     @GenerateNodeFactory
     @ImportStatic(UnicodeDataModuleBuiltins.class)
-    public abstract static class NormalizeNode extends PythonBinaryClinicBuiltinNode {
+    abstract static class NormalizeNode extends PythonBinaryClinicBuiltinNode {
         @Specialization(guards = {"cachedNormalizer != null", "stringEquals(form, cachedForm, equalNode)"}, limit = "NORMALIZER_FORM_COUNT")
         static TruffleString normalize(@SuppressWarnings("unused") TruffleString form, TruffleString unistr,
                         @SuppressWarnings("unused") @Cached("form") TruffleString cachedForm,
                         @Cached("getNormalizer(cachedForm)") Normalizer2 cachedNormalizer,
                         @SuppressWarnings("unused") @Cached TruffleString.EqualNode equalNode,
-                        @Cached TruffleString.ToJavaStringNode toJavaStringNode,
-                        @Exclusive @Cached TruffleString.FromJavaStringNode fromJavaStringNode) {
+                        @Cached ToJavaStringNode toJavaStringNode,
+                        @Exclusive @Cached FromJavaStringNode fromJavaStringNode) {
             return fromJavaStringNode.execute(normalize(toJavaStringNode.execute(unistr), cachedNormalizer), TS_ENCODING);
         }
 
         @Specialization(guards = "getNormalizer(form) == null")
-        TruffleString invalidForm(@SuppressWarnings("unused") TruffleString form, @SuppressWarnings("unused") TruffleString unistr) {
-            throw PRaiseNode.raiseStatic(this, ValueError, ErrorMessages.INVALID_NORMALIZATION_FORM);
+        static TruffleString invalidForm(@SuppressWarnings("unused") TruffleString form, @SuppressWarnings("unused") TruffleString unistr,
+                        @Bind Node inliningTarget) {
+            throw PRaiseNode.raiseStatic(inliningTarget, ValueError, ErrorMessages.INVALID_NORMALIZATION_FORM);
         }
 
         @TruffleBoundary
@@ -167,10 +172,10 @@ public final class UnicodeDataModuleBuiltins extends PythonBuiltins {
     @ArgumentClinic(name = "unistr", conversion = ArgumentClinic.ClinicConversion.TString)
     @GenerateNodeFactory
     @ImportStatic(UnicodeDataModuleBuiltins.class)
-    public abstract static class IsNormalizedNode extends PythonBinaryClinicBuiltinNode {
+    abstract static class IsNormalizedNode extends PythonBinaryClinicBuiltinNode {
         @Specialization(guards = {"cachedNormalizer != null", "stringEquals(form, cachedForm, equalNode)"}, limit = "NORMALIZER_FORM_COUNT")
         @TruffleBoundary
-        boolean isNormalized(@SuppressWarnings("unused") TruffleString form, TruffleString unistr,
+        static boolean isNormalized(@SuppressWarnings("unused") TruffleString form, TruffleString unistr,
                         @SuppressWarnings("unused") @Cached("form") TruffleString cachedForm,
                         @Cached("getNormalizer(cachedForm)") Normalizer2 cachedNormalizer,
                         @SuppressWarnings("unused") @Cached TruffleString.EqualNode equalNode) {
@@ -178,8 +183,9 @@ public final class UnicodeDataModuleBuiltins extends PythonBuiltins {
         }
 
         @Specialization(guards = "getNormalizer(form) == null")
-        TruffleString invalidForm(@SuppressWarnings("unused") TruffleString form, @SuppressWarnings("unused") TruffleString unistr) {
-            throw PRaiseNode.raiseStatic(this, ValueError, ErrorMessages.INVALID_NORMALIZATION_FORM);
+        static TruffleString invalidForm(@SuppressWarnings("unused") TruffleString form, @SuppressWarnings("unused") TruffleString unistr,
+                        @Bind Node inliningTarget) {
+            throw PRaiseNode.raiseStatic(inliningTarget, ValueError, ErrorMessages.INVALID_NORMALIZATION_FORM);
         }
 
         @Override
@@ -188,16 +194,82 @@ public final class UnicodeDataModuleBuiltins extends PythonBuiltins {
         }
     }
 
+    // unicodedata.lookup(name)
+    @Builtin(name = "lookup", minNumOfPositionalArgs = 1, numOfPositionalOnlyArgs = 1, parameterNames = {"name"})
+    @ArgumentClinic(name = "name", conversion = ArgumentClinic.ClinicConversion.TString)
+    @GenerateNodeFactory
+    abstract static class LookupNode extends PythonUnaryClinicBuiltinNode {
+
+        private static final int NAME_MAX_LENGTH = 256;
+
+        @Specialization
+        @TruffleBoundary
+        static Object lookup(TruffleString name,
+                        @Bind Node inliningTarget) {
+            String nameString = ToJavaStringNode.getUncached().execute(name);
+            if (nameString.length() > NAME_MAX_LENGTH) {
+                throw PRaiseNode.raiseStatic(inliningTarget, KeyError, ErrorMessages.NAME_TOO_LONG);
+            }
+
+            // TODO: support Unicode character named sequences (GR-68227)
+            // see test/test_ucn.py.UnicodeFunctionsTest.test_named_sequences_full
+            String character = getCharacterByUnicodeName(nameString);
+            if (character == null) {
+                character = getCharacterByUnicodeNameAlias(nameString);
+            }
+            if (character == null) {
+                throw PRaiseNode.raiseStatic(inliningTarget, KeyError, ErrorMessages.UNDEFINED_CHARACTER_NAME, name);
+            }
+
+            return FromJavaStringNode.getUncached().execute(character, TS_ENCODING);
+        }
+
+        @Override
+        protected ArgumentClinicProvider getArgumentClinic() {
+            return UnicodeDataModuleBuiltinsClinicProviders.LookupNodeClinicProviderGen.INSTANCE;
+        }
+
+        /**
+         * Finds a Unicode code point by its Unicode name and returns it as a single character
+         * String. Returns null if name is not found.
+         */
+        @TruffleBoundary
+        private static String getCharacterByUnicodeName(String unicodeName) {
+            int codepoint = UCharacter.getCharFromName(unicodeName);
+
+            if (codepoint < 0) {
+                return null;
+            }
+
+            return UCharacter.toString(codepoint);
+        }
+
+        /**
+         * Finds a Unicode code point by its Unicode name alias and returns it as a single character
+         * String. Returns null if name alias is not found.
+         */
+        @TruffleBoundary
+        private static String getCharacterByUnicodeNameAlias(String unicodeName) {
+            int codepoint = UCharacter.getCharFromNameAlias(unicodeName);
+
+            if (codepoint < 0) {
+                return null;
+            }
+
+            return UCharacter.toString(codepoint);
+        }
+    }
+
     // unicodedata.name(chr, default)
     @Builtin(name = "name", minNumOfPositionalArgs = 1, parameterNames = {"chr", "default"})
     @ArgumentClinic(name = "chr", conversion = ArgumentClinic.ClinicConversion.CodePoint)
     @GenerateNodeFactory
-    public abstract static class NameNode extends PythonBinaryClinicBuiltinNode {
+    abstract static class NameNode extends PythonBinaryClinicBuiltinNode {
 
         @Specialization
         static Object name(int cp, Object defaultValue,
-                        @Bind("this") Node inliningTarget,
-                        @Cached TruffleString.FromJavaStringNode fromJavaStringNode,
+                        @Bind Node inliningTarget,
+                        @Cached FromJavaStringNode fromJavaStringNode,
                         @Cached PRaiseNode raiseNode) {
             String result = getUnicodeName(cp);
             if (result == null) {
@@ -219,10 +291,10 @@ public final class UnicodeDataModuleBuiltins extends PythonBuiltins {
     @Builtin(name = "bidirectional", minNumOfPositionalArgs = 1, numOfPositionalOnlyArgs = 1, parameterNames = {"chr"})
     @ArgumentClinic(name = "chr", conversion = ArgumentClinic.ClinicConversion.CodePoint)
     @GenerateNodeFactory
-    public abstract static class BidirectionalNode extends PythonUnaryClinicBuiltinNode {
+    abstract static class BidirectionalNode extends PythonUnaryClinicBuiltinNode {
         @Specialization
         static TruffleString bidirectional(int chr,
-                        @Cached TruffleString.FromJavaStringNode fromJavaStringNode) {
+                        @Cached FromJavaStringNode fromJavaStringNode) {
             return fromJavaStringNode.execute(getBidiClassName(chr), TS_ENCODING);
         }
 
@@ -241,10 +313,10 @@ public final class UnicodeDataModuleBuiltins extends PythonBuiltins {
     @Builtin(name = "category", minNumOfPositionalArgs = 1, numOfPositionalOnlyArgs = 1, parameterNames = {"chr"})
     @ArgumentClinic(name = "chr", conversion = ArgumentClinic.ClinicConversion.CodePoint)
     @GenerateNodeFactory
-    public abstract static class CategoryNode extends PythonUnaryClinicBuiltinNode {
+    abstract static class CategoryNode extends PythonUnaryClinicBuiltinNode {
         @Specialization
         static TruffleString category(int chr,
-                        @Cached TruffleString.FromJavaStringNode fromJavaStringNode) {
+                        @Cached FromJavaStringNode fromJavaStringNode) {
             return fromJavaStringNode.execute(getCategoryName(chr), TS_ENCODING);
         }
 
@@ -258,4 +330,173 @@ public final class UnicodeDataModuleBuiltins extends PythonBuiltins {
             return UnicodeDataModuleBuiltinsClinicProviders.CategoryNodeClinicProviderGen.INSTANCE;
         }
     }
+
+    // unicodedata.combining(chr)
+    @Builtin(name = "combining", minNumOfPositionalArgs = 1, numOfPositionalOnlyArgs = 1, parameterNames = {"chr"})
+    @ArgumentClinic(name = "chr", conversion = ArgumentClinic.ClinicConversion.CodePoint)
+    @GenerateNodeFactory
+    abstract static class CombiningNode extends PythonUnaryClinicBuiltinNode {
+
+        @Specialization
+        @TruffleBoundary
+        static Object combining(int codepoint) {
+            return UCharacter.getCombiningClass(codepoint);
+        }
+
+        @Override
+        protected ArgumentClinicProvider getArgumentClinic() {
+            return UnicodeDataModuleBuiltinsClinicProviders.CombiningNodeClinicProviderGen.INSTANCE;
+        }
+    }
+
+    // unicodedata.decomposition(chr)
+    @Builtin(name = "decomposition", minNumOfPositionalArgs = 1, numOfPositionalOnlyArgs = 1, parameterNames = {"chr"})
+    @ArgumentClinic(name = "chr", conversion = ArgumentClinic.ClinicConversion.CodePoint)
+    @GenerateNodeFactory
+    abstract static class DecompositionNode extends PythonUnaryClinicBuiltinNode {
+        @Specialization
+        @TruffleBoundary
+        static TruffleString decomposition(int codepoint) {
+            int type = UCharacter.getIntPropertyValue(codepoint, UProperty.DECOMPOSITION_TYPE);
+            String prefix = getDecompositionPrefix(type);
+            String decomposition = Normalizer2.getNFKDInstance().getDecomposition(codepoint);
+
+            StringBuilder sb = new StringBuilder();
+            if (prefix != null) {
+                sb.append(prefix);
+            }
+            if (decomposition != null) {
+                int cp;
+                for (int i = 0; i < decomposition.length(); i += Character.charCount(cp)) {
+                    if (!sb.isEmpty()) {
+                        sb.append(' ');
+                    }
+                    cp = decomposition.codePointAt(i);
+                    sb.append(String.format("%04x", cp));
+                }
+            }
+
+            return FromJavaStringNode.getUncached().execute(sb.toString(), TS_ENCODING);
+        }
+
+        private static String getDecompositionPrefix(int type) {
+            return switch (type) {
+                case DecompositionType.NOBREAK -> "<noBreak>";
+                case DecompositionType.COMPAT -> "<compat>";
+                case DecompositionType.SUPER -> "<super>";
+                case DecompositionType.FRACTION -> "<fraction>";
+                case DecompositionType.SUB -> "<sub>";
+                case DecompositionType.FONT -> "<font>";
+                case DecompositionType.CIRCLE -> "<circle>";
+                case DecompositionType.WIDE -> "<wide>";
+                case DecompositionType.VERTICAL -> "<vertical>";
+                case DecompositionType.SQUARE -> "<square>";
+                case DecompositionType.ISOLATED -> "<isolated>";
+                case DecompositionType.FINAL -> "<final>";
+                case DecompositionType.INITIAL -> "<initial>";
+                case DecompositionType.MEDIAL -> "<medial>";
+                case DecompositionType.SMALL -> "<small>";
+                case DecompositionType.NARROW -> "<narrow>";
+                default -> null;
+            };
+        }
+
+        @Override
+        protected ArgumentClinicProvider getArgumentClinic() {
+            return UnicodeDataModuleBuiltinsClinicProviders.DecompositionNodeClinicProviderGen.INSTANCE;
+        }
+    }
+
+    // unicode.east_asia_width(chr)
+    @Builtin(name = "east_asian_width", minNumOfPositionalArgs = 1, numOfPositionalOnlyArgs = 1, parameterNames = {"chr"})
+    @ArgumentClinic(name = "chr", conversion = ArgumentClinic.ClinicConversion.CodePoint)
+    @GenerateNodeFactory
+    abstract static class EastAsianWidthNode extends PythonUnaryClinicBuiltinNode {
+        @Specialization
+        @TruffleBoundary
+        static TruffleString eastAsianWidth(int codepoint) {
+            String widthName = getWidthName(codepoint);
+            return FromJavaStringNode.getUncached().execute(widthName, TS_ENCODING);
+        }
+
+        @TruffleBoundary
+        private static String getWidthName(int codepoint) {
+            int widthNameCode = UCharacter.getIntPropertyValue(codepoint, UProperty.EAST_ASIAN_WIDTH);
+            String widthName;
+
+            switch (widthNameCode) {
+                case UCharacter.EastAsianWidth.AMBIGUOUS -> widthName = "A";
+                case UCharacter.EastAsianWidth.FULLWIDTH -> widthName = "F";
+                case UCharacter.EastAsianWidth.HALFWIDTH -> widthName = "H";
+                case UCharacter.EastAsianWidth.NARROW -> widthName = "Na";
+                case UCharacter.EastAsianWidth.NEUTRAL -> widthName = "N";
+                case UCharacter.EastAsianWidth.WIDE -> widthName = "W";
+                default -> widthName = ""; // EastAsianWidth.COUNT
+            }
+
+            return widthName;
+        }
+
+        @Override
+        protected ArgumentClinicProvider getArgumentClinic() {
+            return UnicodeDataModuleBuiltinsClinicProviders.EastAsianWidthNodeClinicProviderGen.INSTANCE;
+        }
+    }
+
+    @Builtin(name = "digit", minNumOfPositionalArgs = 1, parameterNames = {"chr", "default"})
+    @ArgumentClinic(name = "chr", conversion = ArgumentClinic.ClinicConversion.CodePoint)
+    @GenerateNodeFactory
+    abstract static class DigitNode extends PythonBinaryClinicBuiltinNode {
+        @Specialization
+        @TruffleBoundary
+        static Object digit(int codepoint, Object def,
+                        @Bind Node inliningTarget) {
+            int numericProperty = UCharacter.getIntPropertyValue(codepoint, UProperty.NUMERIC_TYPE);
+            if (numericProperty != 0 && (numericProperty & (UCharacter.NumericType.DIGIT | UCharacter.NumericType.DECIMAL)) != 0) {
+                int value = UCharacter.getNumericValue(codepoint);
+                if (value >= 0) {
+                    return value;
+                }
+            }
+            if (def != PNone.NO_VALUE) {
+                return def;
+            } else {
+                throw PRaiseNode.raiseStatic(inliningTarget, ValueError, ErrorMessages.NOT_A_DIGIT);
+            }
+        }
+
+        @Override
+        protected ArgumentClinicProvider getArgumentClinic() {
+            return UnicodeDataModuleBuiltinsClinicProviders.DigitNodeClinicProviderGen.INSTANCE;
+        }
+    }
+
+    @Builtin(name = "decimal", minNumOfPositionalArgs = 1, parameterNames = {"chr", "default"})
+    @ArgumentClinic(name = "chr", conversion = ArgumentClinic.ClinicConversion.CodePoint)
+    @GenerateNodeFactory
+    abstract static class DecimalNode extends PythonBinaryClinicBuiltinNode {
+        @Specialization
+        @TruffleBoundary
+        static Object decimal(int codepoint, Object def,
+                        @Bind Node inliningTarget) {
+            int numericProperty = UCharacter.getIntPropertyValue(codepoint, UProperty.NUMERIC_TYPE);
+            if (numericProperty != 0 && (numericProperty & UCharacter.NumericType.DECIMAL) != 0) {
+                int value = UCharacter.getNumericValue(codepoint);
+                if (value >= 0) {
+                    return value;
+                }
+            }
+            if (def != PNone.NO_VALUE) {
+                return def;
+            } else {
+                throw PRaiseNode.raiseStatic(inliningTarget, ValueError, ErrorMessages.NOT_A_DECIMAL);
+            }
+        }
+
+        @Override
+        protected ArgumentClinicProvider getArgumentClinic() {
+            return UnicodeDataModuleBuiltinsClinicProviders.DecimalNodeClinicProviderGen.INSTANCE;
+        }
+    }
+
 }

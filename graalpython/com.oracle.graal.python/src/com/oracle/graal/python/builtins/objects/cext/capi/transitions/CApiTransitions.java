@@ -91,6 +91,7 @@ import com.oracle.graal.python.builtins.objects.cext.structs.CStructAccess.FreeN
 import com.oracle.graal.python.builtins.objects.cext.structs.CStructs;
 import com.oracle.graal.python.builtins.objects.floats.PFloat;
 import com.oracle.graal.python.builtins.objects.getsetdescriptor.DescriptorDeleteMarker;
+import com.oracle.graal.python.builtins.objects.ints.PInt;
 import com.oracle.graal.python.builtins.objects.memoryview.PMemoryView;
 import com.oracle.graal.python.builtins.objects.object.PythonObject;
 import com.oracle.graal.python.builtins.objects.tuple.PTuple;
@@ -439,6 +440,8 @@ public abstract class CApiTransitions {
                     LOGGER.fine(() -> PythonUtils.formatJString("releasing %s, no remaining managed references", entry));
                     if (entry instanceof PythonObjectReference reference) {
                         if (HandlePointerConverter.pointsToPyHandleSpace(reference.pointer)) {
+                            assert !HandlePointerConverter.pointsToPyIntHandle(reference.pointer);
+                            assert !HandlePointerConverter.pointsToPyFloatHandle(reference.pointer);
                             assert nativeStubLookupGet(handleContext, reference.pointer, reference.handleTableIndex) != null : Long.toHexString(reference.pointer);
                             LOGGER.finer(() -> PythonUtils.formatJString("releasing native stub lookup for managed object %x => %s", reference.pointer, reference));
                             nativeStubLookupRemove(handleContext, reference);
@@ -514,10 +517,10 @@ public abstract class CApiTransitions {
     }
 
     /**
-     * Calls function {@link NativeCAPISymbol#FUN_PY_TRUFFLE_OBJECT_ARRAY_RELEASE} to decrement the
-     * reference counts of the stored objects by one and frees the native array. Therefore, this
-     * operation may run guest code because if the stored objects where exclusively owned by this
-     * storage, then they will be freed by calling the element object's destructor.
+     * Calls function {@link NativeCAPISymbol#FUN_OBJECT_ARRAY_RELEASE} to decrement the reference
+     * counts of the stored objects by one and frees the native array. Therefore, this operation may
+     * run guest code because if the stored objects where exclusively owned by this storage, then
+     * they will be freed by calling the element object's destructor.
      */
     private static void processNativeStorageReference(NativeStorageReference reference) {
         /*
@@ -525,7 +528,7 @@ public abstract class CApiTransitions {
          * GC.
          */
         if (reference.type == StorageType.Generic && reference.size > 0) {
-            PCallCapiFunction.callUncached(NativeCAPISymbol.FUN_PY_TRUFFLE_OBJECT_ARRAY_RELEASE, reference.ptr, reference.size);
+            PCallCapiFunction.callUncached(NativeCAPISymbol.FUN_OBJECT_ARRAY_RELEASE, reference.ptr, reference.size);
         }
         assert !InteropLibrary.getUncached().isNull(reference.ptr);
         freeNativeStorage(reference);
@@ -536,7 +539,7 @@ public abstract class CApiTransitions {
         if (reference.data.getDestructor() != null) {
             // Our capsule is dead, so create a temporary copy that doesn't have a reference anymore
             PyCapsule capsule = PFactory.createCapsule(PythonLanguage.get(null), reference.data);
-            PCallCapiFunction.callUncached(NativeCAPISymbol.FUN_PY_TRUFFLE_CAPSULE_CALL_DESTRUCTOR, PythonToNativeNode.executeUncached(capsule), capsule.getDestructor());
+            PCallCapiFunction.callUncached(NativeCAPISymbol.FUN_GRAALPY_CAPSULE_CALL_DESTRUCTOR, PythonToNativeNode.executeUncached(capsule), capsule.getDestructor());
         }
     }
 
@@ -574,6 +577,51 @@ public abstract class CApiTransitions {
         }
     }
 
+    @TruffleBoundary
+    public static void releaseNativeWrapperUncached(PythonNativeWrapper nativeWrapper) {
+        releaseNativeWrapper(nativeWrapper, FreeNode.getUncached());
+    }
+
+    /**
+     * Releases a native wrapper. This requires to remove the native wrapper from any lookup tables
+     * and to free potentially allocated native resources. If native wrappers receive
+     * {@code toNative}, either a <it>handle pointer</it> is allocated or some off-heap memory is
+     * allocated. This method takes care of that and will also free any off-heap memory.
+     */
+    public static void releaseNativeWrapper(PythonNativeWrapper nativeWrapper, FreeNode freeNode) {
+
+        // If wrapper already received toNative, release the handle or free the native memory.
+        if (nativeWrapper.isNative()) {
+            long nativePointer = nativeWrapper.getNativePointer();
+            if (LOGGER.isLoggable(Level.FINE)) {
+                LOGGER.fine(PythonUtils.formatJString("Freeing pointer: 0x%x (wrapper: %s ;; object: %s)", nativePointer, nativeWrapper, nativeWrapper.getDelegate()));
+            }
+            if (HandlePointerConverter.pointsToPyHandleSpace(nativePointer)) {
+                if (HandlePointerConverter.pointsToPyIntHandle(nativePointer)) {
+                    return;
+                } else if (HandlePointerConverter.pointsToPyFloatHandle(nativePointer)) {
+                    return;
+                }
+                // In this case, we are up to free a native object stub.
+                assert tableEntryRemoved(PythonContext.get(freeNode).nativeContext, nativeWrapper);
+                nativePointer = HandlePointerConverter.pointerToStub(nativePointer);
+            } else {
+                nativeLookupRemove(PythonContext.get(freeNode).nativeContext, nativePointer);
+            }
+            freeNode.free(nativePointer);
+        }
+    }
+
+    private static boolean tableEntryRemoved(HandleContext context, PythonNativeWrapper nativeWrapper) {
+        PythonObjectReference ref = nativeWrapper.ref;
+        if (ref != null) {
+            int id = ref.getHandleTableIndex();
+            return id <= 0 || nativeStubLookupGet(context, nativeWrapper.getNativePointer(), id) == null;
+        }
+        // there cannot be a table entry if the wrapper does not have a PythonObjectReference
+        return true;
+    }
+
     public static void freeClassReplacements(HandleContext handleContext) {
         assert PythonContext.get(null).ownsGil();
         handleContext.nativeLookup.forEach((l, ref) -> {
@@ -607,6 +655,8 @@ public abstract class CApiTransitions {
 
     private static void freeNativeStub(PythonObjectReference ref) {
         assert HandlePointerConverter.pointsToPyHandleSpace(ref.pointer);
+        assert !HandlePointerConverter.pointsToPyIntHandle(ref.pointer);
+        assert !HandlePointerConverter.pointsToPyFloatHandle(ref.pointer);
         if (ref.gc) {
             PyObjectGCDelNode.executeUncached(ref.pointer);
         } else {
@@ -841,7 +891,10 @@ public abstract class CApiTransitions {
 
     public static final class HandlePointerConverter {
 
-        private static final long HANDLE_BASE = 0x8000_0000_0000_0000L;
+        // Aligned with handles.h in our C API. Update comment there if you change or move these.
+        private static final long HANDLE_TAG_BIT = 1L << 63;
+        private static final long INTEGER_TAG_BIT = 1L << 62;
+        private static final long FLOAT_TAG_BIT = 1L << 61;
 
         /**
          * Some libraries (notably cffi) do pointer tagging and therefore assume aligned pointers
@@ -849,19 +902,47 @@ public abstract class CApiTransitions {
          */
         private static final int POINTER_ALIGNMENT_SHIFT = 3;
         private static final long POINTER_ALIGNMENT_MASK = (1L << POINTER_ALIGNMENT_SHIFT) - 1L;
+        private static final long _35BIT_MASK = 0xFFFFFFFFL << 3;
+
+        public static boolean pointsToPyHandleSpace(long pointer) {
+            return (pointer & HANDLE_TAG_BIT) != 0;
+        }
+
+        public static boolean pointsToPyIntHandle(long pointer) {
+            return (pointer & INTEGER_TAG_BIT) != 0;
+        }
+
+        public static boolean pointsToPyFloatHandle(long pointer) {
+            return (pointer & FLOAT_TAG_BIT) != 0;
+        }
 
         public static long stubToPointer(long stubPointer) {
             assert (stubPointer & POINTER_ALIGNMENT_MASK) == 0;
-            return stubPointer | HANDLE_BASE;
+            return stubPointer | HANDLE_TAG_BIT;
+        }
+
+        public static long intToPointer(int value) {
+            return ((long) value << 3) & _35BIT_MASK | HANDLE_TAG_BIT | INTEGER_TAG_BIT;
+        }
+
+        public static long floatToPointer(float value) {
+            long rawFloatBits = Float.floatToRawIntBits(value);
+            return (rawFloatBits << 3) & _35BIT_MASK | HANDLE_TAG_BIT | FLOAT_TAG_BIT;
         }
 
         public static long pointerToStub(long pointer) {
-            assert (pointer & ~HANDLE_BASE & POINTER_ALIGNMENT_MASK) == 0;
-            return pointer & ~HANDLE_BASE;
+            assert (pointer & ~HANDLE_TAG_BIT & POINTER_ALIGNMENT_MASK) == 0;
+            return pointer & ~HANDLE_TAG_BIT;
         }
 
-        public static boolean pointsToPyHandleSpace(long pointer) {
-            return (pointer & HANDLE_BASE) != 0;
+        public static long pointerToLong(long pointer) {
+            assert Integer.toHexString((int) ((pointer & ~(HANDLE_TAG_BIT | INTEGER_TAG_BIT)) >> 3)).equals(Long.toHexString(((pointer & ~(HANDLE_TAG_BIT | INTEGER_TAG_BIT)) >> 3)));
+            return (int) (pointer >> 3);
+        }
+
+        public static double pointerToDouble(long pointer) {
+            assert Integer.toHexString((int) ((pointer & ~(HANDLE_TAG_BIT | FLOAT_TAG_BIT)) >> 3)).equals(Long.toHexString(((pointer & ~(HANDLE_TAG_BIT | FLOAT_TAG_BIT)) >> 3)));
+            return Float.intBitsToFloat((int) (pointer >> 3));
         }
     }
 
@@ -891,9 +972,19 @@ public abstract class CApiTransitions {
             Object type;
             if (wrapper.isBool()) {
                 type = PythonBuiltinClassType.Boolean;
-            } else if (wrapper.isIntLike()) {
+            } else if (wrapper.isInt()) {
+                return HandlePointerConverter.intToPointer(wrapper.getInt());
+            } else if (wrapper.isLong()) {
+                long value = wrapper.getLong();
+                if (PInt.fitsInInt(value)) {
+                    return HandlePointerConverter.intToPointer((int) value);
+                }
                 type = PythonBuiltinClassType.PInt;
             } else if (isFloat) {
+                double d = wrapper.getDouble();
+                if (PFloat.fitsInFloat(d)) {
+                    return HandlePointerConverter.floatToPointer((float) d);
+                }
                 type = PythonBuiltinClassType.PFloat;
             } else {
                 throw CompilerDirectives.shouldNotReachHere();
@@ -930,7 +1021,7 @@ public abstract class CApiTransitions {
             CStructs ctype;
             if (isVarObjectProfile.profile(inliningTarget, delegate instanceof PTuple)) {
                 ctype = CStructs.GraalPyVarObject;
-            } else if (isFloatObjectProfile.profile(inliningTarget, delegate instanceof Double || delegate instanceof PFloat)) {
+            } else if (isFloatObjectProfile.profile(inliningTarget, delegate instanceof PFloat)) {
                 ctype = CStructs.GraalPyFloatObject;
             } else if (isMemViewObjectProfile.profile(inliningTarget, delegate instanceof PMemoryView)) {
                 ctype = CStructs.PyMemoryViewObject;
@@ -1176,6 +1267,11 @@ public abstract class CApiTransitions {
                         @Cached(inline = false) CStructAccess.ReadI32Node readI32Node,
                         @Cached InlinedExactClassProfile profile,
                         @Cached UpdateStrongRefNode updateRefNode) {
+            if (HandlePointerConverter.pointsToPyIntHandle(pointer)) {
+                throw CompilerDirectives.shouldNotReachHere("ResolveHandleNode int");
+            } else if (HandlePointerConverter.pointsToPyFloatHandle(pointer)) {
+                throw CompilerDirectives.shouldNotReachHere("ResolveHandleNode float");
+            }
             HandleContext nativeContext = PythonContext.get(inliningTarget).nativeContext;
             int idx = readI32Node.read(HandlePointerConverter.pointerToStub(pointer), CFields.GraalPyObject__handle_table_index);
             PythonObjectReference reference = nativeStubLookupGet(nativeContext, pointer, idx);
@@ -1194,7 +1290,7 @@ public abstract class CApiTransitions {
 
         @Specialization
         static Object doForeign(Object value,
-                        @Bind("this") Node inliningTarget,
+                        @Bind Node inliningTarget,
                         @CachedLibrary(limit = "3") InteropLibrary interopLibrary,
                         @Cached InlinedExactClassProfile classProfile,
                         @Cached InlinedConditionProfile isNullProfile,
@@ -1220,6 +1316,8 @@ public abstract class CApiTransitions {
                     throw CompilerDirectives.shouldNotReachHere(e);
                 }
                 if (HandlePointerConverter.pointsToPyHandleSpace(pointer)) {
+                    assert !HandlePointerConverter.pointsToPyIntHandle(pointer);
+                    assert !HandlePointerConverter.pointsToPyFloatHandle(pointer);
                     PythonNativeWrapper obj = resolveHandleNode.execute(inliningTarget, pointer);
                     if (obj != null) {
                         return logResult(obj.getDelegate());
@@ -1255,7 +1353,7 @@ public abstract class CApiTransitions {
 
         @Specialization
         static Object doNative(PythonAbstractNativeObject obj,
-                        @Bind("this") Node inliningTarget,
+                        @Bind Node inliningTarget,
                         @Bind("needsTransfer()") boolean needsTransfer,
                         @CachedLibrary(limit = "2") InteropLibrary lib,
                         @Cached InlinedBranchProfile inlinedBranchProfile,
@@ -1308,7 +1406,7 @@ public abstract class CApiTransitions {
         @Specialization(guards = "isOther(obj)")
         static Object doOther(Object obj,
                         @Bind("needsTransfer()") boolean needsTransfer,
-                        @Bind("this") Node inliningTarget,
+                        @Bind Node inliningTarget,
                         @Cached GetNativeWrapperNode getWrapper,
                         @Cached GetReplacementNode getReplacementNode,
                         @CachedLibrary(limit = "3") InteropLibrary lib,
@@ -1316,9 +1414,12 @@ public abstract class CApiTransitions {
             CompilerAsserts.partialEvaluationConstant(needsTransfer);
             assert PythonContext.get(inliningTarget).ownsGil();
             pollReferenceQueue();
-            PythonNativeWrapper wrapper = getWrapper.execute(obj);
+            Object wrapper = getWrapper.execute(obj);
+            if (wrapper instanceof Long l) {
+                return new NativePointer(l);
+            }
 
-            Object replacement = getReplacementNode.execute(inliningTarget, wrapper);
+            Object replacement = getReplacementNode.execute(inliningTarget, (PythonNativeWrapper) wrapper);
             if (replacement != null) {
                 return replacement;
             }
@@ -1337,7 +1438,7 @@ public abstract class CApiTransitions {
                  * interpreter will be notified by an upcall as soon as the object's refcount goes
                  * down to MANAGED_RECOUNT again.
                  */
-                assert wrapper.ref != null;
+                assert objectNativeWrapper.ref != null;
                 assert refCnt != MANAGED_REFCNT;
                 updateRefNode.execute(inliningTarget, objectNativeWrapper, refCnt);
             }
@@ -1430,7 +1531,7 @@ public abstract class CApiTransitions {
 
         @Specialization
         static Object doWrapper(PythonNativeWrapper value,
-                        @Bind("$node") Node inliningTarget,
+                        @Bind Node inliningTarget,
                         @Exclusive @Cached InlinedExactClassProfile wrapperProfile,
                         @Exclusive @Cached UpdateStrongRefNode updateRefNode) {
             return handleWrapper(inliningTarget, wrapperProfile, updateRefNode, false, value);
@@ -1439,7 +1540,7 @@ public abstract class CApiTransitions {
         @Specialization(guards = "!isNativeWrapper(value)", limit = "3")
         @SuppressWarnings({"truffle-static-method", "truffle-sharing"})
         Object doNonWrapper(Object value,
-                        @Bind("this") Node inliningTarget,
+                        @Bind Node inliningTarget,
                         @CachedLibrary("value") InteropLibrary interopLibrary,
                         @Cached CStructAccess.ReadI32Node readI32Node,
                         @Cached InlinedConditionProfile isNullProfile,
@@ -1477,6 +1578,11 @@ public abstract class CApiTransitions {
             }
             assert pythonContext.ownsGil();
             if (isHandleSpaceProfile.profile(inliningTarget, HandlePointerConverter.pointsToPyHandleSpace(pointer))) {
+                if (HandlePointerConverter.pointsToPyIntHandle(pointer)) {
+                    return HandlePointerConverter.pointerToLong(pointer);
+                } else if (HandlePointerConverter.pointsToPyFloatHandle(pointer)) {
+                    return HandlePointerConverter.pointerToDouble(pointer);
+                }
                 int idx = readI32Node.read(HandlePointerConverter.pointerToStub(pointer), CFields.GraalPyObject__handle_table_index);
                 PythonObjectReference reference = nativeStubLookupGet(nativeContext, pointer, idx);
                 if (reference == null) {
@@ -1637,7 +1743,7 @@ public abstract class CApiTransitions {
         @Specialization
         @SuppressWarnings({"truffle-static-method", "truffle-sharing"})
         Object doNonWrapper(long pointer, boolean stealing,
-                        @Bind("$node") Node inliningTarget,
+                        @Bind Node inliningTarget,
                         @Cached CStructAccess.ReadI32Node readI32Node,
                         @Cached InlinedConditionProfile isZeroProfile,
                         @Cached InlinedConditionProfile createNativeProfile,
@@ -1659,6 +1765,11 @@ public abstract class CApiTransitions {
             }
             assert pythonContext.ownsGil();
             if (isHandleSpaceProfile.profile(inliningTarget, HandlePointerConverter.pointsToPyHandleSpace(pointer))) {
+                if (HandlePointerConverter.pointsToPyIntHandle(pointer)) {
+                    return HandlePointerConverter.pointerToLong(pointer);
+                } else if (HandlePointerConverter.pointsToPyFloatHandle(pointer)) {
+                    return HandlePointerConverter.pointerToDouble(pointer);
+                }
                 int idx = readI32Node.read(HandlePointerConverter.pointerToStub(pointer), CFields.GraalPyObject__handle_table_index);
                 PythonObjectReference reference = nativeStubLookupGet(nativeContext, pointer, idx);
                 if (reference == null) {
@@ -1725,6 +1836,11 @@ public abstract class CApiTransitions {
             assert pointer != 0;
             assert pythonContext.ownsGil();
             if (isHandleSpaceProfile.profile(inliningTarget, HandlePointerConverter.pointsToPyHandleSpace(pointer))) {
+                if (HandlePointerConverter.pointsToPyIntHandle(pointer)) {
+                    return HandlePointerConverter.pointerToLong(pointer);
+                } else if (HandlePointerConverter.pointsToPyFloatHandle(pointer)) {
+                    return HandlePointerConverter.pointerToDouble(pointer);
+                }
                 int idx = readI32Node.read(HandlePointerConverter.pointerToStub(pointer), CFields.GraalPyObject__handle_table_index);
                 PythonObjectReference reference = nativeStubLookupGet(nativeContext, pointer, idx);
                 if (reference == null) {
@@ -1765,6 +1881,7 @@ public abstract class CApiTransitions {
     private static long addNativeRefCount(long pointer, long refCntDelta, boolean ignoreIfDead) {
         assert PythonContext.get(null).isNativeAccessAllowed();
         assert PythonContext.get(null).ownsGil();
+        LOGGER.finest(() -> PythonUtils.formatJString("addNativeRefCount %x ? + %d", pointer, refCntDelta));
         long refCount = UNSAFE.getLong(pointer + TP_REFCNT_OFFSET);
         if (ignoreIfDead && refCount == 0) {
             return 0;
@@ -1866,6 +1983,11 @@ public abstract class CApiTransitions {
             HandleContext nativeContext = pythonContext.nativeContext;
             assert pythonContext.ownsGil();
             if (isHandleSpaceProfile.profile(inliningTarget, HandlePointerConverter.pointsToPyHandleSpace(pointer))) {
+                if (HandlePointerConverter.pointsToPyIntHandle(pointer)) {
+                    throw CompilerDirectives.shouldNotReachHere("not implemented NativePtrToPythonWrapperNode int");
+                } else if (HandlePointerConverter.pointsToPyFloatHandle(pointer)) {
+                    throw CompilerDirectives.shouldNotReachHere("not implemented NativePtrToPythonWrapperNode float");
+                }
                 int idx = readI32Node.read(HandlePointerConverter.pointerToStub(pointer), CFields.GraalPyObject__handle_table_index);
                 PythonObjectReference reference = nativeStubLookupGet(nativeContext, pointer, idx);
                 PythonNativeWrapper wrapper;
@@ -1915,7 +2037,7 @@ public abstract class CApiTransitions {
 
         @Specialization(guards = "!isNativeWrapper(obj)", limit = "3")
         static PythonNativeWrapper doNonWrapper(Object obj, boolean strict,
-                        @Bind("this") Node inliningTarget,
+                        @Bind Node inliningTarget,
                         @CachedLibrary("obj") InteropLibrary interopLibrary,
                         @Cached NativePtrToPythonWrapperNode nativePtrToPythonWrapperNode,
                         @Cached InlinedConditionProfile isLongProfile) {
@@ -1969,7 +2091,7 @@ public abstract class CApiTransitions {
     public abstract static class WrappedPointerToNativeNode extends CExtToNativeNode {
         @Specialization
         static Object doGeneric(Object object,
-                        @Bind("this") Node inliningTarget,
+                        @Bind Node inliningTarget,
                         @Cached InlinedConditionProfile isWrapperProfile,
                         @Cached GetReplacementNode getReplacementNode) {
             if (isWrapperProfile.profile(inliningTarget, object instanceof PythonNativeWrapper)) {

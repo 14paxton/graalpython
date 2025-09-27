@@ -58,7 +58,7 @@ import com.oracle.graal.python.runtime.sequence.storage.SequenceStorage;
 import com.oracle.truffle.api.CompilerAsserts;
 import com.oracle.truffle.api.dsl.Bind;
 import com.oracle.truffle.api.dsl.Cached;
-import com.oracle.truffle.api.dsl.Cached.Shared;
+import com.oracle.truffle.api.dsl.Cached.Exclusive;
 import com.oracle.truffle.api.dsl.Fallback;
 import com.oracle.truffle.api.dsl.GenerateInline;
 import com.oracle.truffle.api.dsl.GenerateUncached;
@@ -76,10 +76,10 @@ public abstract class UnpackSequenceNode extends PNodeWithContext {
     @Specialization(guards = "isBuiltinSequence(sequence)")
     @ExplodeLoop
     static int doUnpackSequence(VirtualFrame frame, int initialStackTop, PSequence sequence, int count,
-                    @Bind("this") Node inliningTarget,
+                    @Bind Node inliningTarget,
                     @Cached SequenceNodes.GetSequenceStorageNode getSequenceStorageNode,
                     @Cached SequenceStorageNodes.GetItemScalarNode getItemNode,
-                    @Shared("raise") @Cached PRaiseNode raiseNode) {
+                    @Exclusive @Cached PRaiseNode raiseNode) {
         CompilerAsserts.partialEvaluationConstant(count);
         int resultStackTop = initialStackTop + count;
         int stackTop = resultStackTop;
@@ -102,11 +102,11 @@ public abstract class UnpackSequenceNode extends PNodeWithContext {
     @Fallback
     @ExplodeLoop
     static int doUnpackIterable(Frame frame, int initialStackTop, Object collection, int count,
-                    @Bind("this") Node inliningTarget,
+                    @Bind Node inliningTarget,
                     @Cached PyObjectGetIter getIter,
                     @Cached PyIterNextNode nextNode,
                     @Cached IsBuiltinObjectProfile notIterableProfile,
-                    @Shared("raise") @Cached PRaiseNode raiseNode) {
+                    @Exclusive @Cached PRaiseNode raiseNode) {
         CompilerAsserts.partialEvaluationConstant(count);
         int resultStackTop = initialStackTop + count;
         int stackTop = resultStackTop;

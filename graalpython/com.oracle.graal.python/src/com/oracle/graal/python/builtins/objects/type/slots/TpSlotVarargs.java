@@ -105,6 +105,7 @@ import com.oracle.truffle.api.dsl.Fallback;
 import com.oracle.truffle.api.dsl.GenerateCached;
 import com.oracle.truffle.api.dsl.GenerateInline;
 import com.oracle.truffle.api.dsl.GenerateUncached;
+import com.oracle.truffle.api.dsl.NeverDefault;
 import com.oracle.truffle.api.dsl.NodeFactory;
 import com.oracle.truffle.api.dsl.ReportPolymorphism;
 import com.oracle.truffle.api.dsl.Specialization;
@@ -134,10 +135,10 @@ public final class TpSlotVarargs {
             super(nodeFactory);
             this.name = name;
             this.tsName = PythonUtils.tsLiteral(name);
-            Class<T> nodeClass = getNodeFactory().getNodeClass();
+            Class<T> nodeClass = nodeFactory.getNodeClass();
             SlotSignature slotSignature = nodeClass.getAnnotation(SlotSignature.class);
             Slot2Builtin builtin = new Slot2Builtin(slotSignature, name, null);
-            signature = BuiltinFunctionRootNode.createSignature(getNodeFactory(), builtin, true, takesClass);
+            signature = BuiltinFunctionRootNode.createSignature(nodeFactory, builtin, true, takesClass);
             defaults = PBuiltinFunction.generateDefaults(PythonBuiltins.numDefaults(builtin));
             kwDefaults = PBuiltinFunction.generateKwDefaults(signature);
             directInvocation = PythonUnaryBuiltinNode.class.isAssignableFrom(nodeClass) || PythonBinaryBuiltinNode.class.isAssignableFrom(nodeClass) || //
@@ -269,6 +270,7 @@ public final class TpSlotVarargs {
             return invoke.execute(frame, inliningTarget, callNode, arguments);
         }
 
+        @NeverDefault
         protected static DirectCallNode createDirectCallNode(TpSlotVarargsBuiltin<?> slot) {
             return Truffle.getRuntime().createDirectCallNode(PythonLanguage.get(null).getBuiltinSlotCallTarget(slot.callTargetIndex));
         }
@@ -315,14 +317,14 @@ public final class TpSlotVarargs {
                         @Bind Node inliningTarget,
                         @Bind PythonContext context,
                         @Cached GetThreadStateNode getThreadStateNode,
-                        @Cached(inline = false) PythonToNativeNode toNativeNode,
+                        @Cached PythonToNativeNode toNativeNode,
                         @Cached CreateArgsTupleNode createArgsTupleNode,
                         @Cached EagerTupleState eagerTupleState,
                         @Cached ExternalFunctionInvokeNode externalInvokeNode) {
             PythonLanguage language = context.getLanguage(inliningTarget);
             PythonThreadState state = getThreadStateNode.execute(inliningTarget, context);
             PTuple argsTuple = createArgsTupleNode.execute(inliningTarget, language, args, eagerTupleState);
-            Object kwargsDict = PFactory.createDict(language, keywords);
+            Object kwargsDict = keywords.length > 0 ? PFactory.createDict(language, keywords) : NO_VALUE;
             Object nativeResult = externalInvokeNode.call(frame, inliningTarget, state, C_API_TIMING, name, slot.callable,
                             toNativeNode.execute(self), toNativeNode.execute(argsTuple), toNativeNode.execute(kwargsDict));
             eagerTupleState.report(inliningTarget, argsTuple);
@@ -372,7 +374,7 @@ public final class TpSlotVarargs {
         }
 
         protected static boolean isStaticmethod(PDecoratedMethod descriptor) {
-            return descriptor.getInitialPythonClass() == PythonBuiltinClassType.PStaticmethod;
+            return descriptor.getPythonClass() == PythonBuiltinClassType.PStaticmethod;
         }
 
         @Specialization

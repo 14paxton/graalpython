@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2021, 2024, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2021, 2025, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * The Universal Permissive License (UPL), Version 1.0
@@ -79,7 +79,7 @@ public final class PythonCextSysBuiltins {
 
         @Specialization
         Object getObject(TruffleString name,
-                        @Bind("this") Node inliningTarget,
+                        @Bind Node inliningTarget,
                         @Cached PromoteBorrowedValue promoteNode,
                         @Cached PyObjectLookupAttr lookupNode,
                         @Cached PyObjectSetAttr setAttrNode) {
@@ -116,7 +116,7 @@ public final class PythonCextSysBuiltins {
     }
 
     @CApiBuiltin(ret = Int, args = {Int, ConstCharPtrAsTruffleString}, call = Ignored)
-    abstract static class PyTruffleSys_WriteStd extends CApiBinaryBuiltinNode {
+    abstract static class GraalPyPrivate_Sys_WriteStd extends CApiBinaryBuiltinNode {
         @Specialization
         @TruffleBoundary
         static Object doGeneric(int fd, TruffleString msg) {
@@ -130,7 +130,7 @@ public final class PythonCextSysBuiltins {
     }
 
     @CApiBuiltin(ret = Int, args = {Int, ConstCharPtrAsTruffleString, VA_LIST_PTR}, call = Ignored)
-    abstract static class PyTruffleSys_FormatStd extends CApiTernaryBuiltinNode {
+    abstract static class GraalPyPrivate_Sys_FormatStd extends CApiTernaryBuiltinNode {
         @Specialization
         @TruffleBoundary
         static Object doGeneric(int fd, TruffleString format, Object vaList) {

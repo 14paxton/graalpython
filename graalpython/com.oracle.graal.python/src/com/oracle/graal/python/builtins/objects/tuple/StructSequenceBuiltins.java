@@ -55,7 +55,7 @@ import java.util.List;
 import com.oracle.graal.python.PythonLanguage;
 import com.oracle.graal.python.annotations.Slot;
 import com.oracle.graal.python.annotations.Slot.SlotKind;
-import com.oracle.graal.python.builtins.Builtin;
+import com.oracle.graal.python.annotations.Builtin;
 import com.oracle.graal.python.builtins.CoreFunctions;
 import com.oracle.graal.python.builtins.PythonBuiltinClassType;
 import com.oracle.graal.python.builtins.PythonBuiltins;
@@ -133,14 +133,14 @@ public final class StructSequenceBuiltins extends PythonBuiltins {
 
         @Specialization
         static int doPBCT(VirtualFrame frame, Node inliningTarget, PythonBuiltinClassType type, TruffleString key,
-                        @Shared @Cached("createForceType()") ReadAttributeFromObjectNode read,
+                        @Shared @Cached ReadAttributeFromObjectNode read,
                         @Shared @Cached PyNumberAsSizeNode asSizeNode) {
             return doGeneric(frame, inliningTarget, PythonContext.get(inliningTarget).lookupType(type), key, read, asSizeNode);
         }
 
         @Fallback
         static int doGeneric(VirtualFrame frame, Node inliningTarget, Object type, TruffleString key,
-                        @Shared @Cached("createForceType()") ReadAttributeFromObjectNode read,
+                        @Shared @Cached ReadAttributeFromObjectNode read,
                         @Shared @Cached PyNumberAsSizeNode asSizeNode) {
             return asSizeNode.executeExact(frame, inliningTarget, read.execute(type, key));
         }
@@ -190,7 +190,7 @@ public final class StructSequenceBuiltins extends PythonBuiltins {
 
         @Specialization
         static TruffleString repr(VirtualFrame frame, PTuple self,
-                        @Bind("this") Node inliningTarget,
+                        @Bind Node inliningTarget,
                         @Cached GetClassNode getClassNode,
                         @Cached GetFieldNamesNode getFieldNamesNode,
                         @Cached ObjectNodes.GetFullyQualifiedNameNode getQName,
@@ -227,7 +227,7 @@ public final class StructSequenceBuiltins extends PythonBuiltins {
 
         @Specialization
         static PTuple reduce(VirtualFrame frame, PTuple self,
-                        @Bind("this") Node inliningTarget,
+                        @Bind Node inliningTarget,
                         @Cached GetClassNode getClass,
                         @Cached GetSizeNode getSizeNode,
                         @Cached GetFieldNamesNode getFieldNamesNode,

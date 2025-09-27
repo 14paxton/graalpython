@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2020, 2024, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2020, 2025, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * The Universal Permissive License (UPL), Version 1.0
@@ -155,15 +155,15 @@ public class CharsetMapping {
 
         @Specialization
         static TruffleString normalize(TruffleString encoding,
-                        @Cached(inline = false) TruffleString.CreateCodePointIteratorNode createCodePointIteratorNode,
-                        @Cached(inline = false) TruffleStringIterator.NextNode nextNode,
-                        @Cached(inline = false) TruffleStringBuilder.AppendCodePointNode appendCodePointNode,
-                        @Cached(inline = false) TruffleStringBuilder.ToStringNode toStringNode) {
+                        @Cached TruffleString.CreateCodePointIteratorNode createCodePointIteratorNode,
+                        @Cached TruffleStringIterator.NextNode nextNode,
+                        @Cached TruffleStringBuilder.AppendCodePointNode appendCodePointNode,
+                        @Cached TruffleStringBuilder.ToStringNode toStringNode) {
             TruffleStringBuilder str = TruffleStringBuilder.create(TS_ENCODING, encoding.byteLength(TS_ENCODING));
             boolean lastCharInvalid = false;
             TruffleStringIterator it = createCodePointIteratorNode.execute(encoding, TS_ENCODING);
             while (it.hasNext()) {
-                int c = nextNode.execute(it);
+                int c = nextNode.execute(it, TS_ENCODING);
                 if ((c >= 'A' && c <= 'Z')) {
                     appendCodePointNode.execute(str, c - 'A' + 'a', 1, true);
                     lastCharInvalid = false;

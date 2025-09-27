@@ -85,7 +85,6 @@ import com.oracle.graal.python.builtins.objects.slice.PSlice.SliceInfo;
 import com.oracle.graal.python.builtins.objects.slice.SliceNodes;
 import com.oracle.graal.python.builtins.objects.slice.SliceNodes.CoerceToIntSlice;
 import com.oracle.graal.python.builtins.objects.slice.SliceNodes.ComputeIndices;
-import com.oracle.graal.python.builtins.objects.str.PString;
 import com.oracle.graal.python.builtins.objects.type.PythonAbstractClass;
 import com.oracle.graal.python.builtins.objects.type.TpSlots.GetObjectSlotsNode;
 import com.oracle.graal.python.builtins.objects.type.slots.TpSlot;
@@ -358,10 +357,6 @@ public abstract class SequenceStorageNodes {
         protected static boolean isObject(StorageType et) {
             return et == StorageType.Generic;
         }
-
-        protected static boolean hasStorage(Object source) {
-            return source instanceof PSequence && !(source instanceof PString);
-        }
     }
 
     abstract static class NormalizingNode extends PNodeWithContext {
@@ -437,7 +432,7 @@ public abstract class SequenceStorageNodes {
 
         @Specialization
         protected Object doScalarLong(VirtualFrame frame, SequenceStorage storage, long idx,
-                        @Bind("this") Node inliningTarget,
+                        @Bind Node inliningTarget,
                         @Shared @Cached PyNumberAsSizeNode asSizeNode) {
             return getGetItemScalarNode().executeCached(storage, normalizeIndex(frame, inliningTarget, asSizeNode, idx, storage));
         }
@@ -445,7 +440,7 @@ public abstract class SequenceStorageNodes {
         @InliningCutoff
         @Specialization
         protected Object doScalarPInt(VirtualFrame frame, SequenceStorage storage, PInt idx,
-                        @Bind("this") Node inliningTarget,
+                        @Bind Node inliningTarget,
                         @Shared @Cached PyNumberAsSizeNode asSizeNode) {
             return getGetItemScalarNode().executeCached(storage, normalizeIndex(frame, inliningTarget, asSizeNode, idx, storage));
         }
@@ -453,7 +448,7 @@ public abstract class SequenceStorageNodes {
         @InliningCutoff
         @Specialization(guards = "!isPSlice(idx)")
         protected Object doScalarGeneric(VirtualFrame frame, SequenceStorage storage, Object idx,
-                        @Bind("this") Node inliningTarget,
+                        @Bind Node inliningTarget,
                         @Shared @Cached PyNumberAsSizeNode asSizeNode) {
             return getGetItemScalarNode().executeCached(storage, normalizeIndex(frame, inliningTarget, asSizeNode, idx, storage));
         }
@@ -462,7 +457,7 @@ public abstract class SequenceStorageNodes {
         @Specialization
         @SuppressWarnings("truffle-static-method")
         protected Object doSlice(VirtualFrame frame, SequenceStorage storage, PSlice slice,
-                        @Bind("this") Node inliningTarget,
+                        @Bind Node inliningTarget,
                         @Cached CoerceToIntSlice sliceCast,
                         @Cached ComputeIndices compute,
                         @Cached LenOfRangeNode sliceLen) {
@@ -642,7 +637,7 @@ public abstract class SequenceStorageNodes {
 
     @GenerateUncached
     @ImportStatic(SequenceStorageBaseNode.class)
-    @SuppressWarnings("truffle-inlining")       // footprint reduction 48 -> 30
+    @GenerateInline(false)       // footprint reduction 48 -> 30
     protected abstract static class GetNativeItemScalarNode extends Node {
         public abstract Object execute(NativeSequenceStorage s, int idx);
 
@@ -662,7 +657,7 @@ public abstract class SequenceStorageNodes {
 
     @GenerateUncached
     @ImportStatic({StorageType.class, SequenceStorageBaseNode.class})
-    @SuppressWarnings("truffle-inlining")       // footprint reduction 40 -> 21
+    @GenerateInline(false)       // footprint reduction 40 -> 21
     public abstract static class GetItemSliceNode extends PNodeWithContext {
 
         public abstract SequenceStorage execute(SequenceStorage s, int start, int stop, int step, int length);
@@ -794,7 +789,7 @@ public abstract class SequenceStorageNodes {
 
         @Specialization
         protected static SequenceStorage doNativeInt(NativeIntSequenceStorage storage, int start, int stop, int step, int length,
-                        @Bind("this") Node node) {
+                        @Bind Node node) {
             NativeBuffer sliceValueBuffer = doNativePrimitiveSliceInBound(PythonContext.get(node), start, step, length, storage);
             return PythonContext.get(node).nativeBufferContext.createNativeIntStorage(sliceValueBuffer, length);
         }
@@ -823,7 +818,7 @@ public abstract class SequenceStorageNodes {
 
         @Specialization
         protected static SequenceStorage doForeign(ForeignSequenceStorage storage, int start, @SuppressWarnings("unused") int stop, int step, int length,
-                        @Bind("this") Node inliningTarget,
+                        @Bind Node inliningTarget,
                         @Cached ForeignSequenceStorage.ReadNode readNode) {
             Object[] newArray = new Object[length];
             for (int i = start, j = 0; j < length; i += step, j++) {
@@ -865,14 +860,14 @@ public abstract class SequenceStorageNodes {
 
     @GenerateUncached
     @ImportStatic(PGuards.class)
-    @SuppressWarnings("truffle-inlining")       // footprint reduction 40 -> 23
+    @GenerateInline(false)       // footprint reduction 40 -> 23
     public abstract static class SetItemDynamicNode extends Node {
 
         public abstract SequenceStorage execute(Frame frame, GenNodeSupplier generalizationNodeProvider, SequenceStorage s, Object key, Object value);
 
         @Specialization
         protected static SequenceStorage doScalarInt(GenNodeSupplier generalizationNodeProvider, SequenceStorage storage, int idx, Object value,
-                        @Bind("this") Node inliningTarget,
+                        @Bind Node inliningTarget,
                         @Shared("generalizeProfile") @Cached InlinedBranchProfile generalizeProfile,
                         @Shared("setItemScalarNode") @Cached SetItemScalarNode setItemScalarNode,
                         @Shared("doGenNode") @Cached DoGeneralizationNode doGenNode,
@@ -896,7 +891,7 @@ public abstract class SequenceStorageNodes {
 
         @Specialization
         protected static SequenceStorage doScalarLong(GenNodeSupplier generalizationNodeProvider, SequenceStorage storage, long idx, Object value,
-                        @Bind("this") Node inliningTarget,
+                        @Bind Node inliningTarget,
                         @Shared("generalizeProfile") @Cached InlinedBranchProfile generalizeProfile,
                         @Shared("setItemScalarNode") @Cached SetItemScalarNode setItemScalarNode,
                         @Shared("doGenNode") @Cached DoGeneralizationNode doGenNode,
@@ -915,7 +910,7 @@ public abstract class SequenceStorageNodes {
 
         @Specialization
         protected static SequenceStorage doScalarPInt(GenNodeSupplier generalizationNodeProvider, SequenceStorage storage, PInt idx, Object value,
-                        @Bind("this") Node inliningTarget,
+                        @Bind Node inliningTarget,
                         @Shared("generalizeProfile") @Cached InlinedBranchProfile generalizeProfile,
                         @Shared("setItemScalarNode") @Cached SetItemScalarNode setItemScalarNode,
                         @Shared("doGenNode") @Cached DoGeneralizationNode doGenNode,
@@ -934,7 +929,7 @@ public abstract class SequenceStorageNodes {
 
         @Specialization(guards = "!isPSlice(idx)")
         protected static SequenceStorage doScalarGeneric(GenNodeSupplier generalizationNodeProvider, SequenceStorage storage, Object idx, Object value,
-                        @Bind("this") Node inliningTarget,
+                        @Bind Node inliningTarget,
                         @Shared("generalizeProfile") @Cached InlinedBranchProfile generalizeProfile,
                         @Shared("setItemScalarNode") @Cached SetItemScalarNode setItemScalarNode,
                         @Shared("doGenNode") @Cached DoGeneralizationNode doGenNode,
@@ -953,7 +948,7 @@ public abstract class SequenceStorageNodes {
 
         @Specialization
         protected static SequenceStorage doSlice(VirtualFrame frame, GenNodeSupplier generalizationNodeProvider, SequenceStorage storage, PSlice slice, Object iterable,
-                        @Bind("this") Node inliningTarget,
+                        @Bind Node inliningTarget,
                         @Exclusive @Cached InlinedBranchProfile generalizeProfile,
                         @Cached SetItemSliceNode setItemSliceNode,
                         @Exclusive @Cached DoGeneralizationNode doGenNode,
@@ -1048,7 +1043,7 @@ public abstract class SequenceStorageNodes {
         @Specialization
         @InliningCutoff
         protected SequenceStorage doScalarInt(SequenceStorage storage, int idx, Object value,
-                        @Bind("this") Node inliningTarget,
+                        @Bind Node inliningTarget,
                         @Shared("generalizeProfile") @Cached InlinedBranchProfile generalizeProfile,
                         @Shared("setItemScalarNode") @Cached SetItemScalarNode setItemScalarNode) {
             int normalized = normalizeIndex(idx, storage);
@@ -1072,7 +1067,7 @@ public abstract class SequenceStorageNodes {
         @InliningCutoff
         @SuppressWarnings("truffle-static-method")
         protected SequenceStorage doScalarLong(VirtualFrame frame, SequenceStorage storage, long idx, Object value,
-                        @Bind("this") Node inliningTarget,
+                        @Bind Node inliningTarget,
                         @Shared @Cached PyNumberAsSizeNode asSizeNode,
                         @Shared("generalizeProfile") @Cached InlinedBranchProfile generalizeProfile,
                         @Shared("setItemScalarNode") @Cached SetItemScalarNode setItemScalarNode) {
@@ -1091,7 +1086,7 @@ public abstract class SequenceStorageNodes {
         @Specialization
         @InliningCutoff
         protected SequenceStorage doScalarPInt(VirtualFrame frame, SequenceStorage storage, PInt idx, Object value,
-                        @Bind("this") Node inliningTarget,
+                        @Bind Node inliningTarget,
                         @Shared @Cached PyNumberAsSizeNode asSizeNode,
                         @Shared("generalizeProfile") @Cached InlinedBranchProfile generalizeProfile,
                         @Shared("setItemScalarNode") @Cached SetItemScalarNode setItemScalarNode) {
@@ -1110,7 +1105,7 @@ public abstract class SequenceStorageNodes {
         @Specialization(guards = "!isPSlice(idx)")
         @InliningCutoff
         protected SequenceStorage doScalarGeneric(VirtualFrame frame, SequenceStorage storage, Object idx, Object value,
-                        @Bind("this") Node inliningTarget,
+                        @Bind Node inliningTarget,
                         @Shared @Cached PyNumberAsSizeNode asSizeNode,
                         @Shared("generalizeProfile") @Cached InlinedBranchProfile generalizeProfile,
                         @Shared("setItemScalarNode") @Cached SetItemScalarNode setItemScalarNode) {
@@ -1128,7 +1123,7 @@ public abstract class SequenceStorageNodes {
 
         @Specialization
         protected SequenceStorage doSliceSequence(VirtualFrame frame, SequenceStorage storage, PSlice slice, PSequence sequence,
-                        @Bind("this") Node inliningTarget,
+                        @Bind Node inliningTarget,
                         @Shared("generalizeProfile") @Cached InlinedBranchProfile generalizeProfile,
                         @Shared @Cached SetItemSliceNode setItemSliceNode,
                         @Shared @Cached CoerceToIntSlice sliceCast,
@@ -1148,7 +1143,7 @@ public abstract class SequenceStorageNodes {
         @Specialization(replaces = "doSliceSequence")
         @InliningCutoff
         protected SequenceStorage doSliceGeneric(VirtualFrame frame, SequenceStorage storage, PSlice slice, Object iterable,
-                        @Bind("this") Node inliningTarget,
+                        @Bind Node inliningTarget,
                         @Shared("generalizeProfile") @Cached InlinedBranchProfile generalizeProfile,
                         @Shared @Cached SetItemSliceNode setItemSliceNode,
                         @Cached ListNodes.ConstructListNode constructListNode,
@@ -1368,7 +1363,7 @@ public abstract class SequenceStorageNodes {
 
     @GenerateUncached
     @ImportStatic(SequenceStorageBaseNode.class)
-    @SuppressWarnings("truffle-inlining")       // footprint reduction 36 -> 18
+    @GenerateInline(false)       // footprint reduction 36 -> 18
     public abstract static class SetNativeItemScalarNode extends Node {
         public abstract void execute(NativeSequenceStorage s, int idx, Object value);
 
@@ -1381,7 +1376,7 @@ public abstract class SequenceStorageNodes {
 
         @Specialization
         protected static void doNativeObject(NativeObjectSequenceStorage storage, int idx, Object value,
-                        @Bind("this") Node inliningTarget,
+                        @Bind Node inliningTarget,
                         @Cached PythonToNativeNewRefNode toNative,
                         @Cached CStructAccess.ReadPointerNode readPointerNode,
                         @Cached CStructAccess.WritePointerNode writePointerNode,
@@ -1394,7 +1389,7 @@ public abstract class SequenceStorageNodes {
 
     @GenerateUncached
     @ImportStatic(SequenceStorageBaseNode.class)
-    @SuppressWarnings("truffle-inlining")       // footprint reduction 36 -> 18
+    @GenerateInline(false)       // footprint reduction 36 -> 18
     public abstract static class InitializeNativeItemScalarNode extends Node {
         public abstract void execute(NativeSequenceStorage s, int idx, Object value);
 
@@ -1425,7 +1420,7 @@ public abstract class SequenceStorageNodes {
             execute(frame, inliningTarget, s, info, iterable, true);
         }
 
-        @Specialization(guards = "hasStorage(seq)")
+        @Specialization
         static void doStorage(Node inliningTarget, SequenceStorage s, SliceInfo info, PSequence seq, boolean canGeneralize,
                         @Shared("setStorageSliceNode") @Cached(inline = false) SetStorageSliceNode setStorageSliceNode,
                         @Cached GetSequenceStorageNode getSequenceStorageNode) {
@@ -1683,7 +1678,7 @@ public abstract class SequenceStorageNodes {
 
     @GenerateUncached
     @ImportStatic(SequenceStorageBaseNode.class)
-    @SuppressWarnings("truffle-inlining")       // footprint reduction 92 -> 75
+    @GenerateInline(false)       // footprint reduction 92 -> 75
     abstract static class SetStorageSliceNode extends Node {
 
         public abstract void execute(SequenceStorage s, SliceInfo info, SequenceStorage iterable, boolean canGeneralize);
@@ -1700,7 +1695,7 @@ public abstract class SequenceStorageNodes {
 
         @Specialization(guards = {"!canGeneralize || isDataTypeCompatibleNode.execute(inliningTarget, self, values)", "sinfo.step == 1"}, limit = "1")
         static void singleStep(SequenceStorage self, SliceInfo sinfo, SequenceStorage values, @SuppressWarnings("unused") boolean canGeneralize,
-                        @Bind("this") Node inliningTarget,
+                        @Bind Node inliningTarget,
                         @Exclusive @Cached @SuppressWarnings("unused") IsDataTypeCompatibleNode isDataTypeCompatibleNode,
                         @Exclusive @Cached SetLenNode setLenNode,
                         @Exclusive @Cached EnsureCapacityNode ensureCapacityNode,
@@ -1710,7 +1705,7 @@ public abstract class SequenceStorageNodes {
                         @Exclusive @Cached InlinedConditionProfile memoryError,
                         @Exclusive @Cached InlinedConditionProfile negGrowth,
                         @Exclusive @Cached InlinedConditionProfile posGrowth,
-                        @Shared @Cached PRaiseNode raiseNode) {
+                        @Exclusive @Cached PRaiseNode raiseNode) {
             int start = sinfo.start;
             int stop = sinfo.stop;
             int step = sinfo.step;
@@ -1726,7 +1721,7 @@ public abstract class SequenceStorageNodes {
 
         @Specialization(guards = {"!canGeneralize || isDataTypeCompatibleNode.execute(inliningTarget, self, values)", "sinfo.step != 1"}, limit = "1")
         static void multiStep(SequenceStorage self, SliceInfo sinfo, SequenceStorage values, @SuppressWarnings("unused") boolean canGeneralize,
-                        @Bind("this") Node inliningTarget,
+                        @Bind Node inliningTarget,
                         @Exclusive @Cached @SuppressWarnings("unused") IsDataTypeCompatibleNode isDataTypeCompatibleNode,
                         @Exclusive @Cached InlinedConditionProfile wrongLength,
                         @Exclusive @Cached InlinedConditionProfile deleteSlice,
@@ -1735,7 +1730,7 @@ public abstract class SequenceStorageNodes {
                         @Exclusive @Cached MemMoveNode memove,
                         @Cached SetItemScalarNode setLeftItemNode,
                         @Cached GetItemScalarNode getRightItemNode,
-                        @Shared @Cached PRaiseNode raiseNode,
+                        @Exclusive @Cached PRaiseNode raiseNode,
                         @Exclusive @Cached CopyNode copyNode) {
             int start = sinfo.start;
             int step = sinfo.step;
@@ -1759,7 +1754,7 @@ public abstract class SequenceStorageNodes {
 
         @Specialization(guards = {"canGeneralize", "!isAssignCompatibleNode.execute(inliningTarget, self, sequence)"}, limit = "1")
         static void doError(@SuppressWarnings("unused") SequenceStorage self, @SuppressWarnings("unused") SliceInfo info, SequenceStorage sequence, @SuppressWarnings("unused") boolean canGeneralize,
-                        @SuppressWarnings("unused") @Bind("this") Node inliningTarget,
+                        @SuppressWarnings("unused") @Bind Node inliningTarget,
                         @Cached @SuppressWarnings("unused") IsAssignCompatibleNode isAssignCompatibleNode) {
             throw new SequenceStoreException(sequence.getIndicativeValue());
         }
@@ -2203,7 +2198,7 @@ public abstract class SequenceStorageNodes {
 
     }
 
-    @SuppressWarnings("truffle-inlining")       // footprint reduction 68 -> 49
+    @GenerateInline(false)       // footprint reduction 68 -> 49
     @GenerateUncached
     public abstract static class ConcatBaseNode extends SequenceStorageBaseNode {
 
@@ -2211,7 +2206,7 @@ public abstract class SequenceStorageNodes {
 
         @Specialization(guards = "!isNative(right)")
         static SequenceStorage doLeftEmpty(@SuppressWarnings("unused") EmptySequenceStorage dest, @SuppressWarnings("unused") EmptySequenceStorage left, SequenceStorage right,
-                        @Bind("this") Node inliningTarget,
+                        @Bind Node inliningTarget,
                         @Shared("raiseNode") @Cached PRaiseNode raiseNode,
                         @Shared("copyNode") @Cached CopyNode copyNode) {
             try {
@@ -2223,7 +2218,7 @@ public abstract class SequenceStorageNodes {
 
         @Specialization(guards = "!isNative(left)")
         static SequenceStorage doRightEmpty(@SuppressWarnings("unused") EmptySequenceStorage dest, SequenceStorage left, @SuppressWarnings("unused") EmptySequenceStorage right,
-                        @Bind("this") Node inliningTarget,
+                        @Bind Node inliningTarget,
                         @Shared("raiseNode") @Cached PRaiseNode raiseNode,
                         @Shared("copyNode") @Cached CopyNode copyNode) {
             try {
@@ -2235,7 +2230,7 @@ public abstract class SequenceStorageNodes {
 
         @Specialization(guards = {"dest == left", "left.getClass() == right.getClass()", "cachedClass == left.getClass()"}, limit = "1")
         static SequenceStorage doArrayBasedManagedManagedSameTypeInplace(@SuppressWarnings("unused") ArrayBasedSequenceStorage dest, ArrayBasedSequenceStorage left, ArrayBasedSequenceStorage right,
-                        @Bind("this") Node inliningTarget,
+                        @Bind Node inliningTarget,
                         @Cached("left.getClass()") Class<? extends ArrayBasedSequenceStorage> cachedClass,
                         @Shared @Cached SetLenNode setLenNode) {
             ArrayBasedSequenceStorage leftProfiled = cachedClass.cast(left);
@@ -2251,7 +2246,7 @@ public abstract class SequenceStorageNodes {
 
         @Specialization(guards = {"dest != left", "dest.getClass() == left.getClass()", "left.getClass() == right.getClass()", "cachedClass == dest.getClass()"}, limit = "1")
         static SequenceStorage doArrayBasedManagedManagedSameType(ArrayBasedSequenceStorage dest, ArrayBasedSequenceStorage left, ArrayBasedSequenceStorage right,
-                        @Bind("this") Node inliningTarget,
+                        @Bind Node inliningTarget,
                         @Cached("left.getClass()") Class<? extends ArrayBasedSequenceStorage> cachedClass,
                         @Shared @Cached SetLenNode setLenNode) {
             ArrayBasedSequenceStorage destProfiled = cachedClass.cast(dest);
@@ -2268,7 +2263,7 @@ public abstract class SequenceStorageNodes {
 
         @Specialization(guards = {"dest.getClass() == right.getClass()", "cachedClass == dest.getClass()"}, limit = "1")
         static SequenceStorage doArrayBasedEmptyManagedSameType(ArrayBasedSequenceStorage dest, @SuppressWarnings("unused") EmptySequenceStorage left, ArrayBasedSequenceStorage right,
-                        @Bind("this") Node inliningTarget,
+                        @Bind Node inliningTarget,
                         @Cached("dest.getClass()") Class<? extends ArrayBasedSequenceStorage> cachedClass,
                         @Shared @Cached SetLenNode setLenNode) {
             ArrayBasedSequenceStorage destProfiled = cachedClass.cast(dest);
@@ -2282,7 +2277,7 @@ public abstract class SequenceStorageNodes {
 
         @Specialization(guards = {"dest.getClass() == left.getClass()", "cachedClass == dest.getClass()"}, limit = "1")
         static SequenceStorage doArrayBasedManagedEmptySameType(ArrayBasedSequenceStorage dest, ArrayBasedSequenceStorage left, @SuppressWarnings("unused") EmptySequenceStorage right,
-                        @Bind("this") Node inliningTarget,
+                        @Bind Node inliningTarget,
                         @Cached("left.getClass()") Class<? extends ArrayBasedSequenceStorage> cachedClass,
                         @Shared @Cached SetLenNode setLenNode) {
             ArrayBasedSequenceStorage destProfiled = cachedClass.cast(dest);
@@ -2296,7 +2291,7 @@ public abstract class SequenceStorageNodes {
 
         @Specialization(guards = "dest == left")
         static SequenceStorage doGenericInplace(@SuppressWarnings("unused") SequenceStorage dest, SequenceStorage left, SequenceStorage right,
-                        @Bind("this") Node inliningTarget,
+                        @Bind Node inliningTarget,
                         @Exclusive @Cached GetItemScalarNode getItemRightNode,
                         @Exclusive @Cached InitializeItemScalarNode initializeItemNode,
                         @Exclusive @Cached SetLenNode setLenNode) {
@@ -2311,7 +2306,7 @@ public abstract class SequenceStorageNodes {
 
         @Specialization(guards = "dest != left")
         static SequenceStorage doGeneric(SequenceStorage dest, SequenceStorage left, SequenceStorage right,
-                        @Bind("this") Node inliningTarget,
+                        @Bind Node inliningTarget,
                         @Exclusive @Cached GetItemScalarNode getItemLeftNode,
                         @Exclusive @Cached GetItemScalarNode getItemRightNode,
                         @Exclusive @Cached InitializeItemScalarNode initializeItemNode,
@@ -2385,10 +2380,10 @@ public abstract class SequenceStorageNodes {
             }
         }
 
-        @Specialization(guards = {"hasStorage(seq)", "isBuiltinSequence(seq)"})
+        @Specialization(guards = {"isBuiltinSequence(seq)"})
         @SuppressWarnings("truffle-static-method")
         SequenceStorage doWithStorage(SequenceStorage left, PSequence seq, int len,
-                        @Bind("this") Node inliningTarget,
+                        @Bind Node inliningTarget,
                         @Cached GetSequenceStorageNode getStorageNode,
                         @Exclusive @Cached EnsureCapacityNode ensureCapacityNode,
                         @Cached ConcatBaseNode concatStoragesNode) {
@@ -2419,7 +2414,7 @@ public abstract class SequenceStorageNodes {
         @SuppressWarnings("truffle-static-method")
         @InliningCutoff
         SequenceStorage doWithoutStorage(VirtualFrame frame, SequenceStorage left, Object iterable, int len,
-                        @Bind("this") Node inliningTarget,
+                        @Bind Node inliningTarget,
                         @Cached PyObjectGetIter getIter,
                         @Exclusive @Cached EnsureCapacityNode ensureCapacityNode,
                         @Cached GetObjectSlotsNode getSlots,
@@ -2489,7 +2484,7 @@ public abstract class SequenceStorageNodes {
 
         @Specialization(guards = "times <= 0")
         static SequenceStorage doZeroRepeat(SequenceStorage s, @SuppressWarnings("unused") int times,
-                        @Bind("this") Node inliningTarget,
+                        @Bind Node inliningTarget,
                         @Exclusive @Cached CreateEmptyNode createEmptyNode) {
             return createEmptyNode.execute(inliningTarget, s, 0, -1);
         }
@@ -2497,7 +2492,7 @@ public abstract class SequenceStorageNodes {
         /* special but common case: something like '[False] * n' */
         @Specialization(guards = {"s.length() == 1", "times > 0"})
         BoolSequenceStorage doBoolSingleElement(BoolSequenceStorage s, int times,
-                        @Bind("this") Node inliningTarget,
+                        @Bind Node inliningTarget,
                         @Shared @Cached PRaiseNode raiseNode) {
             try {
                 boolean[] repeated = new boolean[PythonUtils.multiplyExact(s.length(), times)];
@@ -2513,7 +2508,7 @@ public abstract class SequenceStorageNodes {
         /* special but common case: something like '["\x00"] * n' */
         @Specialization(guards = {"s.length() == 1", "times > 0"})
         ByteSequenceStorage doByteSingleElement(ByteSequenceStorage s, int times,
-                        @Bind("this") Node inliningTarget,
+                        @Bind Node inliningTarget,
                         @Shared @Cached PRaiseNode raiseNode) {
             try {
                 byte[] repeated = new byte[PythonUtils.multiplyExact(s.length(), times)];
@@ -2529,7 +2524,7 @@ public abstract class SequenceStorageNodes {
         /* special but common case: something like '[0] * n' */
         @Specialization(guards = {"s.length() == 1", "times > 0"})
         IntSequenceStorage doIntSingleElement(IntSequenceStorage s, int times,
-                        @Bind("this") Node inliningTarget,
+                        @Bind Node inliningTarget,
                         @Shared @Cached PRaiseNode raiseNode) {
             try {
                 int[] repeated = new int[PythonUtils.multiplyExact(s.length(), times)];
@@ -2545,7 +2540,7 @@ public abstract class SequenceStorageNodes {
         /* special but common case: something like '[0L] * n' */
         @Specialization(guards = {"s.length() == 1", "times > 0"})
         LongSequenceStorage doLongSingleElement(LongSequenceStorage s, int times,
-                        @Bind("this") Node inliningTarget,
+                        @Bind Node inliningTarget,
                         @Shared @Cached PRaiseNode raiseNode) {
             try {
                 long[] repeated = new long[PythonUtils.multiplyExact(s.length(), times)];
@@ -2561,7 +2556,7 @@ public abstract class SequenceStorageNodes {
         /* special but common case: something like '[0.0] * n' */
         @Specialization(guards = {"s.length() == 1", "times > 0"})
         DoubleSequenceStorage doDoubleSingleElement(DoubleSequenceStorage s, int times,
-                        @Bind("this") Node inliningTarget,
+                        @Bind Node inliningTarget,
                         @Shared @Cached PRaiseNode raiseNode) {
             try {
                 double[] repeated = new double[PythonUtils.multiplyExact(s.length(), times)];
@@ -2577,7 +2572,7 @@ public abstract class SequenceStorageNodes {
         /* special but common case: something like '[None] * n' */
         @Specialization(guards = {"s.length() == 1", "times > 0"})
         ObjectSequenceStorage doObjectSingleElement(ObjectSequenceStorage s, int times,
-                        @Bind("this") Node inliningTarget,
+                        @Bind Node inliningTarget,
                         @Shared @Cached PRaiseNode raiseNode) {
             try {
                 Object[] repeated = new Object[PythonUtils.multiplyExact(s.length(), times)];
@@ -2592,7 +2587,7 @@ public abstract class SequenceStorageNodes {
 
         @Specialization(limit = "MAX_BASIC_STORAGES", guards = {"times > 0", "!isNative(s)", "s.getClass() == cachedClass"})
         SequenceStorage doArrayBasedManaged(ArrayBasedSequenceStorage s, int times,
-                        @Bind("this") Node inliningTarget,
+                        @Bind Node inliningTarget,
                         @Shared @Cached PRaiseNode raiseNode,
                         @Cached("s.getClass()") Class<? extends ArrayBasedSequenceStorage> cachedClass) {
             try {
@@ -2615,8 +2610,8 @@ public abstract class SequenceStorageNodes {
         @Specialization(replaces = "doArrayBasedManaged", guards = "times > 0")
         @SuppressWarnings("truffle-static-method")
         SequenceStorage doGeneric(SequenceStorage s, int times,
-                        @Bind("this") Node inliningTarget,
-                        @Shared @Cached PRaiseNode raiseNode,
+                        @Bind Node inliningTarget,
+                        @Exclusive @Cached PRaiseNode raiseNode,
                         @Exclusive @Cached CreateEmptyNode createEmptyNode,
                         @Cached GetItemScalarNode getItemNode,
                         @Cached SetItemScalarNode setItemNode,
@@ -2746,7 +2741,7 @@ public abstract class SequenceStorageNodes {
      * Does not allow any generalization but compatible types.
      */
     @GenerateUncached
-    @SuppressWarnings("truffle-inlining")       // footprint reduction 36 -> 17
+    @GenerateInline(false)       // footprint reduction 36 -> 17
     public abstract static class NoGeneralizationNode extends GeneralizationNode {
 
         public static final GenNodeSupplier DEFAULT = new GenNodeSupplier() {
@@ -2764,7 +2759,7 @@ public abstract class SequenceStorageNodes {
 
         @Specialization
         protected SequenceStorage doGeneric(SequenceStorage s, Object indicationVal,
-                        @Bind("this") Node inliningTarget,
+                        @Bind Node inliningTarget,
                         @Cached IsAssignCompatibleNode isAssignCompatibleNode,
                         @Cached GetElementType getElementType,
                         @Cached InlinedExactClassProfile valTypeProfile,
@@ -3218,7 +3213,7 @@ public abstract class SequenceStorageNodes {
 
             @Specialization
             static void doNativeByte(NativeByteSequenceStorage s, int cap,
-                            @Bind("this") Node inliningTarget,
+                            @Bind Node inliningTarget,
                             @Shared @CachedLibrary(limit = "2") InteropLibrary lib,
                             @Shared @Cached CStructAccess.AllocateNode alloc,
                             @Shared @Cached CStructAccess.FreeNode free,
@@ -3245,7 +3240,7 @@ public abstract class SequenceStorageNodes {
 
             @Specialization
             static void doNativeObject(NativeObjectSequenceStorage s, int cap,
-                            @Bind("this") Node inliningTarget,
+                            @Bind Node inliningTarget,
                             @Shared @CachedLibrary(limit = "2") InteropLibrary lib,
                             @Shared @Cached CStructAccess.AllocateNode alloc,
                             @Shared @Cached CStructAccess.FreeNode free,
@@ -3487,7 +3482,7 @@ public abstract class SequenceStorageNodes {
         @Specialization(guards = "len < s.length()")
         @InliningCutoff
         static void doShrink(NativeObjectSequenceStorage s, int len,
-                        @Bind("this") Node inliningTarget,
+                        @Bind Node inliningTarget,
                         @Cached CStructAccess.ReadPointerNode readNode,
                         @Cached CStructAccess.WritePointerNode writeNode,
                         @Cached CExtNodes.XDecRefPointerNode decRefPointerNode) {
@@ -3522,14 +3517,14 @@ public abstract class SequenceStorageNodes {
 
         @Specialization
         protected void doScalarInt(SequenceStorage storage, int idx,
-                        @Bind("this") Node inliningTarget,
+                        @Bind Node inliningTarget,
                         @Shared @Cached DeleteItemNode deleteItemNode) {
             deleteItemNode.execute(inliningTarget, storage, normalizeIndex(idx, storage));
         }
 
         @Specialization
         protected void doScalarLong(VirtualFrame frame, SequenceStorage storage, long idx,
-                        @Bind("this") Node inliningTarget,
+                        @Bind Node inliningTarget,
                         @Shared @Cached DeleteItemNode deleteItemNode,
                         @Shared @Cached PyNumberAsSizeNode asSizeNode) {
             deleteItemNode.execute(inliningTarget, storage, normalizeIndex(frame, inliningTarget, asSizeNode, idx, storage));
@@ -3537,7 +3532,7 @@ public abstract class SequenceStorageNodes {
 
         @Specialization
         protected void doScalarPInt(VirtualFrame frame, SequenceStorage storage, PInt idx,
-                        @Bind("this") Node inliningTarget,
+                        @Bind Node inliningTarget,
                         @Shared @Cached DeleteItemNode deleteItemNode,
                         @Shared @Cached PyNumberAsSizeNode asSizeNode) {
             deleteItemNode.execute(inliningTarget, storage, normalizeIndex(frame, inliningTarget, asSizeNode, idx, storage));
@@ -3545,7 +3540,7 @@ public abstract class SequenceStorageNodes {
 
         @Specialization(guards = "!isPSlice(idx)")
         protected void doScalarGeneric(VirtualFrame frame, SequenceStorage storage, Object idx,
-                        @Bind("this") Node inliningTarget,
+                        @Bind Node inliningTarget,
                         @Shared @Cached DeleteItemNode deleteItemNode,
                         @Shared @Cached PyNumberAsSizeNode asSizeNode) {
             deleteItemNode.execute(inliningTarget, storage, normalizeIndex(frame, inliningTarget, asSizeNode, idx, storage));
@@ -3553,7 +3548,7 @@ public abstract class SequenceStorageNodes {
 
         @Specialization
         protected static void doSlice(SequenceStorage storage, PSlice slice,
-                        @Bind("this") Node inliningTarget,
+                        @Bind Node inliningTarget,
                         @Cached CoerceToIntSlice sliceCast,
                         @Cached SliceNodes.SliceUnpack unpack,
                         @Cached SliceNodes.AdjustIndices adjustIndices,
@@ -4524,7 +4519,7 @@ public abstract class SequenceStorageNodes {
 
             @Specialization(guards = {"isBuiltinIterator(getClassNode, inliningTarget, it)", "storage != null"}, limit = "3")
             public static SequenceStorage createBuiltinFastPath(PBuiltinIterator it, @SuppressWarnings("unused") int len,
-                            @Bind("this") Node inliningTarget,
+                            @Bind Node inliningTarget,
                             @SuppressWarnings("unused") @Exclusive @Cached GetClassNode getClassNode,
                             @SuppressWarnings("unused") @Cached GetInternalIteratorSequenceStorage getIterSeqStorageNode,
                             @Bind("getSequenceStorage(inliningTarget, getIterSeqStorageNode, it)") SequenceStorage storage,
@@ -4535,7 +4530,7 @@ public abstract class SequenceStorageNodes {
 
             @Specialization(replaces = "createBuiltinFastPath", guards = {"isBuiltinIterator(getClassNode, inliningTarget, iterator)", "len < 0"}, limit = "3")
             public SequenceStorage createBuiltinUnknownLen(VirtualFrame frame, PBuiltinIterator iterator, @SuppressWarnings("unused") int len,
-                            @Bind("this") Node inliningTarget,
+                            @Bind Node inliningTarget,
                             @SuppressWarnings("unused") @Exclusive @Cached GetClassNode getClassNode,
                             @Cached BuiltinIteratorLengthHint lengthHint,
                             @Exclusive @Cached InlinedLoopConditionProfile loopProfile,
@@ -4553,7 +4548,7 @@ public abstract class SequenceStorageNodes {
 
             @Specialization(replaces = "createBuiltinFastPath", guards = {"isBuiltinIterator(getClassNode, inliningTarget, iterator)", "len >= 0"}, limit = "3")
             public SequenceStorage createBuiltinKnownLen(VirtualFrame frame, PBuiltinIterator iterator, int len,
-                            @Bind("this") Node inliningTarget,
+                            @Bind Node inliningTarget,
                             @SuppressWarnings("unused") @Exclusive @Cached GetClassNode getClassNode,
                             @Exclusive @Cached InlinedLoopConditionProfile loopProfile,
                             @Exclusive @Cached IsBuiltinObjectProfile errorProfile,
@@ -4566,7 +4561,7 @@ public abstract class SequenceStorageNodes {
 
             @Specialization(guards = {"!isBuiltinIterator(getClassNode, inliningTarget, iterator)", "len < 0"})
             public SequenceStorage createGenericUnknownLen(VirtualFrame frame, Object iterator, @SuppressWarnings("unused") int len,
-                            @Bind("this") Node inliningTarget,
+                            @Bind Node inliningTarget,
                             @SuppressWarnings("unused") @Shared @Cached GetClassNode getClassNode,
                             @Shared("arrayGrowProfile") @Cached InlinedCountingConditionProfile arrayGrowProfile,
                             @Shared @Cached GetElementType getElementType,
@@ -4577,7 +4572,7 @@ public abstract class SequenceStorageNodes {
 
             @Specialization(guards = {"!isBuiltinIterator(getClassNode, inliningTarget, iterator)", "len >= 0"})
             public SequenceStorage createGenericKnownLen(VirtualFrame frame, Object iterator, int len,
-                            @Bind("this") Node inliningTarget,
+                            @Bind Node inliningTarget,
                             @SuppressWarnings("unused") @Shared @Cached GetClassNode getClassNode,
                             @Shared("arrayGrowProfile") @Cached InlinedCountingConditionProfile arrayGrowProfile,
                             @Shared @Cached GetElementType getElementType,

@@ -55,6 +55,7 @@ import com.oracle.graal.python.nodes.bytecode_dsl.BytecodeDSLFrameInfo;
 import com.oracle.graal.python.nodes.bytecode_dsl.PBytecodeDSLRootNode;
 import com.oracle.graal.python.runtime.PythonOptions;
 import com.oracle.graal.python.runtime.object.PFactory;
+import com.oracle.truffle.api.CompilerDirectives.TruffleBoundary;
 import com.oracle.truffle.api.bytecode.BytecodeNode;
 import com.oracle.truffle.api.dsl.Bind;
 import com.oracle.truffle.api.dsl.Cached;
@@ -116,14 +117,14 @@ public abstract class GetFrameLocalsNode extends Node {
     }
 
     @GenerateUncached
-    @SuppressWarnings("truffle-inlining")       // footprint reduction 104 -> 86
+    @GenerateInline(false)       // footprint reduction 104 -> 86
     abstract static class CopyLocalsToDict extends Node {
         abstract void execute(MaterializedFrame locals, PDict dict);
 
         @Specialization(guards = {"cachedFd == locals.getFrameDescriptor()", "count < 32"}, limit = "1")
         @ExplodeLoop
         void doCachedFd(MaterializedFrame locals, PDict dict,
-                        @Bind("this") Node inliningTarget,
+                        @Bind Node inliningTarget,
                         @SuppressWarnings("unused") @Cached("locals.getFrameDescriptor()") FrameDescriptor cachedFd,
                         @Bind("getInfo(cachedFd)") FrameInfo info,
                         @Bind("info.getVariableCount()") int count,
@@ -147,7 +148,7 @@ public abstract class GetFrameLocalsNode extends Node {
 
         @Specialization(replaces = "doCachedFd")
         void doGeneric(MaterializedFrame locals, PDict dict,
-                        @Bind("this") Node inliningTarget,
+                        @Bind Node inliningTarget,
                         @Shared("setItem") @Cached HashingStorageSetItem setItem,
                         @Shared("delItem") @Cached HashingStorageDelItem delItem) {
             FrameInfo info = getInfo(locals.getFrameDescriptor());
@@ -206,7 +207,7 @@ public abstract class GetFrameLocalsNode extends Node {
             BytecodeNode bytecodeNode = bytecodeDSLRootNode.getBytecodeNode();
             for (int i = 0; i < namesArray.length; i++) {
                 TruffleString varname = namesArray[i];
-                Object value = PyDictGetItem.executeUncached(localsDict, varname);
+                Object value = getDictItemUncached(localsDict, varname);
                 if (deref) {
                     PCell cell = (PCell) bytecodeNode.getLocalValue(0, localFrame, offset + i);
                     cell.setRef(value);
@@ -217,7 +218,7 @@ public abstract class GetFrameLocalsNode extends Node {
         } else {
             for (int i = 0; i < namesArray.length; i++) {
                 TruffleString varname = namesArray[i];
-                Object value = PyDictGetItem.executeUncached(localsDict, varname);
+                Object value = getDictItemUncached(localsDict, varname);
                 if (deref) {
                     PCell cell = (PCell) localFrame.getObject(offset + i);
                     cell.setRef(value);
@@ -226,6 +227,11 @@ public abstract class GetFrameLocalsNode extends Node {
                 }
             }
         }
+    }
+
+    @TruffleBoundary
+    private static Object getDictItemUncached(PDict localsDict, TruffleString varname) {
+        return PyDictGetItem.executeUncached(localsDict, varname);
     }
 
     @NeverDefault

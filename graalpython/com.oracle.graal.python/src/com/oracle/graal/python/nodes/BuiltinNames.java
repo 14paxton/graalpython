@@ -302,6 +302,8 @@ public abstract class BuiltinNames {
 
     public static final String J_MAP = "map";
 
+    public static final String J_FILTER = "filter";
+
     public static final String J_REVERSED = "reversed";
 
     public static final TruffleString T___IMPORT__ = tsLiteral("__import__");
@@ -470,6 +472,12 @@ public abstract class BuiltinNames {
 
     public static final String J_HASHLIB = "_hashlib";
     public static final TruffleString T_HASHLIB = tsLiteral(J_HASHLIB);
+
+    public static final String J_MD5 = "_md5";
+
+    public static final String J_SHA1 = "_sha1";
+
+    public static final String J_SHA2 = "_sha2";
 
     public static final String J_SHA3 = "_sha3";
     public static final TruffleString T_SHA3 = tsLiteral(J_SHA3);

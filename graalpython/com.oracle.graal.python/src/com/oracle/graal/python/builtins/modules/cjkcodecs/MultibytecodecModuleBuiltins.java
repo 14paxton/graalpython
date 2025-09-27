@@ -51,7 +51,7 @@ import java.nio.charset.Charset;
 import java.util.List;
 
 import com.oracle.graal.python.PythonLanguage;
-import com.oracle.graal.python.builtins.Builtin;
+import com.oracle.graal.python.annotations.Builtin;
 import com.oracle.graal.python.builtins.CoreFunctions;
 import com.oracle.graal.python.builtins.Python3Core;
 import com.oracle.graal.python.builtins.PythonBuiltins;
@@ -126,7 +126,7 @@ public final class MultibytecodecModuleBuiltins extends PythonBuiltins {
 
         @Specialization
         static Object createCodec(PyCapsule arg,
-                        @Bind("this") Node inliningTarget,
+                        @Bind Node inliningTarget,
                         @Cached PRaiseNode raiseNode) {
             return createCodec(inliningTarget, arg, raiseNode);
         }
@@ -144,7 +144,7 @@ public final class MultibytecodecModuleBuiltins extends PythonBuiltins {
 
         @Fallback
         static Object createCodec(@SuppressWarnings("unused") VirtualFrame frame, @SuppressWarnings("unused") Object arg,
-                        @Bind("this") Node inliningTarget) {
+                        @Bind Node inliningTarget) {
             throw PRaiseNode.raiseStatic(inliningTarget, ValueError, ARGUMENT_TYPE_INVALID);
         }
 

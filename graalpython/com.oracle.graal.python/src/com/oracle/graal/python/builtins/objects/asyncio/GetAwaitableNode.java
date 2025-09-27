@@ -54,6 +54,7 @@ import com.oracle.truffle.api.dsl.Bind;
 import com.oracle.truffle.api.dsl.Cached;
 import com.oracle.truffle.api.dsl.Cached.Exclusive;
 import com.oracle.truffle.api.dsl.Fallback;
+import com.oracle.truffle.api.dsl.GenerateInline;
 import com.oracle.truffle.api.dsl.GenerateUncached;
 import com.oracle.truffle.api.dsl.NeverDefault;
 import com.oracle.truffle.api.dsl.Specialization;
@@ -61,14 +62,14 @@ import com.oracle.truffle.api.frame.VirtualFrame;
 import com.oracle.truffle.api.nodes.Node;
 
 @GenerateUncached
-@OperationProxy.Proxyable
-@SuppressWarnings("truffle-inlining")
+@OperationProxy.Proxyable(storeBytecodeIndex = true)
+@GenerateInline(false)
 public abstract class GetAwaitableNode extends Node {
     public abstract Object execute(VirtualFrame frame, Object arg);
 
     @Specialization
     public static Object doGenerator(PGenerator generator,
-                    @Bind("this") Node inliningTarget,
+                    @Bind Node inliningTarget,
                     @Exclusive @Cached PRaiseNode raise,
                     @Exclusive @Cached PRaiseNode raiseReusedCoro) {
         if (generator.isCoroutine()) {
@@ -84,7 +85,7 @@ public abstract class GetAwaitableNode extends Node {
 
     @Fallback
     public static Object doGeneric(VirtualFrame frame, Object awaitable,
-                    @Bind("this") Node inliningTarget,
+                    @Bind Node inliningTarget,
                     @Exclusive @Cached PRaiseNode raiseNoAwait,
                     @Exclusive @Cached PRaiseNode raiseNotIter,
                     @Cached GetCachedTpSlotsNode getSlots,

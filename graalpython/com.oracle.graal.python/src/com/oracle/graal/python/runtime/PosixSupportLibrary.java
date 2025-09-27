@@ -264,8 +264,6 @@ public abstract class PosixSupportLibrary extends Library {
 
     public abstract long[] waitpid(Object receiver, long pid, int options) throws PosixException;
 
-    public abstract void abort(Object receiver);
-
     public abstract boolean wcoredump(Object receiver, int status);
 
     public abstract boolean wifcontinued(Object receiver, int status);
@@ -1021,7 +1019,7 @@ public abstract class PosixSupportLibrary extends Library {
             msg = message;
         }
 
-        public final TruffleString getMessageAsTruffleString() {
+        public TruffleString getMessageAsTruffleString() {
             return msg;
         }
 
@@ -1036,7 +1034,7 @@ public abstract class PosixSupportLibrary extends Library {
 
         @SuppressWarnings("sync-override")
         @Override
-        public final Throwable fillInStackTrace() {
+        public Throwable fillInStackTrace() {
             return this;
         }
     }

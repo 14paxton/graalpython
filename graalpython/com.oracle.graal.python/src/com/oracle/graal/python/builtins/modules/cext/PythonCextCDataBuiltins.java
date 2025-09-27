@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2024, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2024, 2025, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * The Universal Permissive License (UPL), Version 1.0
@@ -61,10 +61,10 @@ import com.oracle.truffle.api.nodes.Node;
 
 public final class PythonCextCDataBuiltins {
     @CApiBuiltin(ret = Int, args = {PyObject, PY_BUFFER_PTR, Int}, call = Ignored)
-    abstract static class PyTruffleCData_NewGetBuffer extends CApiTernaryBuiltinNode {
+    abstract static class GraalPyPrivate_CData_NewGetBuffer extends CApiTernaryBuiltinNode {
         @Specialization
         static int getBuffer(CDataObject self, Object view, int flags,
-                        @Bind("this") Node inliningTarget,
+                        @Bind Node inliningTarget,
                         @CachedLibrary(limit = "1") InteropLibrary lib,
                         @Cached CtypesNodes.CDataGetBufferNode getBufferNode) {
             if (lib.isNull(view)) {
@@ -76,10 +76,10 @@ public final class PythonCextCDataBuiltins {
     }
 
     @CApiBuiltin(ret = ArgDescriptor.Void, args = {PyObject, PY_BUFFER_PTR}, call = Ignored)
-    abstract static class PyTruffleCData_ReleaseBuffer extends CApiBinaryBuiltinNode {
+    abstract static class GraalPyPrivate_CData_ReleaseBuffer extends CApiBinaryBuiltinNode {
         @Specialization
         static Object releaseBuffer(@SuppressWarnings("unused") CDataObject self, Object view,
-                        @Bind("this") Node inliningTarget,
+                        @Bind Node inliningTarget,
                         @Cached CtypesNodes.CDataReleaseBufferNode releaseBufferNode) {
             releaseBufferNode.execute(inliningTarget, view);
             return PNone.NO_VALUE;

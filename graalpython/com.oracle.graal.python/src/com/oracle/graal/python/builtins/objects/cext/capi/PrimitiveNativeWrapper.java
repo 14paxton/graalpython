@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2018, 2024, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2018, 2025, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * The Universal Permissive License (UPL), Version 1.0
@@ -231,7 +231,7 @@ public final class PrimitiveNativeWrapper extends PythonAbstractObjectNativeWrap
 
         @Specialization(guards = {"obj.isBool()", "!obj.isNative()"})
         static long doBoolNotNative(PrimitiveNativeWrapper obj,
-                        @Bind("this") Node inliningTarget,
+                        @Bind Node inliningTarget,
                         @Cached MaterializeDelegateNode materializeNode) {
             // special case for True and False singletons
             PInt boxed = (PInt) materializeNode.execute(inliningTarget, obj);
@@ -252,19 +252,11 @@ public final class PrimitiveNativeWrapper extends PythonAbstractObjectNativeWrap
 
     @ExportMessage
     void toNative(
-                    @Bind("$node") Node inliningTarget,
+                    @Bind Node inliningTarget,
                     @Cached CApiTransitions.FirstToNativeNode firstToNativeNode) {
         if (!isNative()) {
-            if (isBool()) {
-                assert (PythonContext.get(inliningTarget).getCApiContext().getCachedBooleanPrimitiveNativeWrapper(value != 0) == this);
-                setNativePointer(firstToNativeNode.execute(inliningTarget, this, true /* immortal */));
-                return;
-            }
-            // small int values are cached and will be immortal
-            boolean immortal = isIntLike() && CApiGuards.isSmallLong(value);
-            // if this wrapper wraps a small int value, this wrapper is one of the cached primitive
-            // native wrappers
-            assert !immortal || (PythonContext.get(inliningTarget).getCApiContext().getCachedPrimitiveNativeWrapper(value) == this);
+            boolean immortal = isBool();
+            assert !isBool() || (PythonContext.get(inliningTarget).getCApiContext().getCachedBooleanPrimitiveNativeWrapper(value != 0) == this);
             setNativePointer(firstToNativeNode.execute(inliningTarget, this, immortal));
         }
     }

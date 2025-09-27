@@ -55,7 +55,7 @@ import com.oracle.graal.python.annotations.ArgumentClinic;
 import com.oracle.graal.python.annotations.Slot;
 import com.oracle.graal.python.annotations.Slot.SlotKind;
 import com.oracle.graal.python.annotations.Slot.SlotSignature;
-import com.oracle.graal.python.builtins.Builtin;
+import com.oracle.graal.python.annotations.Builtin;
 import com.oracle.graal.python.builtins.CoreFunctions;
 import com.oracle.graal.python.builtins.PythonBuiltinClassType;
 import com.oracle.graal.python.builtins.PythonBuiltins;
@@ -116,7 +116,7 @@ public final class TupleGetterBuiltins extends PythonBuiltins {
     public abstract static class ReduceNode extends PythonUnaryBuiltinNode {
         @Specialization
         static Object reduce(PTupleGetter self,
-                        @Bind("this") Node inliningTarget,
+                        @Bind Node inliningTarget,
                         @Cached GetClassNode getClassNode,
                         @Bind PythonLanguage language) {
             PTuple args = PFactory.createTuple(language, new Object[]{self.getIndex(), self.getDoc()});
@@ -129,7 +129,7 @@ public final class TupleGetterBuiltins extends PythonBuiltins {
     abstract static class TupleGetterGetNode extends DescrGetBuiltinNode {
         @Specialization()
         static Object getTuple(VirtualFrame frame, PTupleGetter self, PTuple instance, @SuppressWarnings("unused") Object owner,
-                        @Bind("this") Node inliningTarget,
+                        @Bind Node inliningTarget,
                         @Cached PyObjectSizeNode sizeNode,
                         @Cached TupleBuiltins.GetItemNode getItemNode,
                         @Cached PRaiseNode raiseNode) {
@@ -148,7 +148,7 @@ public final class TupleGetterBuiltins extends PythonBuiltins {
         @Fallback
         @InliningCutoff
         static Object getOthers(@SuppressWarnings("unused") VirtualFrame frame, Object self, Object instance, @SuppressWarnings("unused") Object owner,
-                        @Bind("this") Node inliningTarget) {
+                        @Bind Node inliningTarget) {
             final int index = ((PTupleGetter) self).getIndex();
             throw PRaiseNode.raiseStatic(inliningTarget, PythonBuiltinClassType.TypeError, DESC_FOR_INDEX_S_FOR_S_DOESNT_APPLY_TO_P,
                             index, "tuple subclasses", instance);

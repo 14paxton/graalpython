@@ -57,10 +57,10 @@ import java.util.List;
 
 import com.oracle.graal.python.PythonLanguage;
 import com.oracle.graal.python.annotations.ArgumentClinic;
+import com.oracle.graal.python.annotations.Builtin;
 import com.oracle.graal.python.annotations.Slot;
 import com.oracle.graal.python.annotations.Slot.SlotKind;
 import com.oracle.graal.python.annotations.Slot.SlotSignature;
-import com.oracle.graal.python.builtins.Builtin;
 import com.oracle.graal.python.builtins.CoreFunctions;
 import com.oracle.graal.python.builtins.PythonBuiltinClassType;
 import com.oracle.graal.python.builtins.PythonBuiltins;
@@ -72,7 +72,8 @@ import com.oracle.graal.python.builtins.objects.array.ArrayNodes.GetValueNode;
 import com.oracle.graal.python.builtins.objects.buffer.PythonBufferAccessLibrary;
 import com.oracle.graal.python.builtins.objects.bytes.PBytes;
 import com.oracle.graal.python.builtins.objects.bytes.PBytesLike;
-import com.oracle.graal.python.builtins.objects.common.IndexNodes.NormalizeIndexNode;
+import com.oracle.graal.python.builtins.objects.common.IndexNodes.NormalizeIndexWithBoundsCheckNode;
+import com.oracle.graal.python.builtins.objects.common.IndexNodes.NormalizeIndexWithoutBoundsCheckNode;
 import com.oracle.graal.python.builtins.objects.common.SequenceNodes;
 import com.oracle.graal.python.builtins.objects.common.SequenceStorageNodes;
 import com.oracle.graal.python.builtins.objects.function.PKeyword;
@@ -81,7 +82,7 @@ import com.oracle.graal.python.builtins.objects.module.PythonModule;
 import com.oracle.graal.python.builtins.objects.range.PIntRange;
 import com.oracle.graal.python.builtins.objects.slice.PSlice;
 import com.oracle.graal.python.builtins.objects.slice.SliceNodes;
-import com.oracle.graal.python.builtins.objects.str.StringNodes.CastToTruffleStringCheckedNode;
+import com.oracle.graal.python.builtins.objects.str.StringNodes.CastToTruffleStringChecked1Node;
 import com.oracle.graal.python.builtins.objects.tuple.PTuple;
 import com.oracle.graal.python.builtins.objects.type.TpSlots;
 import com.oracle.graal.python.builtins.objects.type.TypeNodes;
@@ -182,10 +183,10 @@ public final class ArrayBuiltins extends PythonBuiltins {
 
         @Specialization(guards = "args.length == 1 || args.length == 2")
         static Object array2(VirtualFrame frame, Object cls, Object[] args, PKeyword[] kwargs,
-                        @Bind("this") Node inliningTarget,
+                        @Bind Node inliningTarget,
                         @Cached InlinedConditionProfile hasInitializerProfile,
                         @Cached IsBuiltinClassExactProfile isNotSubtypeProfile,
-                        @Cached CastToTruffleStringCheckedNode cast,
+                        @Cached CastToTruffleStringChecked1Node cast,
                         @Cached ArrayNodeInternal arrayNodeInternal,
                         @Cached PRaiseNode raise) {
             if (isNotSubtypeProfile.profileClass(inliningTarget, cls, PythonBuiltinClassType.PArray)) {
@@ -371,8 +372,8 @@ public final class ArrayBuiltins extends PythonBuiltins {
 
                 @Specialization
                 static BufferFormat get(Node inliningTarget, TruffleString typeCode,
-                                @Cached(inline = false) TruffleString.CodePointLengthNode lengthNode,
-                                @Cached(inline = false) TruffleString.CodePointAtIndexNode atIndexNode,
+                                @Cached TruffleString.CodePointLengthNode lengthNode,
+                                @Cached TruffleString.CodePointAtIndexNode atIndexNode,
                                 @Cached PRaiseNode raise,
                                 @Cached(value = "createIdentityProfile()", inline = false) ValueProfile valueProfile) {
                     if (lengthNode.execute(typeCode, TS_ENCODING) != 1) {
@@ -411,13 +412,13 @@ public final class ArrayBuiltins extends PythonBuiltins {
         @Specialization(guards = "left.getFormat() != right.getFormat()")
         @SuppressWarnings("unused")
         static Object error(PArray left, PArray right,
-                        @Bind("this") Node inliningTarget) {
+                        @Bind Node inliningTarget) {
             throw PRaiseNode.raiseStatic(inliningTarget, TypeError, BAD_ARG_TYPE_FOR_BUILTIN_OP);
         }
 
         @Fallback
         static Object error(@SuppressWarnings("unused") Object left, Object right,
-                        @Bind("this") Node inliningTarget) {
+                        @Bind Node inliningTarget) {
             throw PRaiseNode.raiseStatic(inliningTarget, TypeError, ErrorMessages.CAN_ONLY_APPEND_ARRAY_TO_ARRAY, right);
         }
     }
@@ -434,7 +435,7 @@ public final class ArrayBuiltins extends PythonBuiltins {
 
         @Fallback
         static Object error(@SuppressWarnings("unused") Object left, Object right,
-                        @Bind("this") Node inliningTarget) {
+                        @Bind Node inliningTarget) {
             throw PRaiseNode.raiseStatic(inliningTarget, TypeError, ErrorMessages.CAN_ONLY_EXTEND_ARRAY_WITH_ARRAY, right);
         }
     }
@@ -444,7 +445,7 @@ public final class ArrayBuiltins extends PythonBuiltins {
     abstract static class MulNode extends SqRepeatBuiltinNode {
         @Specialization(guards = "self.getLength() > 0")
         static PArray concat(PArray self, int valueIn,
-                        @Bind("this") Node inliningTarget,
+                        @Bind Node inliningTarget,
                         @CachedLibrary(limit = "2") PythonBufferAccessLibrary bufferLib,
                         @Cached InlinedBranchProfile negativeSize,
                         @Cached InlinedLoopConditionProfile loopProfile,
@@ -480,7 +481,7 @@ public final class ArrayBuiltins extends PythonBuiltins {
     abstract static class IMulNode extends SqRepeatBuiltinNode {
         @Specialization
         static Object concat(PArray self, int value,
-                        @Bind("this") Node inliningTarget,
+                        @Bind Node inliningTarget,
                         @CachedLibrary(limit = "2") PythonBufferAccessLibrary bufferLib,
                         @Cached ArrayNodes.EnsureCapacityNode ensureCapacityNode,
                         @Cached ArrayNodes.SetLengthNode setLengthNode,
@@ -553,7 +554,7 @@ public final class ArrayBuiltins extends PythonBuiltins {
         // would return false on CPython, and so we do the same. This is tested in CPython tests.
         @Specialization(guards = {"isFloatingPoint(left.getFormat())", "left.getFormat() == right.getFormat()"})
         static boolean cmpDoubles(VirtualFrame frame, PArray left, PArray right, RichCmpOp op,
-                        @Bind("$node") Node inliningTarget,
+                        @Bind Node inliningTarget,
                         @Exclusive @Cached InlinedBranchProfile fullCmpProfile,
                         @Exclusive @Cached ArrayNodes.GetValueNode getLeft,
                         @Exclusive @Cached ArrayNodes.GetValueNode getRight,
@@ -587,7 +588,7 @@ public final class ArrayBuiltins extends PythonBuiltins {
         @Specialization(guards = "!isArray(left)")
         @SuppressWarnings("unused")
         static Object error(Object left, Object right, RichCmpOp op,
-                        @Bind("this") Node inliningTarget) {
+                        @Bind Node inliningTarget) {
             throw PRaiseNode.raiseStatic(inliningTarget, PythonErrorType.TypeError, ErrorMessages.DESCRIPTOR_S_REQUIRES_S_OBJ_RECEIVED_P, op.getPythonName(), J_ARRAY + "." + J_ARRAY, left);
         }
     }
@@ -597,7 +598,7 @@ public final class ArrayBuiltins extends PythonBuiltins {
     abstract static class ContainsNode extends SqContainsBuiltinNode {
         @Specialization
         static boolean contains(VirtualFrame frame, PArray self, Object value,
-                        @Bind("this") Node inliningTarget,
+                        @Bind Node inliningTarget,
                         @Cached PyObjectRichCompareBool eqNode,
                         @Cached ArrayNodes.GetValueNode getValueNode) {
             for (int i = 0; i < self.getLength(); i++) {
@@ -614,7 +615,7 @@ public final class ArrayBuiltins extends PythonBuiltins {
     abstract static class ReprNode extends PythonUnaryBuiltinNode {
         @Specialization
         static TruffleString repr(VirtualFrame frame, PArray self,
-                        @Bind("this") Node inliningTarget,
+                        @Bind Node inliningTarget,
                         @Cached PyObjectReprAsTruffleStringNode repr,
                         @Cached InlinedConditionProfile isEmptyProfile,
                         @Cached InlinedConditionProfile isUnicodeProfile,
@@ -657,7 +658,7 @@ public final class ArrayBuiltins extends PythonBuiltins {
     abstract static class SqItemNode extends SqItemBuiltinNode {
         @Specialization
         static Object doIt(PArray self, int index,
-                        @Bind("this") Node inliningTarget,
+                        @Bind Node inliningTarget,
                         @Cached PRaiseNode raiseNode,
                         @Cached ArrayNodes.GetValueNode getValueNode) {
             return getItem(inliningTarget, self, index, raiseNode, getValueNode);
@@ -674,7 +675,7 @@ public final class ArrayBuiltins extends PythonBuiltins {
     abstract static class MpSubscriptNode extends MpSubscriptBuiltinNode {
         @Specialization(guards = "!isPSlice(idx)")
         static Object doIndex(VirtualFrame frame, PArray self, Object idx,
-                        @Bind("this") Node inliningTarget,
+                        @Bind Node inliningTarget,
                         @Cached PyIndexCheckNode indexCheckNode,
                         @Cached PRaiseNode raiseNode,
                         @Cached PyNumberAsSizeNode numberAsSizeNode,
@@ -692,7 +693,7 @@ public final class ArrayBuiltins extends PythonBuiltins {
 
         @Specialization
         static Object doSlice(PArray self, PSlice slice,
-                        @Bind("this") Node inliningTarget,
+                        @Bind Node inliningTarget,
                         @CachedLibrary(limit = "2") PythonBufferAccessLibrary bufferLib,
                         @Cached InlinedByteValueProfile itemShiftProfile,
                         @Exclusive @Cached InlinedConditionProfile simpleStepProfile,
@@ -732,18 +733,19 @@ public final class ArrayBuiltins extends PythonBuiltins {
 
         @Specialization(guards = "!isNoValue(value)")
         static void setitem(VirtualFrame frame, PArray self, int index, Object value,
-                        @Bind("this") Node inliningTarget,
+                        @Bind Node inliningTarget,
                         @Cached ArrayNodes.PutValueNode putValueNode,
-                        @Shared @Cached PRaiseNode raiseNode) {
+                        @Exclusive @Cached PRaiseNode raiseNode) {
             checkBounds(inliningTarget, raiseNode, ErrorMessages.ARRAY_ASSIGN_OUT_OF_BOUNDS, index, self.getLength());
             putValueNode.execute(frame, inliningTarget, self, index, value);
         }
 
+        // @Exclusive for truffle-interpreted-performance
         @Specialization(guards = "isNoValue(value)")
         static void delitem(PArray self, int index, @SuppressWarnings("unused") Object value,
-                        @Bind("this") Node inliningTarget,
+                        @Bind Node inliningTarget,
                         @Cached DeleteArraySliceNode deleteSliceNode,
-                        @Shared @Cached PRaiseNode raiseNode) {
+                        @Exclusive @Cached PRaiseNode raiseNode) {
             checkBounds(inliningTarget, raiseNode, ErrorMessages.ARRAY_ASSIGN_OUT_OF_BOUNDS, index, self.getLength());
             self.checkCanResize(inliningTarget, raiseNode);
             deleteSliceNode.execute(inliningTarget, self, index, 1);
@@ -754,31 +756,33 @@ public final class ArrayBuiltins extends PythonBuiltins {
     @GenerateNodeFactory
     abstract static class SetSubscriptNode extends MpAssSubscriptBuiltinNode {
 
+        // @Exclusive for truffle-interpreted-performance
         @Specialization(guards = {"!isPSlice(idx)", "!isNoValue(value)"})
         static void setitem(VirtualFrame frame, PArray self, Object idx, Object value,
-                        @Bind("this") Node inliningTarget,
-                        @Shared @Cached PyNumberIndexNode indexNode,
-                        @Shared @Cached("forArrayAssign()") NormalizeIndexNode normalizeIndexNode,
+                        @Bind Node inliningTarget,
+                        @Exclusive @Cached PyNumberIndexNode indexNode,
+                        @Shared @Cached NormalizeIndexWithBoundsCheckNode normalizeIndexNode,
                         @Cached ArrayNodes.PutValueNode putValueNode) {
-            int index = normalizeIndexNode.execute(indexNode.execute(frame, inliningTarget, idx), self.getLength());
+            int index = normalizeIndexNode.execute(indexNode.execute(frame, inliningTarget, idx), self.getLength(), ErrorMessages.ARRAY_ASSIGN_OUT_OF_BOUNDS);
             putValueNode.execute(frame, inliningTarget, self, index, value);
         }
 
         @Specialization(guards = {"!isPSlice(idx)", "isNoValue(value)"})
         static void delitem(VirtualFrame frame, PArray self, Object idx, @SuppressWarnings("unused") Object value,
-                        @Bind("this") Node inliningTarget,
-                        @Shared @Cached PyNumberIndexNode indexNode,
-                        @Shared @Cached("forArrayAssign()") NormalizeIndexNode normalizeIndexNode,
-                        @Shared @Cached DeleteArraySliceNode deleteSliceNode,
+                        @Bind Node inliningTarget,
+                        @Exclusive @Cached PyNumberIndexNode indexNode,
+                        @Shared @Cached NormalizeIndexWithBoundsCheckNode normalizeIndexNode,
+                        @Exclusive @Cached DeleteArraySliceNode deleteSliceNode,
                         @Exclusive @Cached PRaiseNode raiseNode) {
             self.checkCanResize(inliningTarget, raiseNode);
-            int index = normalizeIndexNode.execute(indexNode.execute(frame, inliningTarget, idx), self.getLength());
+            int index = normalizeIndexNode.execute(indexNode.execute(frame, inliningTarget, idx), self.getLength(), ErrorMessages.ARRAY_ASSIGN_OUT_OF_BOUNDS);
             deleteSliceNode.execute(inliningTarget, self, index, 1);
         }
 
+        // @Exclusive for truffle-interpreted-performance
         @Specialization
         static void setitem(PArray self, PSlice slice, Object other,
-                        @Bind("this") Node inliningTarget,
+                        @Bind Node inliningTarget,
                         @CachedLibrary(limit = "2") PythonBufferAccessLibrary bufferLib,
                         @Cached InlinedBranchProfile hasOtherProfile,
                         @Cached InlinedBranchProfile isDelItemProfile,
@@ -794,10 +798,10 @@ public final class ArrayBuiltins extends PythonBuiltins {
                         @Cached InlinedByteValueProfile itemShiftProfile,
                         @Cached SliceNodes.SliceUnpack sliceUnpack,
                         @Cached SliceNodes.AdjustIndices adjustIndices,
-                        @Shared @Cached DeleteArraySliceNode deleteSliceNode,
+                        @Exclusive @Cached DeleteArraySliceNode deleteSliceNode,
                         @Cached ArrayNodes.ShiftNode shiftNode,
                         @Cached ArrayNodes.SetLengthNode setLengthNode,
-                        @Cached PRaiseNode raiseNode) {
+                        @Exclusive @Cached PRaiseNode raiseNode) {
             int length = self.getLength();
             PSlice.SliceInfo sliceInfo = adjustIndices.execute(inliningTarget, length, sliceUnpack.execute(inliningTarget, slice));
             int start = sliceInfo.start;
@@ -907,7 +911,7 @@ public final class ArrayBuiltins extends PythonBuiltins {
 
         @Specialization(guards = "protocol < 3")
         static Object reduceLegacy(VirtualFrame frame, PArray self, @SuppressWarnings("unused") int protocol,
-                        @Bind("this") Node inliningTarget,
+                        @Bind Node inliningTarget,
                         @Cached @Exclusive GetClassNode getClassNode,
                         @Cached @Exclusive PyObjectLookupAttr lookupDict,
                         @Cached ToListNode toListNode,
@@ -923,7 +927,7 @@ public final class ArrayBuiltins extends PythonBuiltins {
 
         @Specialization(guards = "protocol >= 3")
         static Object reduce(VirtualFrame frame, PArray self, @SuppressWarnings("unused") int protocol,
-                        @Bind("this") Node inliningTarget,
+                        @Bind Node inliningTarget,
                         @Cached @Exclusive GetClassNode getClassNode,
                         @Cached @Exclusive PyObjectLookupAttr lookupDict,
                         @Cached PyObjectGetAttr getReconstructor,
@@ -969,7 +973,7 @@ public final class ArrayBuiltins extends PythonBuiltins {
 
         @Specialization
         static Object bufferinfo(PArray self,
-                        @Bind("this") Node inliningTarget,
+                        @Bind Node inliningTarget,
                         @Bind PythonLanguage language,
                         @Cached ArrayNodes.EnsureNativeStorageNode ensureNativeStorageNode,
                         @CachedLibrary(limit = "1") InteropLibrary lib) {
@@ -991,7 +995,7 @@ public final class ArrayBuiltins extends PythonBuiltins {
     abstract static class AppendNode extends PythonBinaryBuiltinNode {
         @Specialization
         static Object append(VirtualFrame frame, PArray self, Object value,
-                        @Bind("this") Node inliningTarget,
+                        @Bind Node inliningTarget,
                         @Cached ArrayNodes.EnsureCapacityNode ensureCapacityNode,
                         @Cached ArrayNodes.SetLengthNode setLengthNode,
                         @Cached ArrayNodes.PutValueNode putValueNode,
@@ -1016,7 +1020,7 @@ public final class ArrayBuiltins extends PythonBuiltins {
     abstract static class ExtendNode extends PythonBinaryBuiltinNode {
         @Specialization(guards = "self.getFormat() == value.getFormat()")
         static Object extend(PArray self, PArray value,
-                        @Bind("this") Node inliningTarget,
+                        @Bind Node inliningTarget,
                         @CachedLibrary(limit = "2") PythonBufferAccessLibrary bufferLib,
                         @Exclusive @Cached ArrayNodes.EnsureCapacityNode ensureCapacityNode,
                         @Exclusive @Cached ArrayNodes.SetLengthNode setLengthNode,
@@ -1039,7 +1043,7 @@ public final class ArrayBuiltins extends PythonBuiltins {
 
         @Specialization
         static Object extend(VirtualFrame frame, PArray self, PSequence value,
-                        @Bind("this") Node inliningTarget,
+                        @Bind Node inliningTarget,
                         @Exclusive @Cached ArrayNodes.PutValueNode putValueNode,
                         @Cached SequenceNodes.GetSequenceStorageNode getSequenceStorageNode,
                         @Cached SequenceStorageNodes.GetItemScalarNode getItemNode,
@@ -1071,7 +1075,7 @@ public final class ArrayBuiltins extends PythonBuiltins {
 
         @Specialization(guards = "!isArray(value)")
         static Object extend(VirtualFrame frame, PArray self, Object value,
-                        @Bind("this") Node inliningTarget,
+                        @Bind Node inliningTarget,
                         @Cached PyObjectGetIter getIter,
                         @Cached PyIterNextNode nextNode,
                         @Exclusive @Cached ArrayNodes.PutValueNode putValueNode,
@@ -1107,7 +1111,7 @@ public final class ArrayBuiltins extends PythonBuiltins {
         @Specialization(guards = "self.getFormat() != value.getFormat()")
         @SuppressWarnings("unused")
         static Object error(PArray self, PArray value,
-                        @Bind("this") Node inliningTarget) {
+                        @Bind Node inliningTarget) {
             // CPython allows extending an array with an arbitrary iterable. Except a differently
             // formatted array. Weird
             throw PRaiseNode.raiseStatic(inliningTarget, TypeError, ErrorMessages.CAN_ONLY_EXTEND_WITH_ARRAY_OF_SAME_KIND);
@@ -1120,13 +1124,13 @@ public final class ArrayBuiltins extends PythonBuiltins {
     abstract static class InsertNode extends PythonTernaryClinicBuiltinNode {
         @Specialization
         static Object insert(VirtualFrame frame, PArray self, int inputIndex, Object value,
-                        @Bind("this") Node inliningTarget,
-                        @Cached("create(false)") NormalizeIndexNode normalizeIndexNode,
+                        @Bind Node inliningTarget,
+                        @Cached NormalizeIndexWithoutBoundsCheckNode normalizeIndexNode,
                         @Cached ArrayNodes.CheckValueNode checkValueNode,
                         @Cached ArrayNodes.PutValueNode putValueNode,
                         @Cached ArrayNodes.ShiftNode shiftNode,
                         @Cached PRaiseNode raiseNode) {
-            int index = normalizeIndexNode.execute(inputIndex, self.getLength());
+            int index = normalizeIndexNode.execute(inputIndex, self.getLength(), ErrorMessages.INDEX_OUT_OF_RANGE);
             if (index > self.getLength()) {
                 index = self.getLength();
             } else if (index < 0) {
@@ -1152,7 +1156,7 @@ public final class ArrayBuiltins extends PythonBuiltins {
     abstract static class RemoveNode extends PythonBinaryBuiltinNode {
         @Specialization
         static Object remove(VirtualFrame frame, PArray self, Object value,
-                        @Bind("this") Node inliningTarget,
+                        @Bind Node inliningTarget,
                         @Cached PyObjectRichCompareBool eqNode,
                         @Cached ArrayNodes.GetValueNode getValueNode,
                         @Cached DeleteArraySliceNode deleteSliceNode,
@@ -1175,15 +1179,15 @@ public final class ArrayBuiltins extends PythonBuiltins {
     abstract static class PopNode extends PythonBinaryClinicBuiltinNode {
         @Specialization
         static Object pop(PArray self, int inputIndex,
-                        @Bind("this") Node inliningTarget,
-                        @Cached("forPop()") NormalizeIndexNode normalizeIndexNode,
+                        @Bind Node inliningTarget,
+                        @Cached NormalizeIndexWithBoundsCheckNode normalizeIndexNode,
                         @Cached ArrayNodes.GetValueNode getValueNode,
                         @Cached DeleteArraySliceNode deleteSliceNode,
                         @Cached PRaiseNode raiseNode) {
             if (self.getLength() == 0) {
                 throw raiseNode.raise(inliningTarget, IndexError, ErrorMessages.POP_FROM_EMPTY_ARRAY);
             }
-            int index = normalizeIndexNode.execute(inputIndex, self.getLength());
+            int index = normalizeIndexNode.execute(inputIndex, self.getLength(), ErrorMessages.POP_INDEX_OUT_OF_RANGE);
             Object value = getValueNode.execute(inliningTarget, self, index);
             self.checkCanResize(inliningTarget, raiseNode);
             deleteSliceNode.execute(inliningTarget, self, index, 1);
@@ -1207,8 +1211,8 @@ public final class ArrayBuiltins extends PythonBuiltins {
 
         @Specialization
         static Object frombytes(VirtualFrame frame, PArray self, Object buffer,
-                        @Bind("this") Node inliningTarget,
-                        @Cached("createFor(this)") IndirectCallData indirectCallData,
+                        @Bind Node inliningTarget,
+                        @Cached("createFor($node)") IndirectCallData indirectCallData,
                         @CachedLibrary(limit = "3") PythonBufferAccessLibrary bufferLib,
                         @Cached ArrayNodes.EnsureCapacityNode ensureCapacityNode,
                         @Cached ArrayNodes.SetLengthNode setLengthNode,
@@ -1248,7 +1252,7 @@ public final class ArrayBuiltins extends PythonBuiltins {
     public abstract static class FromFileNode extends PythonTernaryClinicBuiltinNode {
         @Specialization
         static Object fromfile(VirtualFrame frame, PArray self, Object file, int n,
-                        @Bind("this") Node inliningTarget,
+                        @Bind Node inliningTarget,
                         @Cached PyObjectCallMethodObjArgs callMethod,
                         @Cached PyObjectSizeNode sizeNode,
                         @Cached InlinedConditionProfile nNegativeProfile,
@@ -1284,7 +1288,7 @@ public final class ArrayBuiltins extends PythonBuiltins {
     abstract static class FromListNode extends PythonBinaryBuiltinNode {
         @Specialization
         static Object fromlist(VirtualFrame frame, PArray self, PList list,
-                        @Bind("this") Node inliningTarget,
+                        @Bind Node inliningTarget,
                         @Cached SequenceNodes.GetSequenceStorageNode getSequenceStorageNode,
                         @Cached SequenceStorageNodes.GetItemScalarNode getItemScalarNode,
                         @Cached ArrayNodes.EnsureCapacityNode ensureCapacityNode,
@@ -1311,7 +1315,7 @@ public final class ArrayBuiltins extends PythonBuiltins {
         @Fallback
         @SuppressWarnings("unused")
         static Object error(Object self, Object arg,
-                        @Bind("this") Node inliningTarget) {
+                        @Bind Node inliningTarget) {
             throw PRaiseNode.raiseStatic(inliningTarget, TypeError, ErrorMessages.ARG_MUST_BE_LIST);
         }
     }
@@ -1322,7 +1326,7 @@ public final class ArrayBuiltins extends PythonBuiltins {
     public abstract static class FromUnicodeNode extends PythonBinaryClinicBuiltinNode {
         @Specialization
         static Object fromunicode(VirtualFrame frame, PArray self, TruffleString str,
-                        @Bind("this") Node inliningTarget,
+                        @Bind Node inliningTarget,
                         @Cached ArrayNodes.PutValueNode putValueNode,
                         @Cached ArrayNodes.EnsureCapacityNode ensureCapacityNode,
                         @Cached ArrayNodes.SetLengthNode setLengthNode,
@@ -1339,7 +1343,7 @@ public final class ArrayBuiltins extends PythonBuiltins {
                 TruffleStringIterator it = createCodePointIteratorNode.execute(str, TS_ENCODING);
                 int codePointIndex = 0;
                 while (it.hasNext()) {
-                    TruffleString value = fromCodePointNode.execute(nextNode.execute(it), TS_ENCODING, true);
+                    TruffleString value = fromCodePointNode.execute(nextNode.execute(it, TS_ENCODING), TS_ENCODING, true);
                     putValueNode.execute(frame, inliningTarget, self, self.getLength() + codePointIndex++, value);
                 }
                 setLengthNode.execute(inliningTarget, self, newLength);
@@ -1353,7 +1357,7 @@ public final class ArrayBuiltins extends PythonBuiltins {
         @Fallback
         @SuppressWarnings("unused")
         static Object error(Object self, Object arg,
-                        @Bind("this") Node inliningTarget) {
+                        @Bind Node inliningTarget) {
             throw PRaiseNode.raiseStatic(inliningTarget, TypeError, ErrorMessages.FROMUNICODE_ARG_MUST_BE_STR_NOT_P, arg);
         }
 
@@ -1391,7 +1395,7 @@ public final class ArrayBuiltins extends PythonBuiltins {
     abstract static class ToUnicodeNode extends PythonUnaryBuiltinNode {
         @Specialization
         static TruffleString tounicode(PArray self,
-                        @Bind("this") Node inliningTarget,
+                        @Bind Node inliningTarget,
                         @Cached InlinedConditionProfile formatProfile,
                         @Cached ArrayNodes.GetValueNode getValueNode,
                         @Cached TruffleStringBuilder.AppendStringNode appendStringNode,
@@ -1414,7 +1418,7 @@ public final class ArrayBuiltins extends PythonBuiltins {
     abstract static class ToFileNode extends PythonBinaryBuiltinNode {
         @Specialization
         static Object tofile(VirtualFrame frame, PArray self, Object file,
-                        @Bind("this") Node inliningTarget,
+                        @Bind Node inliningTarget,
                         @Bind PythonLanguage language,
                         @CachedLibrary(limit = "2") PythonBufferAccessLibrary bufferLib,
                         @Cached PyObjectCallMethodObjArgs callMethod) {
@@ -1491,7 +1495,7 @@ public final class ArrayBuiltins extends PythonBuiltins {
     abstract static class IndexNode extends PythonQuaternaryClinicBuiltinNode {
         @Specialization
         static int index(VirtualFrame frame, PArray self, Object value, int start, int stop,
-                        @Bind("this") Node inliningTarget,
+                        @Bind Node inliningTarget,
                         @Cached PyObjectRichCompareBool eqNode,
                         @Cached ArrayNodes.GetValueNode getValueNode,
                         @Cached PRaiseNode raiseNode) {
@@ -1524,7 +1528,7 @@ public final class ArrayBuiltins extends PythonBuiltins {
     abstract static class CountNode extends PythonBinaryBuiltinNode {
         @Specialization
         static int count(VirtualFrame frame, PArray self, Object value,
-                        @Bind("this") Node inliningTarget,
+                        @Bind Node inliningTarget,
                         @Cached PyObjectRichCompareBool eqNode,
                         @Cached ArrayNodes.GetValueNode getValueNode) {
             int count = 0;

@@ -54,9 +54,9 @@ class int "PyObject *" "&PyLong_Type"
 
 #define medium_value(x) ((stwodigits)_PyLong_CompactValue(x))
 
-#endif // GraalPy change
 #define IS_SMALL_INT(ival) (-_PY_NSMALLNEGINTS <= (ival) && (ival) < _PY_NSMALLPOSINTS)
 #define IS_SMALL_UINT(ival) ((ival) < _PY_NSMALLPOSINTS)
+#endif // GraalPy change
 
 #define _MAX_STR_DIGITS_ERROR_FMT_TO_INT "Exceeds the limit (%d digits) for integer string conversion: value has %zd digits; use sys.set_int_max_str_digits() to increase the limit"
 #define _MAX_STR_DIGITS_ERROR_FMT_TO_STR "Exceeds the limit (%d digits) for integer string conversion; use sys.set_int_max_str_digits() to increase the limit"
@@ -85,10 +85,8 @@ is_medium_int(stwodigits x)
 static PyObject *
 get_small_int(sdigit ival)
 {
-    assert(IS_SMALL_INT(ival));
-    // GraalPy change: use our array of pointers
-    PyObject *v = _PyLong_SMALL_INT_PTRS[_PY_NSMALLNEGINTS + ival];
-    return v;
+    // GraalPy change - we tag 32-bit integers
+    return int32_to_pointer(ival);
 }
 
 #if 0 // GraalPy change
@@ -334,10 +332,7 @@ PyObject *
 PyLong_FromLong(long ival)
 {
     // GraalPy change: different implementation
-    if (IS_SMALL_INT(ival)) {
-        return get_small_int((sdigit)ival);
-    }
-    return GraalPyTruffleLong_FromLongLong((long long) ival);
+    return PyLong_FromLongLong((long long) ival);
 }
 
 #if 0 // GraalPy change
@@ -477,7 +472,11 @@ PyLong_AsLongAndOverflow(PyObject *vv, int *overflow)
         PyErr_BadInternalCall();
         return -1;
     }
-    long result = (long) GraalPyTruffleLong_AsPrimitive(vv, MODE_COERCE_SIGNED, sizeof(long));
+    if (points_to_py_int_handle(vv)) {
+        *overflow = 0;
+        return pointer_to_int64(vv);
+    }
+    long result = (long) GraalPyPrivate_Long_AsPrimitive(vv, MODE_COERCE_SIGNED, sizeof(long));
     if (result == -1L && PyErr_Occurred() && PyErr_ExceptionMatches(PyExc_OverflowError)) {
         PyErr_Clear();
         *overflow = _PyLong_Sign(vv);
@@ -494,7 +493,10 @@ long
 PyLong_AsLong(PyObject *obj)
 {
     // GraalPy change: different implementation
-    return (long) GraalPyTruffleLong_AsPrimitive(obj, MODE_COERCE_SIGNED, sizeof(long));
+    if (points_to_py_int_handle(obj)) {
+        return pointer_to_int64(obj);
+    }
+    return (long) GraalPyPrivate_Long_AsPrimitive(obj, MODE_COERCE_SIGNED, sizeof(long));
 }
 
 /* Get a C int from an int object or any object that has an __index__
@@ -520,7 +522,10 @@ _PyLong_AsInt(PyObject *obj)
 
 Py_ssize_t
 PyLong_AsSsize_t(PyObject *vv) {
-    return (Py_ssize_t) GraalPyTruffleLong_AsPrimitive(vv, MODE_PINT_SIGNED, sizeof(Py_ssize_t));
+    if (points_to_py_int_handle(vv)) {
+        return pointer_to_int64(vv);
+    }
+    return (Py_ssize_t) GraalPyPrivate_Long_AsPrimitive(vv, MODE_PINT_SIGNED, sizeof(Py_ssize_t));
 }
 
 /* Get a C unsigned long int from an int object.
@@ -534,7 +539,15 @@ PyLong_AsUnsignedLong(PyObject *vv)
         PyErr_BadInternalCall();
         return (unsigned long) -1;
     }
-    return (unsigned long) GraalPyTruffleLong_AsPrimitive(vv, MODE_PINT_UNSIGNED, sizeof(unsigned long));
+    if (points_to_py_int_handle(vv)) {
+        long value = pointer_to_int64(vv);
+        if (value < 0) {
+            PyErr_SetString(PyExc_OverflowError, "can't convert negative value to unsigned int");
+            return (unsigned long) -1;
+        }
+        return (unsigned long) value;
+    }
+    return (unsigned long) GraalPyPrivate_Long_AsPrimitive(vv, MODE_PINT_UNSIGNED, sizeof(unsigned long));
 }
 
 /* Get a C size_t from an int object. Returns (size_t)-1 and sets
@@ -544,7 +557,15 @@ size_t
 PyLong_AsSize_t(PyObject *vv)
 {
     // GraalPy change: different implementation
-    return (size_t) GraalPyTruffleLong_AsPrimitive(vv, MODE_PINT_UNSIGNED, sizeof(size_t));
+    if (points_to_py_int_handle(vv)) {
+        long value = pointer_to_int64(vv);
+        if (value < 0) {
+            PyErr_SetString(PyExc_OverflowError, "can't convert negative value to unsigned int");
+            return (size_t) -1;
+        }
+        return (size_t) value;
+    }
+    return (size_t) GraalPyPrivate_Long_AsPrimitive(vv, MODE_PINT_UNSIGNED, sizeof(size_t));
 }
 
 #if 0 // GraalPy change
@@ -588,7 +609,10 @@ PyLong_AsUnsignedLongMask(PyObject *op)
         PyErr_BadInternalCall();
         return (unsigned long) -1;
     }
-    return (unsigned long) GraalPyTruffleLong_AsPrimitive(op, MODE_COERCE_MASK, sizeof(unsigned long));
+    if (points_to_py_int_handle(op)) {
+        return pointer_to_int64(op);
+    }
+    return (unsigned long) GraalPyPrivate_Long_AsPrimitive(op, MODE_COERCE_MASK, sizeof(unsigned long));
 }
 
 #if 0 // GraalPy change
@@ -902,7 +926,7 @@ PyLong_FromVoidPtr(void *p)
 {
     // GraalPy change: different implementation
     // directly do the upcall to avoid a cast to primitive and reference counting
-    return GraalPyLong_FromUnsignedLongLong((uint64_t)p);
+    return PyLong_FromUnsignedLongLong((uint64_t)p);
 }
 
 #if 0 // GraalPy change
@@ -954,10 +978,11 @@ PyObject *
 PyLong_FromLongLong(long long ival)
 {
     // GraalPy change: different implementation
-    if (IS_SMALL_INT(ival)) {
-        return get_small_int((sdigit)ival);
+    if ((int)ival == ival) {
+        return int32_to_pointer(ival);
+    } else {
+        return GraalPyPrivate_Long_FromLongLong(ival);
     }
-    return GraalPyTruffleLong_FromLongLong(ival);
 }
 
 /* Create a new int object from a C Py_ssize_t. */
@@ -966,10 +991,7 @@ PyObject *
 PyLong_FromSsize_t(Py_ssize_t ival)
 {
     // GraalPy change: different implementation
-    if (IS_SMALL_INT(ival)) {
-        return get_small_int((sdigit)ival);
-    }
-    return GraalPyTruffleLong_FromLongLong((long long) ival);
+    return PyLong_FromLongLong((long long) ival);
 }
 
 /* Get a C long long int from an int object or any object that has an
@@ -983,7 +1005,10 @@ PyLong_AsLongLong(PyObject *vv)
         PyErr_BadInternalCall();
         return -1;
     }
-    return (long long) GraalPyTruffleLong_AsPrimitive(vv, MODE_COERCE_SIGNED, sizeof(long long));
+    if (points_to_py_int_handle(vv)) {
+        return pointer_to_int64(vv);
+    }
+    return (long long) GraalPyPrivate_Long_AsPrimitive(vv, MODE_COERCE_SIGNED, sizeof(long long));
 }
 
 /* Get a C unsigned long long int from an int object.
@@ -997,7 +1022,15 @@ PyLong_AsUnsignedLongLong(PyObject *vv)
         PyErr_BadInternalCall();
         return (unsigned long long)-1;
     }
-    return (unsigned long long) GraalPyTruffleLong_AsPrimitive(vv, MODE_PINT_UNSIGNED, sizeof(unsigned long long));
+    if (points_to_py_int_handle(vv)) {
+        long value = pointer_to_int64(vv);
+        if (value < 0) {
+            PyErr_SetString(PyExc_OverflowError, "can't convert negative value to unsigned int");
+            return (unsigned long long) -1;
+        }
+        return (unsigned long long) value;
+    }
+    return (unsigned long long) GraalPyPrivate_Long_AsPrimitive(vv, MODE_PINT_UNSIGNED, sizeof(unsigned long long));
 }
 
 #if 0 // GraalPy change
@@ -1042,7 +1075,10 @@ PyLong_AsUnsignedLongLongMask(PyObject *op)
         PyErr_BadInternalCall();
         return (unsigned long long)-1;
     }
-    return (unsigned long long) GraalPyTruffleLong_AsPrimitive(op, MODE_COERCE_MASK, sizeof(unsigned long long));
+    if (points_to_py_int_handle(op)) {
+        return pointer_to_int64(op);
+    }
+    return (unsigned long long) GraalPyPrivate_Long_AsPrimitive(op, MODE_COERCE_MASK, sizeof(unsigned long long));
 }
 
 /* Get a C long long int from an int object or any object that has an
@@ -1427,6 +1463,66 @@ long_to_decimal_string_internal(PyObject *aa,
                                 _PyBytesWriter *bytes_writer,
                                 char **bytes_str)
 {
+    // GraalPy change:  different implementation
+    PyObject *str;
+
+    // writer or bytes_writer can be used, but not both at the same time.
+    assert(writer == NULL || bytes_writer == NULL);
+
+    if (aa == NULL || !PyLong_Check(aa)) {
+        PyErr_BadInternalCall();
+        return -1;
+    }
+
+    str = PyObject_Repr(aa);
+    if (str == NULL) {
+        goto error;
+    }
+    if (!PyUnicode_Check(str)) {
+        PyErr_SetString(PyExc_TypeError,
+                        "long.repr did not return a str");
+        goto error;
+    }
+    if (writer) {
+        Py_ssize_t size = PyUnicode_GET_LENGTH(str);
+        if (_PyUnicodeWriter_Prepare(writer, size, '9') == -1) {
+            goto error;
+        }
+        if (_PyUnicodeWriter_WriteStr(writer, str) < 0) {
+            goto error;
+        }
+        goto success;
+    }
+    else if (bytes_writer) {
+        Py_ssize_t size = PyUnicode_GET_LENGTH(str);
+        const void *data = PyUnicode_DATA(str);
+        int kind = PyUnicode_KIND(str);
+        *bytes_str = _PyBytesWriter_Prepare(bytes_writer, *bytes_str, size);
+        if (*bytes_str == NULL) {
+            goto error;
+        }
+        char *p = *bytes_str;
+        for (Py_ssize_t i=0; i < size; i++) {
+            Py_UCS4 ch = PyUnicode_READ(kind, data, i);
+            *p++ = (char) ch;
+        }
+        (*bytes_str) = p;
+        goto success;
+    }
+    else {
+        *p_output = Py_NewRef(str);
+        goto success;
+    }
+
+error:
+    Py_XDECREF(str);
+    return -1;
+
+success:
+    Py_DECREF(str);
+    return 0;
+
+#if 0
     PyLongObject *scratch, *a;
     PyObject *str = NULL;
     Py_ssize_t size, strlen, size_a, i, j;
@@ -1450,7 +1546,6 @@ long_to_decimal_string_internal(PyObject *aa,
 
        explanation in https://github.com/python/cpython/pull/96537
     */
-#if 0 // GraalPy change: interp->long_state not supported yet
     if (size_a >= 10 * _PY_LONG_MAX_STR_DIGITS_THRESHOLD
                   / (3 * PyLong_SHIFT) + 2) {
         PyInterpreterState *interp = _PyInterpreterState_GET();
@@ -1462,7 +1557,6 @@ long_to_decimal_string_internal(PyObject *aa,
             return -1;
         }
     }
-    #endif // GraalPy change
 
 #if WITH_PYLONG_MODULE
     if (size_a > 1000) {
@@ -1516,12 +1610,10 @@ long_to_decimal_string_internal(PyObject *aa,
             hi /= _PyLong_DECIMAL_BASE;
         }
         /* check for keyboard interrupt */
-#if 0 // GraalPy change
         SIGCHECK({
                 Py_DECREF(scratch);
                 return -1;
             });
-#endif // GraalPy change
     }
     /* pout should have at least one digit, so that the case when a = 0
        works correctly */
@@ -1536,7 +1628,6 @@ long_to_decimal_string_internal(PyObject *aa,
         tenpow *= 10;
         strlen++;
     }
-#if 0 // GraalPy change: interp->long_state not supported yet
     if (strlen > _PY_LONG_MAX_STR_DIGITS_THRESHOLD) {
         PyInterpreterState *interp = _PyInterpreterState_GET();
         int max_str_digits = interp->long_state.max_str_digits;
@@ -1548,7 +1639,6 @@ long_to_decimal_string_internal(PyObject *aa,
             return -1;
         }
     }
-#endif // GraalPy change
     if (writer) {
         if (_PyUnicodeWriter_Prepare(writer, strlen, '9') == -1) {
             Py_DECREF(scratch);
@@ -1651,6 +1741,7 @@ long_to_decimal_string_internal(PyObject *aa,
         *p_output = (PyObject *)str;
     }
     return 0;
+#endif // GraalPy change
 }
 
 static PyObject *
@@ -2447,7 +2538,7 @@ PyLong_FromString(const char *str, char **pend, int base)
         }
     }
     if (!z) {
-        z = GraalPyTruffleLong_FromString((char *)orig_str, base);
+        z = GraalPyPrivate_Long_FromString((char *)orig_str, base);
         if (z) {
             // TODO: we should probably set the **pend out argument
         }
@@ -6045,8 +6136,33 @@ PyUnstable_Long_CompactValue(const PyLongObject* op) {
 
 #endif // GraalPy change
 
+#undef PyUnstable_Long_CompactValue
+
+Py_ssize_t PyUnstable_Long_CompactValue(const PyLongObject *op) {
+    if (points_to_py_int_handle(op)) {
+        return pointer_to_int64(op);
+    }
+    return GraalPyPrivate_Long_AsPrimitive((PyObject*) op, MODE_PINT_SIGNED, sizeof(Py_ssize_t));
+}
 
 // GraalPy additions
-uintptr_t PyTruffleLong_lv_tag(const PyLongObject *op) {
+uintptr_t GraalPyPrivate_Long_lv_tag(const PyLongObject *op) {
+    if (points_to_py_int_handle(op)) {
+        int64_t t = pointer_to_int64(op);
+        if (t == 0) {
+            return SIGN_ZERO;
+        }
+        int64_t sign = 0;
+        if (t < 0) {
+            sign = SIGN_NEGATIVE;
+            t = -t;
+        }
+        int64_t size = 0;
+        while (t != 0) {
+            ++size;
+            t >>= PYLONG_BITS_IN_DIGIT;
+        }
+        return (size << NON_SIZE_BITS) | sign;
+    }
     return GET_SLOT_SPECIAL(op, PyLongObject, long_value_lv_tag, long_value.lv_tag);
 }

@@ -51,6 +51,7 @@ import com.oracle.truffle.api.HostCompilerDirectives.InliningCutoff;
 import com.oracle.truffle.api.dsl.Bind;
 import com.oracle.truffle.api.dsl.Cached;
 import com.oracle.truffle.api.dsl.Cached.Shared;
+import com.oracle.truffle.api.dsl.GenerateInline;
 import com.oracle.truffle.api.dsl.GenerateUncached;
 import com.oracle.truffle.api.dsl.NeverDefault;
 import com.oracle.truffle.api.dsl.Specialization;
@@ -106,16 +107,6 @@ public abstract class IndexNodes {
         }
 
         @NeverDefault
-        public static NormalizeIndexNode create(boolean boundsCheck) {
-            return new NormalizeIndexNode(ErrorMessages.INDEX_OUT_OF_RANGE, boundsCheck);
-        }
-
-        @NeverDefault
-        public static NormalizeIndexNode create(TruffleString errorMessage, boolean boundsCheck) {
-            return new NormalizeIndexNode(errorMessage, boundsCheck);
-        }
-
-        @NeverDefault
         public static NormalizeIndexNode forList() {
             return create(ErrorMessages.LIST_INDEX_OUT_OF_RANGE);
         }
@@ -128,31 +119,6 @@ public abstract class IndexNodes {
         @NeverDefault
         public static NormalizeIndexNode forTuple() {
             return create(ErrorMessages.TUPLE_OUT_OF_BOUNDS);
-        }
-
-        @NeverDefault
-        public static NormalizeIndexNode forArray() {
-            return create(ErrorMessages.ARRAY_OUT_OF_BOUNDS);
-        }
-
-        @NeverDefault
-        public static NormalizeIndexNode forArrayAssign() {
-            return create(ErrorMessages.ARRAY_ASSIGN_OUT_OF_BOUNDS);
-        }
-
-        @NeverDefault
-        public static NormalizeIndexNode forPop() {
-            return create(ErrorMessages.POP_INDEX_OUT_OF_RANGE);
-        }
-
-        @NeverDefault
-        public static NormalizeIndexNode forRange() {
-            return create(ErrorMessages.RANGE_OUT_OF_BOUNDS);
-        }
-
-        @NeverDefault
-        public static NormalizeIndexNode forBytearray() {
-            return create(ErrorMessages.BYTEARRAY_OUT_OF_BOUNDS);
         }
     }
 
@@ -176,21 +142,26 @@ public abstract class IndexNodes {
         public static NormalizeIndexCustomMessageNode getUncached() {
             return NormalizeIndexWithBoundsCheckNodeGen.getUncached();
         }
-
-        @NeverDefault
-        public static NormalizeIndexCustomMessageNode getUncachedWithoutBoundsCheck() {
-            return NormalizeIndexWithoutBoundsCheckNodeGen.getUncached();
-        }
     }
 
     @GenerateUncached
-    @SuppressWarnings("truffle-inlining")       // footprint reduction 28 -> 10
+    @GenerateInline(false)       // footprint reduction 28 -> 10
     // not inlined because it is always created dynamically by NormalizeIndexNode
-    abstract static class NormalizeIndexWithBoundsCheckNode extends NormalizeIndexCustomMessageNode {
+    public abstract static class NormalizeIndexWithBoundsCheckNode extends NormalizeIndexCustomMessageNode {
+
+        @NeverDefault
+        public static NormalizeIndexWithBoundsCheckNode create() {
+            return NormalizeIndexWithBoundsCheckNodeGen.create();
+        }
+
+        @NeverDefault
+        public static NormalizeIndexWithBoundsCheckNode getUncached() {
+            return NormalizeIndexWithBoundsCheckNodeGen.getUncached();
+        }
 
         @Specialization
         static int doInt(int index, int length, TruffleString errorMessage,
-                        @Bind("this") Node inliningTarget,
+                        @Bind Node inliningTarget,
                         @Shared @Cached InlinedConditionProfile negativeIndexProfile,
                         @Shared @Cached PRaiseNode raiseNode) {
             int normalizedIndex = index;
@@ -203,7 +174,7 @@ public abstract class IndexNodes {
 
         @Specialization
         static int doBool(boolean bIndex, int length, TruffleString errorMessage,
-                        @Bind("this") Node inliningTarget,
+                        @Bind Node inliningTarget,
                         @Shared @Cached PRaiseNode raiseNode) {
             int index = PInt.intValue(bIndex);
             checkBounds(inliningTarget, raiseNode, errorMessage, index, length);
@@ -212,7 +183,7 @@ public abstract class IndexNodes {
 
         @Specialization(rewriteOn = OverflowException.class)
         static int doLong(long lIndex, int length, TruffleString errorMessage,
-                        @Bind("this") Node inliningTarget,
+                        @Bind Node inliningTarget,
                         @Shared @Cached InlinedConditionProfile negativeIndexProfile,
                         @Shared @Cached PRaiseNode raiseNode) throws OverflowException {
             int index = PInt.intValueExact(lIndex);
@@ -221,7 +192,7 @@ public abstract class IndexNodes {
 
         @Specialization(replaces = "doLong")
         int doLongOvf(long index, int length, TruffleString errorMessage,
-                        @Bind("this") Node inliningTarget,
+                        @Bind Node inliningTarget,
                         @Shared @Cached InlinedConditionProfile negativeIndexProfile,
                         @Shared @Cached PRaiseNode raiseNode) {
             try {
@@ -233,7 +204,7 @@ public abstract class IndexNodes {
 
         @Specialization(rewriteOn = OverflowException.class)
         static int doPInt(PInt index, int length, TruffleString errorMessage,
-                        @Bind("this") Node inliningTarget,
+                        @Bind Node inliningTarget,
                         @Shared @Cached InlinedConditionProfile negativeIndexProfile,
                         @Shared @Cached PRaiseNode raiseNode) throws OverflowException {
             int idx = index.intValueExact();
@@ -242,7 +213,7 @@ public abstract class IndexNodes {
 
         @Specialization(replaces = "doPInt")
         int doPIntOvf(PInt index, int length, TruffleString errorMessage,
-                        @Bind("this") Node inliningTarget,
+                        @Bind Node inliningTarget,
                         @Shared @Cached InlinedConditionProfile negativeIndexProfile,
                         @Shared @Cached PRaiseNode raiseNode) {
             try {
@@ -254,7 +225,7 @@ public abstract class IndexNodes {
 
         @Specialization
         static long doLongLong(long lIndex, long length, TruffleString errorMessage,
-                        @Bind("this") Node inliningTarget,
+                        @Bind Node inliningTarget,
                         @Shared @Cached InlinedConditionProfile negativeIndexProfile,
                         @Shared @Cached PRaiseNode raiseNode) {
             long normalizedIndex = lIndex;
@@ -269,13 +240,23 @@ public abstract class IndexNodes {
     }
 
     @GenerateUncached
-    @SuppressWarnings("truffle-inlining")       // footprint reduction 24 -> 6
+    @GenerateInline(false)       // footprint reduction 24 -> 6
     // not inlined because it is always created dynamically by NormalizeIndexNode
-    abstract static class NormalizeIndexWithoutBoundsCheckNode extends NormalizeIndexCustomMessageNode {
+    public abstract static class NormalizeIndexWithoutBoundsCheckNode extends NormalizeIndexCustomMessageNode {
+
+        @NeverDefault
+        public static NormalizeIndexWithoutBoundsCheckNode create() {
+            return NormalizeIndexWithoutBoundsCheckNodeGen.create();
+        }
+
+        @NeverDefault
+        public static NormalizeIndexWithoutBoundsCheckNode getUncached() {
+            return NormalizeIndexWithoutBoundsCheckNodeGen.getUncached();
+        }
 
         @Specialization
         static int doInt(int index, int length, @SuppressWarnings("unused") TruffleString errorMessage,
-                        @Bind("this") Node inliningTarget,
+                        @Bind Node inliningTarget,
                         @Shared("negativeIndexProfile") @Cached InlinedConditionProfile negativeIndexProfile) {
             int idx = index;
             if (negativeIndexProfile.profile(inliningTarget, idx < 0)) {
@@ -291,7 +272,7 @@ public abstract class IndexNodes {
 
         @Specialization(rewriteOn = OverflowException.class)
         static int doLong(long index, int length, TruffleString errorMessage,
-                        @Bind("this") Node inliningTarget,
+                        @Bind Node inliningTarget,
                         @Shared("negativeIndexProfile") @Cached InlinedConditionProfile negativeIndexProfile) throws OverflowException {
             int idx = PInt.intValueExact(index);
             return doInt(idx, length, errorMessage, inliningTarget, negativeIndexProfile);
@@ -299,7 +280,7 @@ public abstract class IndexNodes {
 
         @Specialization(replaces = "doLong")
         static int doLongOvf(long index, int length, TruffleString errorMessage,
-                        @Bind("this") Node inliningTarget,
+                        @Bind Node inliningTarget,
                         @Shared("negativeIndexProfile") @Cached InlinedConditionProfile negativeIndexProfile,
                         @Shared("raiseNode") @Cached PRaiseNode raiseNode) {
             try {
@@ -311,7 +292,7 @@ public abstract class IndexNodes {
 
         @Specialization(rewriteOn = OverflowException.class)
         static int doPInt(PInt index, int length, TruffleString errorMessage,
-                        @Bind("this") Node inliningTarget,
+                        @Bind Node inliningTarget,
                         @Shared("negativeIndexProfile") @Cached InlinedConditionProfile negativeIndexProfile) throws OverflowException {
             int idx = index.intValueExact();
             return doInt(idx, length, errorMessage, inliningTarget, negativeIndexProfile);
@@ -319,7 +300,7 @@ public abstract class IndexNodes {
 
         @Specialization(replaces = "doPInt")
         static int doPIntOvf(PInt index, int length, TruffleString errorMessage,
-                        @Bind("this") Node inliningTarget,
+                        @Bind Node inliningTarget,
                         @Shared("negativeIndexProfile") @Cached InlinedConditionProfile negativeIndexProfile,
                         @Shared("raiseNode") @Cached PRaiseNode raiseNode) {
             try {
@@ -331,7 +312,7 @@ public abstract class IndexNodes {
 
         @Specialization
         static long doLongLong(long index, long length, @SuppressWarnings("unused") TruffleString errorMessage,
-                        @Bind("this") Node inliningTarget,
+                        @Bind Node inliningTarget,
                         @Shared("negativeIndexProfile") @Cached InlinedConditionProfile negativeIndexProfile) {
             long idx = index;
             if (negativeIndexProfile.profile(inliningTarget, idx < 0)) {

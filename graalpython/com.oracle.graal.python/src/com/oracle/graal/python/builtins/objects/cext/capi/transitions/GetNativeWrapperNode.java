@@ -50,9 +50,10 @@ import com.oracle.graal.python.builtins.objects.cext.capi.PrimitiveNativeWrapper
 import com.oracle.graal.python.builtins.objects.cext.capi.PythonClassNativeWrapper;
 import com.oracle.graal.python.builtins.objects.cext.capi.PythonNativeWrapper;
 import com.oracle.graal.python.builtins.objects.cext.capi.PythonNativeWrapper.PythonAbstractObjectNativeWrapper;
+import com.oracle.graal.python.builtins.objects.cext.capi.transitions.CApiTransitions.HandlePointerConverter;
+import com.oracle.graal.python.builtins.objects.floats.PFloat;
 import com.oracle.graal.python.builtins.objects.cext.capi.PythonObjectNativeWrapper;
 import com.oracle.graal.python.builtins.objects.cext.capi.TruffleObjectNativeWrapper;
-import com.oracle.graal.python.builtins.objects.floats.PFloat;
 import com.oracle.graal.python.builtins.objects.ints.PInt;
 import com.oracle.graal.python.builtins.objects.type.PythonBuiltinClass;
 import com.oracle.graal.python.builtins.objects.type.PythonManagedClass;
@@ -80,15 +81,15 @@ import com.oracle.truffle.api.strings.TruffleString;
 @ImportStatic({PGuards.class, CApiGuards.class})
 public abstract class GetNativeWrapperNode extends PNodeWithContext {
 
-    public static PythonNativeWrapper executeUncached(Object value) {
+    public static Object executeUncached(Object value) {
         return GetNativeWrapperNodeGen.getUncached().execute(value);
     }
 
-    public abstract PythonNativeWrapper execute(Object value);
+    public abstract Object execute(Object value);
 
     @Specialization
     static PythonAbstractObjectNativeWrapper doString(TruffleString str,
-                    @Bind("this") Node inliningTarget,
+                    @Bind Node inliningTarget,
                     @Bind PythonLanguage language,
                     @Exclusive @Cached InlinedConditionProfile noWrapperProfile) {
         return PythonObjectNativeWrapper.wrap(PFactory.createString(language, str), inliningTarget, noWrapperProfile);
@@ -96,7 +97,7 @@ public abstract class GetNativeWrapperNode extends PNodeWithContext {
 
     @Specialization
     static PythonAbstractObjectNativeWrapper doBoolean(boolean b,
-                    @Bind("this") Node inliningTarget,
+                    @Bind Node inliningTarget,
                     @Exclusive @Cached InlinedConditionProfile profile) {
         Python3Core core = PythonContext.get(inliningTarget);
         PInt boxed = b ? core.getTrue() : core.getFalse();
@@ -109,63 +110,30 @@ public abstract class GetNativeWrapperNode extends PNodeWithContext {
         return nativeWrapper;
     }
 
-    @Specialization(guards = "isSmallInteger(i)")
-    static PrimitiveNativeWrapper doIntegerSmall(int i,
-                    @Bind("this") Node inliningTarget) {
-        PythonContext context = PythonContext.get(inliningTarget);
-        if (context.getCApiContext() != null) {
-            return context.getCApiContext().getCachedPrimitiveNativeWrapper(i);
-        }
-        return PrimitiveNativeWrapper.createInt(i);
+    @Specialization
+    static Object doInt(int i) {
+        return HandlePointerConverter.intToPointer(i);
     }
 
-    @Specialization(guards = "!isSmallInteger(i)")
-    static PrimitiveNativeWrapper doInteger(int i) {
-        return PrimitiveNativeWrapper.createInt(i);
-    }
-
-    public static PrimitiveNativeWrapper doLongSmall(long l, PythonContext context) {
-        if (context.getCApiContext() != null) {
-            return context.getCApiContext().getCachedPrimitiveNativeWrapper(l);
+    @Specialization
+    static Object doLong(long l) {
+        if (PInt.fitsInInt(l)) {
+            return HandlePointerConverter.intToPointer((int) l);
         }
         return PrimitiveNativeWrapper.createLong(l);
     }
 
-    @Specialization(guards = "isSmallLong(l)")
-    static PrimitiveNativeWrapper doLongSmall(long l,
-                    @Bind("this") Node inliningTarget) {
-        return doLongSmall(l, PythonContext.get(inliningTarget));
-    }
-
-    @Specialization(guards = "!isSmallLong(l)")
-    static PrimitiveNativeWrapper doLong(long l) {
-        return PrimitiveNativeWrapper.createLong(l);
-    }
-
-    @Specialization(guards = "!isNaN(d)")
-    static PrimitiveNativeWrapper doDouble(double d) {
+    @Specialization
+    static Object doDouble(double d) {
+        if (PFloat.fitsInFloat(d)) {
+            return HandlePointerConverter.floatToPointer((float) d);
+        }
         return PrimitiveNativeWrapper.createDouble(d);
-    }
-
-    @Specialization(guards = "isNaN(d)")
-    static PythonNativeWrapper doDoubleNaN(@SuppressWarnings("unused") double d,
-                    @Bind("this") Node inliningTarget) {
-        PFloat boxed = PythonContext.get(inliningTarget).getNaN();
-        PythonAbstractObjectNativeWrapper nativeWrapper = boxed.getNativeWrapper();
-        // Use a counting profile since we should enter the branch just once per context.
-        if (nativeWrapper == null) {
-            // This deliberately uses 'CompilerDirectives.transferToInterpreter()' because this
-            // code will happen just once per context.
-            CompilerDirectives.transferToInterpreter();
-            nativeWrapper = PrimitiveNativeWrapper.createDouble(Double.NaN);
-            boxed.setNativeWrapper(nativeWrapper);
-        }
-        return nativeWrapper;
     }
 
     @Specialization(guards = "isSpecialSingleton(object)")
     static PythonNativeWrapper doSingleton(PythonAbstractObject object,
-                    @Bind("this") Node inliningTarget) {
+                    @Bind Node inliningTarget) {
         PythonContext context = PythonContext.get(inliningTarget);
         PythonAbstractObjectNativeWrapper nativeWrapper = context.getCApiContext().getSingletonNativeWrapper(object);
         assert nativeWrapper != null;
@@ -174,7 +142,7 @@ public abstract class GetNativeWrapperNode extends PNodeWithContext {
 
     @Specialization
     static PythonNativeWrapper doPythonClassUncached(PythonManagedClass object,
-                    @Bind("this") Node inliningTarget,
+                    @Bind Node inliningTarget,
                     @Cached TypeNodes.GetTpNameNode getTpNameNode,
                     @Shared @Cached TruffleString.SwitchEncodingNode switchEncoding) {
         return PythonClassNativeWrapper.wrap(object, getTpNameNode.execute(inliningTarget, object), switchEncoding);
@@ -182,7 +150,7 @@ public abstract class GetNativeWrapperNode extends PNodeWithContext {
 
     @Specialization
     static PythonNativeWrapper doPythonTypeUncached(PythonBuiltinClassType object,
-                    @Bind("this") Node inliningTarget,
+                    @Bind Node inliningTarget,
                     @Shared @Cached TruffleString.SwitchEncodingNode switchEncoding) {
         PythonBuiltinClass type = PythonContext.get(inliningTarget).lookupType(object);
         return PythonClassNativeWrapper.wrap(type, type.getName(), switchEncoding);
@@ -190,7 +158,7 @@ public abstract class GetNativeWrapperNode extends PNodeWithContext {
 
     @Specialization(guards = {"!isClass(inliningTarget, object, isTypeNode)", "!isNativeObject(object)", "!isSpecialSingleton(object)"}, limit = "1")
     static PythonNativeWrapper runAbstractObject(PythonAbstractObject object,
-                    @Bind("this") Node inliningTarget,
+                    @Bind Node inliningTarget,
                     @Exclusive @Cached InlinedConditionProfile noWrapperProfile,
                     @SuppressWarnings("unused") @Cached IsTypeNode isTypeNode) {
         assert object != PNone.NO_VALUE;
@@ -199,7 +167,7 @@ public abstract class GetNativeWrapperNode extends PNodeWithContext {
 
     @Specialization(guards = {"isForeignObjectNode.execute(inliningTarget, object)", "!isNativeWrapper(object)", "!isNativeNull(object)"}, limit = "1")
     static PythonNativeWrapper doForeignObject(Object object,
-                    @SuppressWarnings("unused") @Bind("this") Node inliningTarget,
+                    @SuppressWarnings("unused") @Bind Node inliningTarget,
                     @SuppressWarnings("unused") @Cached IsForeignObjectNode isForeignObjectNode) {
         assert !CApiTransitions.isBackendPointerObject(object);
         assert !(object instanceof String);

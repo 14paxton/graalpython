@@ -60,13 +60,13 @@ import com.oracle.truffle.api.nodes.ExplodeLoop;
 import com.oracle.truffle.api.nodes.Node;
 
 @GenerateInline(false) // used in BCI root node
-@OperationProxy.Proxyable
+@OperationProxy.Proxyable(storeBytecodeIndex = true)
 public abstract class CopyDictWithoutKeysNode extends PNodeWithContext {
     public abstract PDict execute(Frame frame, Object subject, Object[] keys);
 
     @Specialization(guards = {"keys.length == keysLength", "keysLength <= 32"}, limit = "1")
     public static PDict copy(VirtualFrame frame, Object subject, @NeverDefault @SuppressWarnings("unused") Object[] keys,
-                    @Bind("this") Node inliningTarget,
+                    @Bind Node inliningTarget,
                     @Cached("keys.length") int keysLength,
                     @Bind PythonLanguage language,
                     @Shared @Cached DictNodes.UpdateNode updateNode,
@@ -87,7 +87,7 @@ public abstract class CopyDictWithoutKeysNode extends PNodeWithContext {
 
     @Specialization(guards = "keys.length > 32")
     public static PDict copy(VirtualFrame frame, Object subject, Object[] keys,
-                    @Bind("this") Node inliningTarget,
+                    @Bind Node inliningTarget,
                     @Bind PythonLanguage language,
                     @Shared @Cached DictNodes.UpdateNode updateNode,
                     @Shared @Cached PyDictDelItem delItem) {

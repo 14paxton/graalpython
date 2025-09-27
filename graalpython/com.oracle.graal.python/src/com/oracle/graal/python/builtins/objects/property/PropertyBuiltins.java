@@ -54,7 +54,7 @@ import com.oracle.graal.python.PythonLanguage;
 import com.oracle.graal.python.annotations.Slot;
 import com.oracle.graal.python.annotations.Slot.SlotKind;
 import com.oracle.graal.python.annotations.Slot.SlotSignature;
-import com.oracle.graal.python.builtins.Builtin;
+import com.oracle.graal.python.annotations.Builtin;
 import com.oracle.graal.python.builtins.CoreFunctions;
 import com.oracle.graal.python.builtins.PythonBuiltinClassType;
 import com.oracle.graal.python.builtins.PythonBuiltins;
@@ -173,7 +173,7 @@ public final class PropertyBuiltins extends PythonBuiltins {
         @Specialization(guards = "!isNoValue(value)")
         @SuppressWarnings("unused")
         static Object doSet(PProperty self, Object value,
-                        @Bind("this") Node inliningTarget) {
+                        @Bind Node inliningTarget) {
             /*
              * That's a bit unfortunate: if we define 'isGetter = true' and 'isSetter = false' then
              * this will use a GetSetDescriptor which has a slightly different error message for
@@ -322,7 +322,7 @@ public final class PropertyBuiltins extends PythonBuiltins {
 
         @Specialization
         PException error(VirtualFrame frame, PProperty self, Object obj, String what,
-                        @Bind("this") Node inliningTarget,
+                        @Bind Node inliningTarget,
                         @Cached GetClassNode getClassNode,
                         @Cached TypeNodes.GetQualNameNode getQualNameNode,
                         @Cached PyObjectReprAsTruffleStringNode reprNode,
@@ -344,7 +344,7 @@ public final class PropertyBuiltins extends PythonBuiltins {
 
         @Specialization
         static Object get(VirtualFrame frame, PProperty self, Object obj, @SuppressWarnings("unused") Object type,
-                        @Bind("this") Node inliningTarget,
+                        @Bind Node inliningTarget,
                         @Cached InlinedConditionProfile objIsPNoneProfile,
                         @Cached CallUnaryMethodNode callNode,
                         @Cached PropertyErrorNode propertyErrorNode) {
@@ -397,7 +397,7 @@ public final class PropertyBuiltins extends PythonBuiltins {
 
         @Specialization
         static boolean doGeneric(VirtualFrame frame, PProperty self,
-                        @Bind("this") Node inliningTarget,
+                        @Bind Node inliningTarget,
                         @Cached PyObjectLookupAttr lookup,
                         @Cached PyObjectIsTrueNode isTrueNode) {
             if (isAbstract(frame, inliningTarget, lookup, isTrueNode, self.getFget())) {
